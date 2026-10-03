@@ -1,5 +1,7 @@
 # sync-google-health-api
 
+[![CI](https://github.com/aomomo55/sync-google-health-api/actions/workflows/ci.yml/badge.svg)](https://github.com/aomomo55/sync-google-health-api/actions/workflows/ci.yml)
+
 Android の Health Connect に集まる健康データ（歩数・心拍・睡眠・体重など）を毎日自動で集め、Obsidian の Vault にダッシュボード付きのノートとして書き込むパイプラインです。
 スマホの Claude アプリから、そのノートを読んで健康状態を振り返れるようにすることを目的にしています。
 

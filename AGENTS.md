@@ -1,0 +1,63 @@
+# AGENTS.md
+
+このリポジトリで作業するコーディングエージェント向けの指示。全体像は [README.md](README.md)、設計判断の経緯は [docs/adr](docs/adr/README.md) を先に読むこと。
+
+## 構成
+
+- `server/` — TypeScript / Hono のサーバー。日次データの受信・保存（CouchDB）、Google Takeout の取り込み、Obsidian ノートの生成と obsidian-sync-mcp 経由の書き込み
+  - `src/domain/` 日次・月次のデータ型と集計（純粋関数）
+  - `src/store/` 保存先（`HealthStore`。CouchDB 実装とテスト用のメモリ実装）
+  - `src/notes/` ノート・ダッシュボード・Bases の生成（純粋関数、出力は決定的）
+  - `src/sync/` どのノートを更新するかの計画と実行
+  - `src/vault/` obsidian-sync-mcp を MCP クライアントとして呼ぶ書き込み
+  - `src/takeout/` Takeout（Google Fit 形式）の解析
+  - `scripts/` `import:takeout` と `sync:notes` の CLI
+- `android/` — Kotlin / Jetpack Compose のアプリ。Health Connect から日次サマリーを作り `POST /api/ingest` へ送る。集計ロジックは Android に依存しない純粋な Kotlin（`DayAggregator`、`SleepAssigner` など）
+- `docs/adr/` — 設計判断の記録
+
+## コマンド
+
+サーバー（`server/` で実行。pnpm 12.8.1 を使う。グローバルに無ければ `npx --yes pnpm@12.8.1 <コマンド>`）:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm typecheck
+pnpm test        # 結合テストは環境変数が無ければスキップされる（下記）
+pnpm build
+```
+
+- CouchDB の結合テスト: `COUCHDB_TEST_URL=http://user:pass@localhost:5984` を設定する（`docker run -p 5984:5984 -e COUCHDB_USER=admin -e COUCHDB_PASSWORD=... couchdb:3` で立てられる）
+- obsidian-sync-mcp の結合テスト: `OBSIDIAN_MCP_TEST_URL` と `OBSIDIAN_MCP_TEST_TOKEN` を設定する。テスト用の Vault にだけ向けること
+- pnpm 12 は `pnpm run <script> -- --opt` の `--` をそのままスクリプトに渡す。スクリプト側で先頭の `--` を読み飛ばしているので、新しい CLI も同じ扱いにする
+
+Android（`android/` で実行。JDK 21 が必要。`JAVA_HOME` を JDK 21 にする）:
+
+```sh
+./gradlew testDebugUnitTest assembleDebug
+```
+
+## 変更するときの約束
+
+- 変更したら、該当するテストを追加・更新し、サーバーは typecheck / test / build、Android は testDebugUnitTest / assembleDebug が通ることを確認してから完了とする
+- **個人の情報をリポジトリに入れない**: 実在の健康データの値、本番のホスト名・アプリ名、メールアドレス、トークンやパスワード。テストのデータは架空の値で作る
+- **特定の端末やメーカーに依存した処理を書かない**（例: 睡眠の元データは、パッケージ名ではなく「睡眠ステージを持つ記録を優先し、合計時間が長いもの」で選ぶ）。サーバーの Takeout 取り込みと Android アプリで、同じ規則を保つ
+- 設計に関わる判断をしたら `docs/adr/` に ADR を追加する。過去の判断を覆すときは元の ADR を書き換えず、新しい ADR を作って元のステータスを「置き換え済み」にする
+- コードのコメントは日本語で、必要な箇所にだけ書く
+- コミットメッセージは Conventional Commits の形式で、接頭辞（`feat:` など）以外は日本語で書く
+
+## 壊しやすい前提
+
+- 日付は Asia/Tokyo の暦日（`YYYY-MM-DD`）。睡眠は起床した日に属する
+- `POST /api/ingest` はセクションごとにマージする。**項目を省略すると既存の値が残り、`null` を送ると値を消す**。データが無い項目は `null` ではなく省略して送る
+- ノートの生成は決定的でなければならない（生成日時などを入れない）。同期処理は「内容が変わらないノートは書き込まない」ことに依存している
+- 日次ノートの `%% health:memo` の行より下は利用者のメモ欄。`mergeMemo` で必ず保持する。obsidian-sync-mcp の `write_note` はノート全体を置き換えるので、読んでから書く
+- Vault への書き込みは `VAULT_HEALTH_PREFIX`（既定 `Health/`）配下の `.md` / `.base` に限る
+- 前後の日のリンクは、範囲で探さず `HealthStore.findAdjacentDate` で求める（データが長く途切れていても正しくつなぐため）
+- obsidian-sync-mcp は LiveSync 1.0.33 以降の「ID キー」に未対応。LiveSync 側の ID キーや Obfuscate Properties の設定を変える提案をしない（[ADR 0007](docs/adr/0007-write-via-obsidian-sync-mcp.md)）
+- トークン類は起動時に制御文字を検査している（端末への貼り付けで ESC が混入した実例がある）。検査を緩めない
+
+## デプロイ
+
+- サーバーは fly.io。`server/fly.toml` のアプリ名はプレースホルダーなので、`fly deploy -a <アプリ名> --ha=false` で指定する
+- 秘密情報（`API_TOKEN`、`COUCHDB_*`、`OBSIDIAN_MCP_*`）は `fly secrets set` で登録し、リポジトリやログに出さない。エージェントが値を扱う必要がある手順は、利用者自身に実行してもらう
+- Android アプリはデバッグ署名の APK を手動でインストールする（`android/README.md`）
