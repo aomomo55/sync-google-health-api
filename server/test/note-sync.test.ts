@@ -54,7 +54,7 @@ describe("NoteSync", () => {
     await store.upsertDays([{ date: "2026-02-01", activity: { steps: 1 } }]);
     await sync.syncDates(["2026-02-01"]);
     const path = "Health/Daily/2026-02-01.md";
-    writer.notes.set(path, writer.notes.get(path)! + "\n大事なメモ\n");
+    writer.notes.set(path, `${writer.notes.get(path)!}\n大事なメモ\n`);
     await store.upsertDays([{ date: "2026-02-01", activity: { steps: 999 } }]);
     const r = await sync.syncDates(["2026-02-01"]);
     expect(r.written).toContain(path);

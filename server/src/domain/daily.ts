@@ -38,9 +38,7 @@ export const SleepSchema = z.strictObject({
   nap_minutes: num,
 });
 
-export const DateSchema = z
-  .string()
-  .refine(isRealDate, "YYYY-MM-DD 形式の実在する日付が必要です");
+export const DateSchema = z.string().refine(isRealDate, "YYYY-MM-DD 形式の実在する日付が必要です");
 
 export const DailySummarySchema = z.strictObject({
   date: DateSchema,
@@ -57,10 +55,7 @@ export const SECTIONS = ["activity", "heart_rate", "body", "sleep"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 // セクション単位の浅いマージ。incoming に存在するキー（null含む）が上書きする
-export function mergeDay(
-  existing: DailySummary | undefined,
-  incoming: DailySummary,
-): DailySummary {
+export function mergeDay(existing: DailySummary | undefined, incoming: DailySummary): DailySummary {
   const out: Record<string, unknown> = {
     ...(existing ?? {}),
     date: incoming.date,

@@ -42,7 +42,9 @@ export function parseDailyCsv(text: string): DailySummary[] {
   const header = rows[0];
   if (!header) return [];
   const col = new Map<string, number>();
-  header.forEach((h, i) => col.set(h.trim(), i));
+  header.forEach((h, i) => {
+    col.set(h.trim(), i);
+  });
   const c = (name: string) => col.get(name);
   const dateIdx = c("日付");
   if (dateIdx === undefined) throw new Error("CSV に「日付」列がありません");

@@ -1,10 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  createServer,
-  type IncomingMessage,
-  type Server,
-  type ServerResponse,
-} from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -55,10 +50,7 @@ export class FakeObsidianMcp {
     });
     const denied = (path: string) =>
       !path.startsWith("Health/")
-        ? text(
-            `Write access denied: '${path}' is outside the writable folders (Health/).`,
-            true,
-          )
+        ? text(`Write access denied: '${path}' is outside the writable folders (Health/).`, true)
         : null;
     mcp.registerTool(
       "write_note",
@@ -81,18 +73,12 @@ export class FakeObsidianMcp {
         }
       },
     );
-    mcp.registerTool(
-      "read_note",
-      { inputSchema: { path: z.string() } },
-      async ({ path }) => {
-        this.toolCalls++;
-        const body = this.notes.get(path);
-        if (body === undefined) return text(`Note not found: ${path}`, true);
-        return text(
-          `[Open in Obsidian](obsidian://open?path=${path})\n\n---\n\n${body}`,
-        );
-      },
-    );
+    mcp.registerTool("read_note", { inputSchema: { path: z.string() } }, async ({ path }) => {
+      this.toolCalls++;
+      const body = this.notes.get(path);
+      if (body === undefined) return text(`Note not found: ${path}`, true);
+      return text(`[Open in Obsidian](obsidian://open?path=${path})\n\n---\n\n${body}`);
+    });
     return mcp;
   }
 

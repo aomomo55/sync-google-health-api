@@ -24,7 +24,7 @@ describe.skipIf(!MCP_URL || !MCP_TOKEN || !COUCH)(
       u.username = "";
       u.password = "";
       base = u.toString().replace(/\/+$/, "");
-      auth = "Basic " + Buffer.from(`${user}:${password}`).toString("base64");
+      auth = `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
       store = new CouchStore({ baseUrl: base, user, password, db: dbName });
       await store.ensureReady();
       writer = new McpVaultWriter({ url: MCP_URL as string, token: MCP_TOKEN as string });
@@ -40,7 +40,9 @@ describe.skipIf(!MCP_URL || !MCP_TOKEN || !COUCH)(
     it("3日分を ingest して Vault から読み戻せ、再同期は変更なし", async () => {
       const sync = new NoteSync({ store, writer, root });
       const dates = ["2026-04-01", "2026-04-02", "2026-04-03"];
-      await store.upsertDays(dates.map((date, i) => ({ date, activity: { steps: 1000 * (i + 1) } })));
+      await store.upsertDays(
+        dates.map((date, i) => ({ date, activity: { steps: 1000 * (i + 1) } })),
+      );
       const r1 = await sync.syncDates(dates);
       expect(r1.failed).toEqual([]);
       expect(r1.written.length + r1.unchanged.length).toBe(4);

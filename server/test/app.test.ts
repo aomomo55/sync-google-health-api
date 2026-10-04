@@ -57,9 +57,7 @@ describe("loadConfig", () => {
   });
 
   it("API_TOKEN が短いと throw", () => {
-    expect(() => loadConfig({ ...COUCH, API_TOKEN: "short" })).toThrow(
-      /API_TOKEN/,
-    );
+    expect(() => loadConfig({ ...COUCH, API_TOKEN: "short" })).toThrow(/API_TOKEN/);
   });
 
   it("PORT のデフォルトは 8080", () => {
@@ -71,7 +69,7 @@ describe("loadConfig", () => {
   });
 
   it("トークンに制御文字（貼り付け時の ESC など）があると throw し、値は出さない", () => {
-    const bad = "\x1b[200~" + "s".repeat(32);
+    const bad = `\x1b[200~${"s".repeat(32)}`;
     const run = () =>
       loadConfig({
         ...COUCH,
@@ -85,13 +83,15 @@ describe("loadConfig", () => {
   });
 
   it("CouchDB のパスワードは空白を許し、改行は拒否する", () => {
-    expect(loadConfig({ ...COUCH, COUCHDB_PASSWORD: "pass word", API_TOKEN: TOKEN }).COUCHDB_PASSWORD).toBe("pass word");
-    expect(() => loadConfig({ ...COUCH, COUCHDB_PASSWORD: "pass\n", API_TOKEN: TOKEN })).toThrow(/COUCHDB_PASSWORD/);
+    expect(
+      loadConfig({ ...COUCH, COUCHDB_PASSWORD: "pass word", API_TOKEN: TOKEN }).COUCHDB_PASSWORD,
+    ).toBe("pass word");
+    expect(() => loadConfig({ ...COUCH, COUCHDB_PASSWORD: "pass\n", API_TOKEN: TOKEN })).toThrow(
+      /COUCHDB_PASSWORD/,
+    );
   });
 
   it("COUCHDB_HEALTH_DB のデフォルトは health", () => {
-    expect(loadConfig({ ...COUCH, API_TOKEN: TOKEN }).COUCHDB_HEALTH_DB).toBe(
-      "health",
-    );
+    expect(loadConfig({ ...COUCH, API_TOKEN: TOKEN }).COUCHDB_HEALTH_DB).toBe("health");
   });
 });

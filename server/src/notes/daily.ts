@@ -1,13 +1,5 @@
 import type { DailySummary } from "../domain/daily.js";
-import {
-  fmtDuration,
-  fmtNum,
-  jstHm,
-  monthLabelJa,
-  numOrNull,
-  round,
-  weekdayJa,
-} from "./format.js";
+import { fmtDuration, fmtNum, jstHm, monthLabelJa, numOrNull, round, weekdayJa } from "./format.js";
 import { linkTarget, notePaths } from "./paths.js";
 import { frontmatter, type YamlEntry } from "./yaml.js";
 

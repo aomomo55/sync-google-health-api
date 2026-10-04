@@ -67,6 +67,6 @@ export function renderMonthlyNote(m: MonthlySummary, root?: string): string {
     `${summaryLines(m).join("\n")}\n`,
     `← [[${linkTarget(p.monthly(prev))}|${monthLabelJa(prev)}]] | [[${linkTarget(p.monthly(next))}|${monthLabelJa(next)}]] →\n`,
     "## 日別一覧\n",
-    "```dataview\n" + query + "\n```\n",
+    `\`\`\`dataview\n${query}\n\`\`\`\n`,
   ].join("\n");
 }

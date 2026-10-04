@@ -1,7 +1,7 @@
 import type { HealthStore } from "../store/health-store.js";
 import type { VaultWriter } from "../vault/vault-writer.js";
 import { writeMany } from "../vault/vault-writer.js";
-import { planNotes, type PlanItem } from "./plan.js";
+import { type PlanItem, planNotes } from "./plan.js";
 
 export interface SyncReport {
   written: string[];
@@ -67,8 +67,7 @@ export class NoteSync {
     const days = await this.store.getDays(start, end);
 
     const targetDates =
-      targets ??
-      days.filter((d) => d.date >= from && d.date <= to).map((d) => d.date);
+      targets ?? days.filter((d) => d.date >= from && d.date <= to).map((d) => d.date);
     const items = planNotes(days, targetDates, this.root, { includeStatic });
     return this.apply(items);
   }
@@ -114,4 +113,3 @@ async function mapLimit<T>(
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
 }
-

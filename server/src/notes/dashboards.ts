@@ -46,7 +46,7 @@ function monthlyPages(root: string): string {
 }
 
 function block(body: string): string {
-  return "```dataviewjs\n" + body + "\n```\n";
+  return `\`\`\`dataviewjs\n${body}\n\`\`\`\n`;
 }
 
 function emptyGuard(msg: string): string {

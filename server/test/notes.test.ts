@@ -58,10 +58,34 @@ function parseFm(note: string): [string, string][] {
 }
 
 const DAILY_KEYS = [
-  "type", "日付", "曜日", "歩数", "距離km", "消費カロリー", "運動時間", "強めの運動",
-  "ハートポイント", "ウォーキング分", "平均心拍", "最大心拍", "最小心拍", "安静時心拍",
-  "体重kg", "体脂肪率", "就寝時刻", "起床時刻", "睡眠時間h", "ベッド内時間h", "中途覚醒分",
-  "深い睡眠分", "浅い睡眠分", "REM睡眠分", "仮眠分", "8000歩達成", "7時間以上", "tags",
+  "type",
+  "日付",
+  "曜日",
+  "歩数",
+  "距離km",
+  "消費カロリー",
+  "運動時間",
+  "強めの運動",
+  "ハートポイント",
+  "ウォーキング分",
+  "平均心拍",
+  "最大心拍",
+  "最小心拍",
+  "安静時心拍",
+  "体重kg",
+  "体脂肪率",
+  "就寝時刻",
+  "起床時刻",
+  "睡眠時間h",
+  "ベッド内時間h",
+  "中途覚醒分",
+  "深い睡眠分",
+  "浅い睡眠分",
+  "REM睡眠分",
+  "仮眠分",
+  "8000歩達成",
+  "7時間以上",
+  "tags",
 ];
 
 describe("paths", () => {
@@ -76,7 +100,9 @@ describe("paths", () => {
     expect(p.monthlyBase).toBe("Health/_bases/月次サマリー.base");
   });
   it("ルートを変更できる（前後のスラッシュは除去）", () => {
-    expect(notePaths("/Vault/Health/").daily("2026-01-02")).toBe("Vault/Health/Daily/2026-01-02.md");
+    expect(notePaths("/Vault/Health/").daily("2026-01-02")).toBe(
+      "Vault/Health/Daily/2026-01-02.md",
+    );
   });
 });
 
@@ -91,7 +117,22 @@ describe("yaml", () => {
     expect(yamlScalar(Number.NaN)).toBe("");
   });
   it("引用が必要な文字列", () => {
-    for (const s of ["", "true", "No", "null", "123", "1.5", "2026-03-15", "a: b", "# x", "- x", " pad", "[a]", "'q'", "~"]) {
+    for (const s of [
+      "",
+      "true",
+      "No",
+      "null",
+      "123",
+      "1.5",
+      "2026-03-15",
+      "a: b",
+      "# x",
+      "- x",
+      " pad",
+      "[a]",
+      "'q'",
+      "~",
+    ]) {
       expect(needsQuote(s), s).toBe(true);
     }
     for (const s of ["health-daily", "日", "health/daily"]) expect(needsQuote(s), s).toBe(false);
@@ -153,7 +194,10 @@ ${MEMO_MARKER}
   });
 
   it("歩数のみのスパースなノート。キーと順序は常に同じ", () => {
-    const note = renderDailyNote({ date: "2026-03-16", activity: { steps: 100 } }, { prev: "2026-03-15" });
+    const note = renderDailyNote(
+      { date: "2026-03-16", activity: { steps: 100 } },
+      { prev: "2026-03-15" },
+    );
     const rows = parseFm(note);
     expect(rows.map(([k]) => k)).toEqual(DAILY_KEYS);
     const get = (k: string) => rows.find(([x]) => x === k)![1];
@@ -165,7 +209,9 @@ ${MEMO_MARKER}
     expect(note).toContain("- 活動: 100歩");
     expect(note).not.toContain("- 心拍:");
     expect(note).not.toContain("- 睡眠:");
-    expect(note).toContain("← [[Health/Daily/2026-03-15|前日]] | [[Health/Monthly/2026-03|2026年3月]]\n");
+    expect(note).toContain(
+      "← [[Health/Daily/2026-03-15|前日]] | [[Health/Monthly/2026-03|2026年3月]]\n",
+    );
     expect(note).not.toContain("翌日");
   });
 
@@ -178,7 +224,10 @@ ${MEMO_MARKER}
 
   it("睡眠時刻は入力オフセットによらず JST", () => {
     const note = renderDailyNote(
-      { date: "2026-01-02", sleep: { start: "2026-01-01T14:30:00Z", end: "2026-01-01T21:00:00-05:00" } },
+      {
+        date: "2026-01-02",
+        sleep: { start: "2026-01-01T14:30:00Z", end: "2026-01-01T21:00:00-05:00" },
+      },
       {},
     );
     expect(note).toContain('就寝時刻: "23:30"');
@@ -187,7 +236,11 @@ ${MEMO_MARKER}
 
   it("体重・仮眠・達成フラグ", () => {
     const note = renderDailyNote(
-      { date: "2026-03-15", body: { weight_kg: 60.5 }, sleep: { asleep_minutes: 420, nap_minutes: 30 } },
+      {
+        date: "2026-03-15",
+        body: { weight_kg: 60.5 },
+        sleep: { asleep_minutes: 420, nap_minutes: 30 },
+      },
       {},
     );
     expect(note).toContain("体重kg: 60.5");
@@ -214,7 +267,7 @@ describe("mergeMemo", () => {
   it("ユーザーのメモを保持し、上側は再生成", () => {
     const old = renderDailyNote({ date: "2026-03-15", activity: { steps: 1 } }, {});
     const existing = withMemo("今日は雨だった\n- [ ] todo\n").replace("12,855", "0");
-    const merged = mergeMemo(old + "今日は雨だった\n", generated);
+    const merged = mergeMemo(`${old}今日は雨だった\n`, generated);
     expect(merged.startsWith(generated.slice(0, generated.indexOf("%% health:memo")))).toBe(true);
     expect(merged.endsWith("## メモ\n今日は雨だった\n")).toBe(true);
     expect(merged).toBe(mergeMemo(merged, generated)); // 冪等
@@ -228,9 +281,9 @@ describe("mergeMemo", () => {
     expect(merged).toContain("# 2026-03-15（日）");
   });
   it("CRLF の既存ファイルでもマーカーを検出して保持する", () => {
-    const existing = "古い\r\n上部\r\n" + MEMO_MARKER + "\r\n## メモ\r\nユーザー\r\n";
+    const existing = `古い\r\n上部\r\n${MEMO_MARKER}\r\n## メモ\r\nユーザー\r\n`;
     const merged = mergeMemo(existing, generated);
-    expect(merged.endsWith(MEMO_MARKER + "\r\n## メモ\r\nユーザー\r\n")).toBe(true);
+    expect(merged.endsWith(`${MEMO_MARKER}\r\n## メモ\r\nユーザー\r\n`)).toBe(true);
     expect(merged).not.toContain("古い");
   });
   it("マーカーが行頭以外にしか無ければ（本文での言及）マーカー扱いしない", () => {
@@ -310,7 +363,9 @@ SORT 日付 ASC
     expect(parseFm(e).find(([k]) => k === "平均歩数")![1]).toBe("");
     expect(e).toContain("[[Health/Monthly/2025-12|2025年12月]]");
     expect(e).toContain("[[Health/Monthly/2026-02|2026年2月]]");
-    expect(renderMonthlyNote(summarizeMonth("2026-12", []))).toContain("[[Health/Monthly/2027-01|2027年1月]]");
+    expect(renderMonthlyNote(summarizeMonth("2026-12", []))).toContain(
+      "[[Health/Monthly/2027-01|2027年1月]]",
+    );
   });
 
   it("決定的", () => {
@@ -332,8 +387,8 @@ describe("静的ノート", () => {
     expect(d).toContain("Health Connect");
     expect(jsBlocks(d)).toHaveLength(6);
     expect(d).toContain("window.renderChart");
-    expect(d).toContain('dv.pages(\'"Health/Daily"\')');
-    expect(d).toContain('dv.pages(\'"Health/Monthly"\')');
+    expect(d).toContain("dv.pages('\"Health/Daily\"')");
+    expect(d).toContain("dv.pages('\"Health/Monthly\"')");
   });
 
   it("睡眠ダッシュボード", () => {
@@ -367,6 +422,7 @@ describe("静的ノート", () => {
   });
 
   it("実データ相当でグラフ設定が生成される", async () => {
+    // biome-ignore lint/suspicious/noExplicitAny: dataviewjs の動的な API を模したモックのため
     const calls: any[] = [];
     const page = (d: string) => ({
       type: "health-daily",
@@ -382,7 +438,11 @@ describe("静的ノート", () => {
       REM睡眠分: 50,
       中途覚醒分: 5,
     });
-    const arr = { where: () => arr, sort: () => arr, array: () => [page("2026-03-01"), page("2026-03-02")] };
+    const arr = {
+      where: () => arr,
+      sort: () => arr,
+      array: () => [page("2026-03-01"), page("2026-03-02")],
+    };
     const dv = { date: () => ({ minus: () => 0 }), pages: () => arr, paragraph: () => {} };
     const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
       ...a: string[]
@@ -406,7 +466,16 @@ describe("静的ノート", () => {
     expect(d).toContain("name: 全期間");
     expect(d).toContain('today() - "90d"');
     expect(d).toContain("direction: DESC");
-    for (const c of ["日付", "曜日", "歩数", "距離km", "運動時間", "平均心拍", "体重kg", "8000歩達成"]) {
+    for (const c of [
+      "日付",
+      "曜日",
+      "歩数",
+      "距離km",
+      "運動時間",
+      "平均心拍",
+      "体重kg",
+      "8000歩達成",
+    ]) {
       expect(d).toContain(`- note.${c}\n`);
     }
     const s = renderSleepLogBase();
@@ -423,9 +492,9 @@ describe("静的ノート", () => {
 
   it("Bases の埋め込み先ビュー名が実在する", () => {
     const dash = renderHealthDashboard();
-    expect(renderDailyLogBase()).toContain("name: " + /日次ログ\.base#(.+?)\]\]/.exec(dash)![1]);
+    expect(renderDailyLogBase()).toContain(`name: ${/日次ログ\.base#(.+?)\]\]/.exec(dash)![1]}`);
     expect(renderSleepLogBase()).toContain(
-      "name: " + /睡眠ログ\.base#(.+?)\]\]/.exec(renderSleepDashboard())![1],
+      `name: ${/睡眠ログ\.base#(.+?)\]\]/.exec(renderSleepDashboard())![1]}`,
     );
   });
 

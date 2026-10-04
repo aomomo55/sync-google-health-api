@@ -10,11 +10,11 @@ import {
   normalizePrefix,
   stripOpenPrefix,
   VaultWriteError,
-  writeMany,
   type VaultWriter,
   type WriteManyItem,
   type WriteManyOptions,
   type WriteManyResult,
+  writeMany,
 } from "./vault-writer.js";
 
 export interface McpVaultWriterOptions {
@@ -46,8 +46,7 @@ function classify(e: unknown): ErrorKind {
     return "permanent";
   }
   if (e instanceof McpError) {
-    return e.code === ErrorCode.RequestTimeout ||
-      e.code === ErrorCode.ConnectionClosed
+    return e.code === ErrorCode.RequestTimeout || e.code === ErrorCode.ConnectionClosed
       ? "transient"
       : "permanent";
   }
@@ -95,10 +94,7 @@ export class McpVaultWriter implements VaultWriter {
     return text;
   }
 
-  writeMany(
-    items: WriteManyItem[],
-    opts?: WriteManyOptions,
-  ): Promise<WriteManyResult> {
+  writeMany(items: WriteManyItem[], opts?: WriteManyOptions): Promise<WriteManyResult> {
     return writeMany(this, items, opts);
   }
 
@@ -143,9 +139,7 @@ export class McpVaultWriter implements VaultWriter {
 
   private async drop(client: Client | null): Promise<void> {
     if (!client) return;
-    const current = this.clientPromise
-      ? await this.clientPromise.catch(() => null)
-      : null;
+    const current = this.clientPromise ? await this.clientPromise.catch(() => null) : null;
     if (current === client) this.clientPromise = null;
     await client.close().catch(() => {});
   }
@@ -164,9 +158,7 @@ export class McpVaultWriter implements VaultWriter {
           timeout: this.timeoutMs,
         });
         const content = Array.isArray(res.content) ? res.content : [];
-        const text = content
-          .map((c) => (c && c.type === "text" ? String(c.text) : ""))
-          .join("");
+        const text = content.map((c) => (c && c.type === "text" ? String(c.text) : "")).join("");
         return { text, isError: res.isError === true };
       } catch (e) {
         const kind = classify(e);

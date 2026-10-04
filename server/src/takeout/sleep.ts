@@ -38,7 +38,7 @@ export function jstDate(ms: number): string {
 
 export function jstIso(ms: number): string {
   const sec = Math.round(ms / 1000) * 1000; // .999 秒の端数を丸める
-  return new Date(sec + JST_OFFSET_MS).toISOString().slice(0, 19) + "+09:00";
+  return `${new Date(sec + JST_OFFSET_MS).toISOString().slice(0, 19)}+09:00`;
 }
 
 // Takeout の raw sleep segment JSON を Segment[] にする
@@ -58,13 +58,8 @@ export function parseSleepJson(json: unknown, source: string): Segment[] {
 }
 
 // 1 ソース分の segment を、gap <= 60 分で連続するものを 1 セッションにまとめる
-export function sessionize(
-  segments: Segment[],
-  gapMs = SESSION_GAP_MS,
-): Session[] {
-  const sorted = [...segments].sort(
-    (a, b) => a.start - b.start || a.end - b.end,
-  );
+export function sessionize(segments: Segment[], gapMs = SESSION_GAP_MS): Session[] {
+  const sorted = [...segments].sort((a, b) => a.start - b.start || a.end - b.end);
   const sessions: Session[] = [];
   let cur: Session | undefined;
   for (const seg of sorted) {
@@ -119,8 +114,7 @@ export function summarizeSession(s: Session): {
 const hasStagedSleep = (sessions: Session[]) =>
   sessions.some((s) => s.segments.some((g) => g.stage >= 4 && g.stage <= 6));
 
-const totalMs = (sessions: Session[]) =>
-  sessions.reduce((t, s) => t + (s.end - s.start), 0);
+const totalMs = (sessions: Session[]) => sessions.reduce((t, s) => t + (s.end - s.start), 0);
 
 // ステージ付きを優先し、次に合計時間が長いもの。同点は source id の辞書順
 function pickSource(sources: Map<string, Session[]>): [string, Session[]] {
@@ -133,9 +127,7 @@ function pickSource(sources: Map<string, Session[]>): [string, Session[]] {
 }
 
 // 全ソースの segment から、起床日(JST)ごとに採用する睡眠を決める
-export function buildSleepByDate(
-  segments: Segment[],
-): Map<string, ChosenSleep> {
+export function buildSleepByDate(segments: Segment[]): Map<string, ChosenSleep> {
   const bySource = new Map<string, Segment[]>();
   for (const seg of segments) {
     const list = bySource.get(seg.source);
@@ -149,7 +141,10 @@ export function buildSleepByDate(
     for (const session of sessionize(segs)) {
       const date = jstDate(session.end);
       let m = byDate.get(date);
-      if (!m) byDate.set(date, (m = new Map()));
+      if (!m) {
+        m = new Map();
+        byDate.set(date, m);
+      }
       const list = m.get(source);
       if (list) list.push(session);
       else m.set(source, [session]);
@@ -160,15 +155,11 @@ export function buildSleepByDate(
   for (const [date, sources] of byDate) {
     const [source, sessions] = pickSource(sources);
     // 最長を main に（同長なら先に起きた方）
-    const main = sessions.reduce((best, s) =>
-      s.end - s.start > best.end - best.start ? s : best,
-    );
+    const main = sessions.reduce((best, s) => (s.end - s.start > best.end - best.start ? s : best));
     const { sleep, hasStages } = summarizeSession(main);
     const naps = sessions.filter((s) => s !== main);
     if (naps.length > 0) {
-      sleep.nap_minutes = Math.round(
-        naps.reduce((t, s) => t + asleepMs(s), 0) / MIN,
-      );
+      sleep.nap_minutes = Math.round(naps.reduce((t, s) => t + asleepMs(s), 0) / MIN);
     }
     result.set(date, { source, sleep, hasStages });
   }

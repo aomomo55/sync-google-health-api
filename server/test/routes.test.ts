@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { MemoryStore } from "../src/store/memory-store.js";
-import { NoteSync } from "../src/sync/note-sync.js";
-import { MemoryVaultWriter } from "../src/vault/memory-vault-writer.js";
 
 const TOKEN = "t".repeat(32);
 let app: ReturnType<typeof createApp>;
@@ -41,14 +39,8 @@ describe("POST /api/ingest", () => {
     ["実在しない日付", { days: [{ date: "2026-02-30" }] }],
     ["負の数", { days: [{ date: "2026-01-01", activity: { steps: -1 } }] }],
     ["未知のトップレベルキー", { days: [{ date: "2026-01-01", foo: 1 }] }],
-    [
-      "未知のセクション内キー",
-      { days: [{ date: "2026-01-01", activity: { step: 1 } }] },
-    ],
-    [
-      "日付重複",
-      { days: [{ date: "2026-01-01" }, { date: "2026-01-01" }] },
-    ],
+    ["未知のセクション内キー", { days: [{ date: "2026-01-01", activity: { step: 1 } }] }],
+    ["日付重複", { days: [{ date: "2026-01-01" }, { date: "2026-01-01" }] }],
     ["空配列", { days: [] }],
     [
       "401件",
@@ -141,9 +133,7 @@ describe("GET /api/summary", () => {
   it("date 指定、無ければ空配列", async () => {
     const res = await call("/api/summary?date=2026-01-01");
     expect(await res.json()).toEqual({
-      days: [
-        { date: "2026-01-01", activity: { steps: 1 }, body: { weight_kg: 60 } },
-      ],
+      days: [{ date: "2026-01-01", activity: { steps: 1 }, body: { weight_kg: 60 } }],
     });
     const none = await call("/api/summary?date=2030-01-01");
     expect(await none.json()).toEqual({ days: [] });
@@ -156,9 +146,7 @@ describe("GET /api/summary", () => {
   });
 
   it("types で絞り込み（date は常に含む）", async () => {
-    const res = await call(
-      "/api/summary?from=2026-01-01&to=2026-01-03&types=activity,sleep",
-    );
+    const res = await call("/api/summary?from=2026-01-01&to=2026-01-03&types=activity,sleep");
     expect(await res.json()).toEqual({
       days: [
         { date: "2026-01-01", activity: { steps: 1 } },

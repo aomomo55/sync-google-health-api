@@ -5,15 +5,11 @@ import { z } from "zod";
 import {
   DailySummarySchema,
   DateSchema,
-  SECTIONS,
   pickSections,
+  SECTIONS,
   type Section,
 } from "../domain/daily.js";
-import {
-  inclusiveDays,
-  inclusiveMonths,
-  isRealMonth,
-} from "../domain/dates.js";
+import { inclusiveDays, inclusiveMonths, isRealMonth } from "../domain/dates.js";
 import { summarizeMonths } from "../domain/monthly.js";
 import type { HealthStore } from "../store/health-store.js";
 import type { NoteSync } from "../sync/note-sync.js";
@@ -110,11 +106,7 @@ export function healthRoutes(store: HealthStore, noteSync: NoteSync | null = nul
     async (c) => {
       if (!noteSync) return c.json({ error: "Vault が設定されていません" }, 503);
       const raw: unknown = await c.req.json().catch(() => badRequest("JSON が不正です"));
-      const { from, to, includeStatic } = parseWith(
-        SyncNotesSchema,
-        raw,
-        "リクエストが不正です",
-      );
+      const { from, to, includeStatic } = parseWith(SyncNotesSchema, raw, "リクエストが不正です");
       const n = inclusiveDays(from, to);
       if (n < 1) badRequest("from は to 以前である必要があります");
       if (n > MAX_SPAN_DAYS) badRequest(`期間は最大 ${MAX_SPAN_DAYS} 日です`);

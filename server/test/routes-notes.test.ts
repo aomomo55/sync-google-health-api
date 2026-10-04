@@ -88,7 +88,10 @@ describe("POST /api/notes/sync", () => {
     ["from > to", { from: "2026-01-03", to: "2026-01-02" }],
     ["401日", { from: "2025-01-01", to: "2026-02-05" }],
     ["未知キー", { from: "2026-01-01", to: "2026-01-02", x: 1 }],
-    ["includeStatic が真偽値でない", { from: "2026-01-01", to: "2026-01-02", includeStatic: "yes" }],
+    [
+      "includeStatic が真偽値でない",
+      { from: "2026-01-01", to: "2026-01-02", includeStatic: "yes" },
+    ],
   ])("400: %s", async (_n, body) => {
     expect((await call("/api/notes/sync", body)).status).toBe(400);
   });

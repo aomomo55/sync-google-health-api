@@ -3,12 +3,12 @@ import { TAKEOUT_SOURCE } from "./daily-csv.js";
 import { buildSleepByDate, type ChosenSleep, type Segment } from "./sleep.js";
 
 export { parseDailyCsv } from "./daily-csv.js";
+export type { ChosenSleep, Segment } from "./sleep.js";
 export {
   buildSleepByDate,
   parseSleepJson,
   sourceFromFilename,
 } from "./sleep.js";
-export type { ChosenSleep, Segment } from "./sleep.js";
 
 export type BuildResult = {
   days: DailySummary[]; // 日付昇順
@@ -30,11 +30,7 @@ export function buildDays(
     map.set(date, day);
   }
   const days = [...map.values()]
-    .filter(
-      (d) =>
-        (!range.from || d.date >= range.from) &&
-        (!range.to || d.date <= range.to),
-    )
+    .filter((d) => (!range.from || d.date >= range.from) && (!range.to || d.date <= range.to))
     .sort((a, b) => a.date.localeCompare(b.date));
   return { days, sleepByDate };
 }

@@ -1,4 +1,4 @@
-import { mergeDay, type DailySummary } from "../domain/daily.js";
+import { type DailySummary, mergeDay } from "../domain/daily.js";
 import type { HealthStore } from "./health-store.js";
 
 export class MemoryStore implements HealthStore {
@@ -23,9 +23,7 @@ export class MemoryStore implements HealthStore {
   async findAdjacentDate(date: string, direction: "prev" | "next"): Promise<string | null> {
     const dates = [...this.days.keys()].sort();
     const found =
-      direction === "prev"
-        ? dates.filter((d) => d < date).at(-1)
-        : dates.find((d) => d > date);
+      direction === "prev" ? dates.filter((d) => d < date).at(-1) : dates.find((d) => d > date);
     return found ?? null;
   }
 }

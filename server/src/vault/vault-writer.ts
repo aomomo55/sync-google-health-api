@@ -83,8 +83,6 @@ export async function writeMany(
     }
   }
 
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, items.length) }, worker),
-  );
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
   return result;
 }

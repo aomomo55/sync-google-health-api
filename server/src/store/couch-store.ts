@@ -1,4 +1,4 @@
-import { mergeDay, type DailySummary } from "../domain/daily.js";
+import { type DailySummary, mergeDay } from "../domain/daily.js";
 import type { HealthStore } from "./health-store.js";
 
 export interface CouchStoreOptions {
@@ -29,8 +29,7 @@ export class CouchStore implements HealthStore {
 
   constructor(opts: CouchStoreOptions) {
     this.base = opts.baseUrl.replace(/\/+$/, "");
-    this.auth =
-      "Basic " + Buffer.from(`${opts.user}:${opts.password}`).toString("base64");
+    this.auth = `Basic ${Buffer.from(`${opts.user}:${opts.password}`).toString("base64")}`;
     this.db = encodeURIComponent(opts.db);
     this.fetchFn = opts.fetch ?? fetch;
   }
@@ -52,9 +51,7 @@ export class CouchStore implements HealthStore {
     });
     if (!okStatuses.includes(res.status)) {
       // 認証情報やレスポンス本文は含めない
-      throw new Error(
-        `CouchDB ${method} ${path.split("?")[0] || "/"} が失敗: HTTP ${res.status}`,
-      );
+      throw new Error(`CouchDB ${method} ${path.split("?")[0] || "/"} が失敗: HTTP ${res.status}`);
     }
     return res.json().catch(() => null);
   }
@@ -85,10 +82,7 @@ export class CouchStore implements HealthStore {
       .sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  async findAdjacentDate(
-    date: string,
-    direction: "prev" | "next",
-  ): Promise<string | null> {
+  async findAdjacentDate(date: string, direction: "prev" | "next"): Promise<string | null> {
     // キー順で前後を 2 件取り、date 自身を除いた最初の日を返す
     const key = (s: string) => encodeURIComponent(JSON.stringify(s));
     const query =
@@ -112,14 +106,10 @@ export class CouchStore implements HealthStore {
       if (attempt > MAX_CONFLICT_RETRIES) {
         throw new Error("CouchDB への書き込みが競合し続けました");
       }
-      const existingJson = await this.request(
-        "POST",
-        "/_all_docs?include_docs=true",
-        { keys: pending.map((d) => `day:${d.date}`) },
-      );
-      const existing = new Map(
-        CouchStore.docsOf(existingJson).map((d) => [d._id, d]),
-      );
+      const existingJson = await this.request("POST", "/_all_docs?include_docs=true", {
+        keys: pending.map((d) => `day:${d.date}`),
+      });
+      const existing = new Map(CouchStore.docsOf(existingJson).map((d) => [d._id, d]));
       const now = new Date().toISOString();
       const docs = pending.map((incoming) => {
         const id = `day:${incoming.date}`;
@@ -137,9 +127,7 @@ export class CouchStore implements HealthStore {
         if (r.ok) written++;
         else if (r.error === "conflict" && r.id) conflicts.add(r.id);
         else
-          throw new Error(
-            `CouchDB bulk 書き込みエラー: ${r.error ?? "unknown"} (${r.id ?? "?"})`,
-          );
+          throw new Error(`CouchDB bulk 書き込みエラー: ${r.error ?? "unknown"} (${r.id ?? "?"})`);
       }
       pending = pending.filter((d) => conflicts.has(`day:${d.date}`));
     }

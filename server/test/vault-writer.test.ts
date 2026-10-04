@@ -3,11 +3,7 @@ import { loadConfig } from "../src/config.js";
 import { createVaultWriter } from "../src/vault/index.js";
 import { McpVaultWriter } from "../src/vault/mcp-vault-writer.js";
 import { MemoryVaultWriter } from "../src/vault/memory-vault-writer.js";
-import {
-  VaultWriteError,
-  writeMany,
-  type VaultWriter,
-} from "../src/vault/vault-writer.js";
+import { VaultWriteError, type VaultWriter, writeMany } from "../src/vault/vault-writer.js";
 import { FakeObsidianMcp } from "./vault-fake-server.js";
 
 const TOKEN = "vault-test-token-0123456789";
@@ -206,12 +202,12 @@ describe("config / createVaultWriter", () => {
   });
 
   it("片方だけなら throw", () => {
-    expect(() =>
-      loadConfig({ ...base, OBSIDIAN_MCP_URL: "https://x.fly.dev/mcp" }),
-    ).toThrow(/OBSIDIAN_MCP_URL/);
-    expect(() =>
-      loadConfig({ ...base, OBSIDIAN_MCP_TOKEN: "t".repeat(16) }),
-    ).toThrow(/OBSIDIAN_MCP/);
+    expect(() => loadConfig({ ...base, OBSIDIAN_MCP_URL: "https://x.fly.dev/mcp" })).toThrow(
+      /OBSIDIAN_MCP_URL/,
+    );
+    expect(() => loadConfig({ ...base, OBSIDIAN_MCP_TOKEN: "t".repeat(16) })).toThrow(
+      /OBSIDIAN_MCP/,
+    );
   });
 
   it("トークンが短いと throw", () => {

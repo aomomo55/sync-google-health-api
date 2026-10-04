@@ -12,6 +12,9 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "lint": "biome ci .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
     "import:takeout": "tsx scripts/import-takeout.ts",
     "sync:notes": "tsx scripts/sync-notes.ts"
   },
@@ -22,6 +25,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@types/node": "^24.19.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

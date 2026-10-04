@@ -10,29 +10,30 @@ const token = (min: number) =>
 const credential = z
   .string()
   .min(1)
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: 制御文字を弾くことが目的の検査
   .regex(/^[^\x00-\x1f\x7f]+$/, "改行や制御文字を含めないでください");
 
-const schema = z.object({
-  PORT: z.coerce.number().int().min(1).max(65535).default(8080),
-  API_TOKEN: token(32),
-  COUCHDB_URL: z.url(),
-  COUCHDB_USER: credential,
-  COUCHDB_PASSWORD: credential,
-  COUCHDB_HEALTH_DB: z.string().min(1).default("health"),
-  OBSIDIAN_MCP_URL: z.url().optional(),
-  OBSIDIAN_MCP_TOKEN: token(16).optional(),
-  VAULT_HEALTH_PREFIX: z.string().min(1).default("Health/"),
-  NODE_ENV: z.string().optional(),
-}).refine((c) => !!c.OBSIDIAN_MCP_URL === !!c.OBSIDIAN_MCP_TOKEN, {
-  message: "OBSIDIAN_MCP_URL と OBSIDIAN_MCP_TOKEN は両方設定するか両方未設定にしてください",
-  path: ["OBSIDIAN_MCP_URL"],
-});
+const schema = z
+  .object({
+    PORT: z.coerce.number().int().min(1).max(65535).default(8080),
+    API_TOKEN: token(32),
+    COUCHDB_URL: z.url(),
+    COUCHDB_USER: credential,
+    COUCHDB_PASSWORD: credential,
+    COUCHDB_HEALTH_DB: z.string().min(1).default("health"),
+    OBSIDIAN_MCP_URL: z.url().optional(),
+    OBSIDIAN_MCP_TOKEN: token(16).optional(),
+    VAULT_HEALTH_PREFIX: z.string().min(1).default("Health/"),
+    NODE_ENV: z.string().optional(),
+  })
+  .refine((c) => !!c.OBSIDIAN_MCP_URL === !!c.OBSIDIAN_MCP_TOKEN, {
+    message: "OBSIDIAN_MCP_URL と OBSIDIAN_MCP_TOKEN は両方設定するか両方未設定にしてください",
+    path: ["OBSIDIAN_MCP_URL"],
+  });
 
 export type Config = z.infer<typeof schema>;
 
-export function loadConfig(
-  env: Record<string, string | undefined> = process.env,
-): Config {
+export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const result = schema.safeParse(env);
   if (!result.success) {
     const details = result.error.issues

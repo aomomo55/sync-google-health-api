@@ -21,6 +21,8 @@
 
 ```sh
 pnpm install --frozen-lockfile
+pnpm lint        # チェックのみ（Biome）
+pnpm lint:fix    # 自動修正
 pnpm typecheck
 pnpm test        # 結合テストは環境変数が無ければスキップされる（下記）
 pnpm build
@@ -38,7 +40,7 @@ Android（`android/` で実行。JDK 21 が必要。`JAVA_HOME` を JDK 21 に�
 
 ## 変更するときの約束
 
-- 変更したら、該当するテストを追加・更新し、サーバーは typecheck / test / build、Android は testDebugUnitTest / assembleDebug が通ることを確認してから完了とする
+- 変更したら、該当するテストを追加・更新し、サーバーは lint / typecheck / test / build、Android は testDebugUnitTest / assembleDebug が通ることを確認してから完了とする
 - **個人の情報をリポジトリに入れない**: 実在の健康データの値、本番のホスト名・アプリ名、メールアドレス、トークンやパスワード。テストのデータは架空の値で作る
 - **特定の端末やメーカーに依存した処理を書かない**（例: 睡眠の元データは、パッケージ名ではなく「睡眠ステージを持つ記録を優先し、合計時間が長いもの」で選ぶ）。サーバーの Takeout 取り込みと Android アプリで、同じ規則を保つ
 - 設計に関わる判断をしたら `docs/adr/` に ADR を追加する。過去の判断を覆すときは元の ADR を書き換えず、新しい ADR を作って元のステータスを「置き換え済み」にする

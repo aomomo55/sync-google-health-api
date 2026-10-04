@@ -44,10 +44,7 @@ describe("planNotes", () => {
   });
 
   it("月次は月内の全日で集計する", () => {
-    const monthly = planNotes(
-      [day("2026-02-01", 1000), day("2026-02-20", 3000)],
-      ["2026-02-20"],
-    )
+    const monthly = planNotes([day("2026-02-01", 1000), day("2026-02-20", 3000)], ["2026-02-20"])
       .find((i) => i.path.endsWith("Monthly/2026-02.md"))!
       .render(null);
     expect(monthly).toContain("2000");
@@ -55,7 +52,7 @@ describe("planNotes", () => {
 
   it("既存メモを保持する", () => {
     const item = planNotes(DAYS, ["2026-02-05"])[1]!;
-    const edited = item.render(null) + "\n自分のメモ\n";
+    const edited = `${item.render(null)}\n自分のメモ\n`;
     expect(item.render(edited)).toBe(edited);
   });
 
@@ -70,9 +67,7 @@ describe("planNotes", () => {
     const a = planNotes(DAYS, ["2026-02-05"], "Health/_it");
     const b = planNotes(DAYS, ["2026-02-05"], "Health/_it");
     expect(a.every((i) => i.path.startsWith("Health/_it/"))).toBe(true);
-    expect(a.map((i) => [i.path, i.render(null)])).toEqual(
-      b.map((i) => [i.path, i.render(null)]),
-    );
+    expect(a.map((i) => [i.path, i.render(null)])).toEqual(b.map((i) => [i.path, i.render(null)]));
   });
 
   it("対象が無ければ空", () => {

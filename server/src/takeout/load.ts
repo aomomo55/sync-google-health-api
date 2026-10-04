@@ -2,7 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { DailySummary } from "../domain/daily.js";
 import { parseDailyCsv } from "./daily-csv.js";
-import { parseSleepJson, sourceFromFilename, type Segment } from "./sleep.js";
+import { parseSleepJson, type Segment, sourceFromFilename } from "./sleep.js";
 
 export const DAILY_CSV_PATH = ["日別のアクティビティ指標", "日別のアクティビティ指標.csv"];
 export const RAW_DIR = "すべてのデータ";

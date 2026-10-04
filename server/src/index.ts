@@ -24,9 +24,7 @@ const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
 function shutdown(signal: string) {
   console.log(`${signal} received, shutting down`);
   server.close((err) => {
-    void (writer?.close() ?? Promise.resolve()).finally(() =>
-      process.exit(err ? 1 : 0),
-    );
+    void (writer?.close() ?? Promise.resolve()).finally(() => process.exit(err ? 1 : 0));
   });
   // keep-alive 接続で閉じきれない場合の保険
   setTimeout(() => process.exit(1), 10_000).unref();

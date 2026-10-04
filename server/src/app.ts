@@ -30,8 +30,7 @@ export function createApp({ config, store, noteSync = null }: AppDeps) {
       // WWW-Authenticate は MCP コネクタの OAuth 開始に必要なので引き継ぐ
       const wwwAuthenticate = err.getResponse().headers.get("WWW-Authenticate");
       if (wwwAuthenticate) c.header("WWW-Authenticate", wwwAuthenticate);
-      const message =
-        err.message || (err.status === 401 ? "Unauthorized" : "Error");
+      const message = err.message || (err.status === 401 ? "Unauthorized" : "Error");
       return c.json({ error: message }, err.status);
     }
     // スタックトレースはレスポンスに含めない

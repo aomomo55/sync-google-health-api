@@ -77,11 +77,7 @@ export function summarizeMonth(month: string, days: DailySummary[]): MonthlySumm
   const a = days.map((d) => d.activity);
   const sleepDays = days.flatMap((d) => (d.sleep ? [d.sleep] : []));
   const nights = sleepDays.filter(
-    (s) =>
-      s.asleep_minutes != null ||
-      s.in_bed_minutes != null ||
-      s.start != null ||
-      s.end != null,
+    (s) => s.asleep_minutes != null || s.in_bed_minutes != null || s.start != null || s.end != null,
   ).length;
   const sleepAvg = (pick: (s: (typeof sleepDays)[number]) => number | null | undefined) =>
     avg(vals(sleepDays.map(pick)));
@@ -115,9 +111,18 @@ export function summarizeMonth(month: string, days: DailySummary[]): MonthlySumm
         return w === null ? null : formatHm(w);
       })(),
       total_nap_minutes: sum(vals(sleepDays.map((s) => s.nap_minutes))),
-      avg_deep_minutes: r(sleepAvg((s) => s.deep_minutes), 1),
-      avg_light_minutes: r(sleepAvg((s) => s.light_minutes), 1),
-      avg_rem_minutes: r(sleepAvg((s) => s.rem_minutes), 1),
+      avg_deep_minutes: r(
+        sleepAvg((s) => s.deep_minutes),
+        1,
+      ),
+      avg_light_minutes: r(
+        sleepAvg((s) => s.light_minutes),
+        1,
+      ),
+      avg_rem_minutes: r(
+        sleepAvg((s) => s.rem_minutes),
+        1,
+      ),
     },
   };
 }

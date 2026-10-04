@@ -4,9 +4,9 @@ import { buildDays } from "../src/takeout/index.js";
 import {
   buildSleepByDate,
   parseSleepJson,
+  type Segment,
   sessionize,
   sourceFromFilename,
-  type Segment,
 } from "../src/takeout/sleep.js";
 
 const MIN = 60_000;
@@ -163,6 +163,8 @@ describe("buildDays", () => {
     expect(days[0]?.activity).toEqual({ steps: 1 });
     expect(days[0]?.sleep?.in_bed_minutes).toBe(360);
     expect(days[1]).toMatchObject({ source: "takeout" });
-    expect(buildDays(csv, [], { from: "2026-03-15" }).days.map((d) => d.date)).toEqual(["2026-03-20"]);
+    expect(buildDays(csv, [], { from: "2026-03-15" }).days.map((d) => d.date)).toEqual([
+      "2026-03-20",
+    ]);
   });
 });

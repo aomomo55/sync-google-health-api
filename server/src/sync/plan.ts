@@ -63,7 +63,10 @@ export function planNotes(
 
   for (const month of months) {
     const content = renderMonthlyNote(
-      summarizeMonth(month, days.filter((d) => d.date.startsWith(month))),
+      summarizeMonth(
+        month,
+        days.filter((d) => d.date.startsWith(month)),
+      ),
       root,
     );
     items.push({ path: p.monthly(month), render: () => content });

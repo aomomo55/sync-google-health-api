@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parseArgs } from "node:util";
-import { DailySummarySchema, type DailySummary } from "../src/domain/daily.js";
+import { type DailySummary, DailySummarySchema } from "../src/domain/daily.js";
 import { isRealDate } from "../src/domain/dates.js";
 import { buildDays } from "../src/takeout/index.js";
 import { loadTakeout } from "../src/takeout/load.js";
@@ -40,8 +40,10 @@ for (const k of ["from", "to"] as const) {
   const v = values[k];
   if (v !== undefined && !isRealDate(v)) fail(`--${k} は YYYY-MM-DD 形式で指定してください`);
 }
-if (!Number.isInteger(BATCH) || BATCH < 1 || BATCH > 400) fail("--batch は 1〜400 の整数で指定してください");
-if (!values.takeout) fail("--takeout か環境変数 TAKEOUT_DIR で Takeout の Fit フォルダを指定してください");
+if (!Number.isInteger(BATCH) || BATCH < 1 || BATCH > 400)
+  fail("--batch は 1〜400 の整数で指定してください");
+if (!values.takeout)
+  fail("--takeout か環境変数 TAKEOUT_DIR で Takeout の Fit フォルダを指定してください");
 if (values.post && !values["api-url"]) fail("--post には --api-url が必要です");
 const token = process.env.API_TOKEN;
 if (values.post && !token) fail("環境変数 API_TOKEN が未設定です");
@@ -56,12 +58,13 @@ const { days, sleepByDate } = buildDays(csvDays, segments, {
 const invalid: string[] = [];
 for (const d of days) {
   const r = DailySummarySchema.safeParse(d);
-  if (!r.success) invalid.push(`${d.date}: ${r.error.issues[0]?.path.join(".")} ${r.error.issues[0]?.message}`);
+  if (!r.success)
+    invalid.push(`${d.date}: ${r.error.issues[0]?.path.join(".")} ${r.error.issues[0]?.message}`);
 }
 if (invalid.length > 0) fail(`検証エラー ${invalid.length} 件\n${invalid.slice(0, 10).join("\n")}`);
 
 await mkdir(dirname(values.out), { recursive: true });
-await writeFile(values.out, JSON.stringify(days) + "\n", "utf8");
+await writeFile(values.out, `${JSON.stringify(days)}\n`, "utf8");
 
 // --- 統計 ---
 const has = (s: "activity" | "heart_rate" | "body" | "sleep") =>
@@ -80,21 +83,30 @@ const stageCodes = new Map<number, number>();
 for (const seg of segments) stageCodes.set(seg.stage, (stageCodes.get(seg.stage) ?? 0) + 1);
 
 console.log(`sources: ${files.length} sleep files, ${segments.length} segments`);
-console.log(`stage codes (segments): ${JSON.stringify(Object.fromEntries([...stageCodes].sort((a, b) => a[0] - b[0])))}`);
+console.log(
+  `stage codes (segments): ${JSON.stringify(Object.fromEntries([...stageCodes].sort((a, b) => a[0] - b[0])))}`,
+);
 console.log(`days: ${days.length} (${days[0]?.date ?? "-"} .. ${days.at(-1)?.date ?? "-"})`);
 console.log(
   `with section: activity=${has("activity")} heart_rate=${has("heart_rate")} body=${has("body")} sleep=${has("sleep")}`,
 );
-console.log(`sleep nights: ${nights.length}, with stages: ${nights.filter(([, c]) => c.hasStages).length}`);
+console.log(
+  `sleep nights: ${nights.length}, with stages: ${nights.filter(([, c]) => c.hasStages).length}`,
+);
 for (const [src, s] of [...bySource].sort((a, b) => b[1].nights - a[1].nights)) {
   console.log(`  ${src}: nights=${s.nights} withStages=${s.withStages}`);
 }
 const byDate = new Map<string, DailySummary>(days.map((d) => [d.date, d]));
-const checkDates = (values.check ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+const checkDates = (values.check ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 for (const date of checkDates) {
   const d = byDate.get(date);
   const src = sleepByDate.get(date)?.source;
-  console.log(`${date}${src ? ` [sleep source: ${src}]` : ""}: ${d ? JSON.stringify(d) : "(no data)"}`);
+  console.log(
+    `${date}${src ? ` [sleep source: ${src}]` : ""}: ${d ? JSON.stringify(d) : "(no data)"}`,
+  );
 }
 console.log(`wrote ${values.out}`);
 

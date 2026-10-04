@@ -2,11 +2,11 @@ import { renderDailyLogBase, renderMonthlyBase, renderSleepLogBase } from "./bas
 import { renderHealthDashboard, renderSleepDashboard } from "./dashboards.js";
 import { notePaths } from "./paths.js";
 
-export { renderDailyNote, mergeMemo, MEMO_MARKER, type DailyNav } from "./daily.js";
-export { renderMonthlyNote } from "./monthly.js";
-export { renderDailyLogBase, renderSleepLogBase, renderMonthlyBase } from "./bases.js";
+export { renderDailyLogBase, renderMonthlyBase, renderSleepLogBase } from "./bases.js";
+export { type DailyNav, MEMO_MARKER, mergeMemo, renderDailyNote } from "./daily.js";
 export { renderHealthDashboard, renderSleepDashboard } from "./dashboards.js";
-export { notePaths, DEFAULT_ROOT, type NotePaths } from "./paths.js";
+export { renderMonthlyNote } from "./monthly.js";
+export { DEFAULT_ROOT, type NotePaths, notePaths } from "./paths.js";
 
 export interface NoteFile {
   path: string;

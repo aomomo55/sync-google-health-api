@@ -12,6 +12,6 @@ export function createVaultWriter(config: Config): VaultWriter | null {
   });
 }
 
-export * from "./vault-writer.js";
 export { McpVaultWriter } from "./mcp-vault-writer.js";
 export { MemoryVaultWriter } from "./memory-vault-writer.js";
+export * from "./vault-writer.js";

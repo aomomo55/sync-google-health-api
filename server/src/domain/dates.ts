@@ -6,9 +6,7 @@ export function isRealDate(s: string): boolean {
   if (!m) return false;
   const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
   const t = new Date(Date.UTC(y, mo - 1, d));
-  return (
-    t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d
-  );
+  return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d;
 }
 
 export function isRealMonth(s: string): boolean {
@@ -27,9 +25,7 @@ export function inclusiveMonths(from: string, to: string): number {
   const f = MONTH_RE.exec(from);
   const t = MONTH_RE.exec(to);
   if (!f || !t) return 0;
-  return (
-    (Number(t[1]) - Number(f[1])) * 12 + (Number(t[2]) - Number(f[2])) + 1
-  );
+  return (Number(t[1]) - Number(f[1])) * 12 + (Number(t[2]) - Number(f[2])) + 1;
 }
 
 // YYYY-MM-DD に日数を足す（負も可）
