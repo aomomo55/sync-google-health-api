@@ -179,6 +179,27 @@ const bed = (s) => { const h = hm(s); return h === null ? null : (h < 12 ? h + 2
 const clock = (v) => { const m = Math.round((((v % 24) + 24) % 24) * 60); return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); };
 const timeAxis = { title: { display: true, text: "時刻" }, ticks: { callback: (v) => clock(v) } };`;
 
+  // 直近 7 日（暦日）の睡眠時間。記録の無い日も空けて並べ、7 時間の目安線を引く
+  const week = block(`${prelude()}
+${dailyPages(r, 7, "days")}
+const labels = [];
+for (let i = 6; i >= 0; i--) labels.push(dv.date("today").minus({ days: i }).toFormat("yyyy-MM-dd"));
+const byDay = new Map(pages.map((p) => [day(p), num(p.睡眠時間h)]));
+const values = labels.map((d) => (byDay.has(d) ? byDay.get(d) : null));
+if (values.every((v) => v === null)) { dv.paragraph("直近7日の睡眠データがありません"); } else {
+  draw({
+    type: "bar",
+    data: {
+      labels: labels.map((d) => d.slice(5)),
+      datasets: [
+        { label: "睡眠時間h", data: values, backgroundColor: "${COLORS.purple}" },
+        { type: "line", label: "目標 7時間", data: labels.map(() => 7), borderColor: "${COLORS.red}", borderDash: [6, 4], pointRadius: 0, borderWidth: 1 },
+      ],
+    },
+    options: { scales: { y: { beginAtZero: true, suggestedMax: 9, title: { display: true, text: "時間" } } } },
+  });
+}`);
+
   const stages = block(`${prelude()}
 ${dailyPages(r, 30, "nights")}
 ${emptyGuard("睡眠データがありません")}
@@ -264,6 +285,8 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
   return [
     "# 睡眠ダッシュボード\n",
     `[[${linkTarget(p.dashboard)}|ヘルスケアダッシュボード]] に戻る\n`,
+    "## 直近1週間の睡眠時間\n",
+    week,
     "## 直近90夜\n",
     `![[${p.sleepBase}#直近90夜]]\n`,
     "### 睡眠ステージ（直近30夜）\n",

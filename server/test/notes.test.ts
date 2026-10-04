@@ -439,7 +439,52 @@ describe("静的ノート", () => {
     expect(d).toContain("stacked: true");
     expect(d).toContain("h + 24");
     expect(d).toContain("[[Health/ヘルスケアダッシュボード|ヘルスケアダッシュボード]]");
-    expect(jsBlocks(d)).toHaveLength(5);
+    expect(jsBlocks(d)).toHaveLength(6);
+    // 直近1週間の睡眠時間が一番上にある
+    expect(d.indexOf("## 直近1週間の睡眠時間")).toBeLessThan(d.indexOf("## 直近90夜"));
+  });
+
+  it("直近1週間の睡眠時間は 7 日分を並べ、記録の無い日は空ける", async () => {
+    // biome-ignore lint/suspicious/noExplicitAny: dataviewjs の動的な API を模したモックのため
+    const calls: any[] = [];
+    const page = (d: string, h: number) => ({
+      type: "health-daily",
+      日付: { toFormat: () => d },
+      睡眠時間h: h,
+    });
+    const arr = {
+      where: () => arr,
+      sort: () => arr,
+      array: () => [page("2026-03-10", 6.5), page("2026-03-15", 7.25)],
+    };
+    const dv = {
+      date: () => ({
+        minus: ({ days }: { days: number }) => ({
+          toFormat: () => `2026-03-${String(15 - days).padStart(2, "0")}`,
+        }),
+      }),
+      pages: () => arr,
+      paragraph: () => {},
+    };
+    const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
+      ...a: string[]
+    ) => (...a: unknown[]) => Promise<void>;
+    await new AsyncFunction("dv", "window", jsBlocks(renderSleepDashboard())[0]!).call(
+      { container: {} },
+      dv,
+      { renderChart: (c: unknown) => calls.push(c) },
+    );
+    expect(calls[0].data.labels).toEqual([
+      "03-09",
+      "03-10",
+      "03-11",
+      "03-12",
+      "03-13",
+      "03-14",
+      "03-15",
+    ]);
+    expect(calls[0].data.datasets[0].data).toEqual([null, 6.5, null, null, null, null, 7.25]);
+    expect(calls[0].data.datasets[1].data).toEqual([7, 7, 7, 7, 7, 7, 7]);
   });
 
   it("全 dataviewjs ブロックは構文的に正しく、データ 0 件でも例外なし", async () => {
@@ -451,7 +496,11 @@ describe("静的ノート", () => {
       const fn = new AsyncFunction("dv", "window", code);
       const msgs: string[] = [];
       const empty = {
-        date: () => ({ minus: () => 0 }),
+        date: () => ({
+          minus: ({ days }: { days: number }) => ({
+            toFormat: () => `2026-03-${String(15 - days).padStart(2, "0")}`,
+          }),
+        }),
         pages: () => {
           const arr = { where: () => arr, sort: () => arr, array: () => [] as unknown[] };
           return arr;
@@ -485,13 +534,21 @@ describe("静的ノート", () => {
       sort: () => arr,
       array: () => [page("2026-03-01"), page("2026-03-02")],
     };
-    const dv = { date: () => ({ minus: () => 0 }), pages: () => arr, paragraph: () => {} };
+    const dv = {
+      date: () => ({
+        minus: ({ days }: { days: number }) => ({
+          toFormat: () => `2026-03-${String(15 - days).padStart(2, "0")}`,
+        }),
+      }),
+      pages: () => arr,
+      paragraph: () => {},
+    };
     const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
       ...a: string[]
     ) => (...a: unknown[]) => Promise<void>;
     const blocks = jsBlocks(renderSleepDashboard());
-    // 2番目: 就寝・起床時刻
-    await new AsyncFunction("dv", "window", blocks[1]!).call({ container: {} }, dv, {
+    // 3番目: 就寝・起床時刻
+    await new AsyncFunction("dv", "window", blocks[2]!).call({ container: {} }, dv, {
       renderChart: (c: unknown) => calls.push(c),
     });
     const ds = calls[0].data.datasets;
