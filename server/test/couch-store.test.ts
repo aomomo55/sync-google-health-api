@@ -35,11 +35,28 @@ function make(responses: { status: number; json?: unknown }[]) {
 }
 
 describe("CouchStore (fake fetch)", () => {
-  it.each([201, 202, 412])("ensureReady は %i を許容", async (status) => {
-    const { store, calls } = make([{ status }]);
+  it("ensureReady は DB があれば作成しない（DB 専用ユーザーで動かせる）", async () => {
+    const { store, calls } = make([{ status: 200, json: { db_name: "health" } }]);
     await store.ensureReady();
-    expect(calls[0]).toMatchObject({ method: "PUT", url: "http://couch.test:5984/health" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ method: "GET", url: "http://couch.test:5984/health" });
     expect(calls[0]?.headers.Authorization).toBe(AUTH);
+  });
+
+  it.each([201, 202, 412])("ensureReady は DB が無ければ作成し、%i を許容", async (status) => {
+    const { store, calls } = make([{ status: 404, json: { error: "not_found" } }, { status }]);
+    await store.ensureReady();
+    expect(calls[1]).toMatchObject({ method: "PUT", url: "http://couch.test:5984/health" });
+  });
+
+  it("ensureReady は DB が無く作成権限も無いと、分かるメッセージで throw する", async () => {
+    const { store } = make([{ status: 404, json: { error: "not_found" } }, { status: 401 }]);
+    const err = await store.ensureReady().then(
+      () => null,
+      (e: Error) => e,
+    );
+    expect(err?.message).toContain("管理者で作成してください");
+    expect(err?.message).not.toContain(PASSWORD);
   });
 
   it("ensureReady の 401 は throw し、パスワードを含まない", async () => {

@@ -56,8 +56,19 @@ export class CouchStore implements HealthStore {
     return res.json().catch(() => null);
   }
 
+  // DB の作成には CouchDB 管理者の権限が要る。DB 専用ユーザーで動かせるよう、存在すれば作成しない
   async ensureReady(): Promise<void> {
-    await this.request("PUT", "", undefined, [201, 202, 412]);
+    const exists = await this.request("GET", "", undefined, [200, 404]).then(
+      (json) => !(json as { error?: string } | null)?.error,
+    );
+    if (exists) return;
+    try {
+      await this.request("PUT", "", undefined, [201, 202, 412]);
+    } catch (e) {
+      throw new Error(
+        `CouchDB に DB "${decodeURIComponent(this.db)}" が無く、作成する権限もありません。管理者で作成してください（${e instanceof Error ? e.message : String(e)}）`,
+      );
+    }
   }
 
   private static toDay(doc: CouchDoc): DailySummary {
