@@ -100,13 +100,7 @@ jobs:
       - name: ユニットテストとデバッグビルド
         run: ./gradlew testDebugUnitTest assembleDebug --stacktrace
 
-      - uses: actions/upload-artifact@v7
-        with:
-          name: debug-apk
-          path: android/app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 7
-
+      # APK は保存しない（依存ライブラリのライセンス表示なしでの配布になるのを避ける）
       - uses: actions/upload-artifact@v7
         if: always()
         with:
