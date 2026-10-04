@@ -42,6 +42,42 @@ describe("summarizeMonth", () => {
   });
 });
 
+describe("summarizeMonth: カロリー", () => {
+  it("消費の平均と、摂取の記録日数・平均（値のある日だけで平均）", () => {
+    const m = summarizeMonth("2026-01", [
+      {
+        date: "2026-01-01",
+        activity: { calories_kcal: 2000 },
+        nutrition: { energy_kcal: 1800, protein_g: 70, fat_g: 50, carbs_g: 200 },
+      },
+      {
+        date: "2026-01-02",
+        activity: { calories_kcal: 2101 },
+        nutrition: { energy_kcal: 2001, protein_g: 75.5 },
+      },
+      { date: "2026-01-03", activity: { steps: 1 }, nutrition: { energy_kcal: null } },
+    ]);
+    expect(m.activity.avg_calories_kcal).toBe(2051); // 2050.5 → 四捨五入
+    expect(m.nutrition).toEqual({
+      days_logged: 2,
+      avg_energy_kcal: 1901, // 1900.5
+      avg_protein_g: 72.8, // 72.75
+      avg_fat_g: 50,
+      avg_carbs_g: 200,
+    });
+  });
+
+  it("摂取だけの日も計測日数に含まれ、無ければ null と 0", () => {
+    const m = summarizeMonth("2026-01", [{ date: "2026-01-01", nutrition: { fat_g: 10 } }]);
+    expect(m.days_with_data).toBe(1);
+    expect(m.nutrition.days_logged).toBe(1);
+    expect(m.nutrition.avg_energy_kcal).toBeNull();
+    const e = summarizeMonth("2026-01", []);
+    expect(e.nutrition.days_logged).toBe(0);
+    expect(e.activity.avg_calories_kcal).toBeNull();
+  });
+});
+
 describe("summarizeMonths", () => {
   it("月ごとに昇順でグルーピングし、全て null の日だけの月は除く", () => {
     const r = summarizeMonths([

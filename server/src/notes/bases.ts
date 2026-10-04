@@ -26,6 +26,7 @@ views:
       - note.歩数
       - note.距離km
       - note.運動時間
+      - note.摂取カロリー
       - note.平均心拍
       - note.体重kg
       - note.8000歩達成
@@ -40,6 +41,7 @@ views:
       - note.歩数
       - note.距離km
       - note.運動時間
+      - note.摂取カロリー
       - note.平均心拍
       - note.体重kg
       - note.8000歩達成
@@ -91,6 +93,8 @@ views:
       - note.平均歩数
       - note.総距離km
       - note.運動時間合計
+      - note.平均消費カロリー
+      - note.平均摂取カロリー
       - note.平均心拍
       - note.平均体重kg
       - note.平均睡眠時間h

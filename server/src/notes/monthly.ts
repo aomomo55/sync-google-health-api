@@ -14,9 +14,15 @@ export function monthlyEntries(m: MonthlySummary): YamlEntry[] {
     { key: "月初日", value: `${m.month}-01`, raw: true },
     { key: "計測日数", value: m.days_with_data },
     { key: "平均歩数", value: numOrNull(m.activity.avg_steps) },
+    { key: "平均消費カロリー", value: numOrNull(m.activity.avg_calories_kcal) },
     { key: "総距離km", value: numOrNull(m.activity.total_distance_km) },
     { key: "運動時間合計", value: numOrNull(m.activity.total_move_minutes) },
     { key: "ウォーキング分合計", value: rnd(numOrNull(m.activity.total_walking_minutes)) },
+    { key: "摂取記録日数", value: m.nutrition.days_logged },
+    { key: "平均摂取カロリー", value: numOrNull(m.nutrition.avg_energy_kcal) },
+    { key: "平均たんぱく質g", value: numOrNull(m.nutrition.avg_protein_g) },
+    { key: "平均脂質g", value: numOrNull(m.nutrition.avg_fat_g) },
+    { key: "平均炭水化物g", value: numOrNull(m.nutrition.avg_carbs_g) },
     { key: "平均心拍", value: numOrNull(m.heart_rate.avg_bpm) },
     { key: "平均体重kg", value: numOrNull(m.body.avg_weight_kg) },
     { key: "睡眠記録日数", value: m.sleep.nights },
@@ -39,6 +45,18 @@ function summaryLines(m: MonthlySummary): string[] {
   if (a.total_distance_km !== null) act.push(`合計 ${fmtNum(a.total_distance_km)} km`);
   if (a.total_move_minutes !== null) act.push(`運動 ${fmtDuration(a.total_move_minutes)}`);
   if (act.length > 0) lines.push(`- 活動: ${act.join(" / ")}`);
+  const nu = m.nutrition;
+  if (nu.days_logged > 0) {
+    const parts: string[] = [`${nu.days_logged}日記録`];
+    if (nu.avg_energy_kcal !== null) parts.push(`平均 ${fmtNum(nu.avg_energy_kcal)} kcal/日`);
+    const pfc = [
+      ["P", nu.avg_protein_g],
+      ["F", nu.avg_fat_g],
+      ["C", nu.avg_carbs_g],
+    ].flatMap(([label, v]) => (v === null ? [] : [`${label} ${fmtNum(v as number)}g`]));
+    if (pfc.length > 0) parts.push(pfc.join(" / "));
+    lines.push(`- 食事: ${parts.join(" / ")}`);
+  }
   if (m.heart_rate.avg_bpm !== null) lines.push(`- 平均心拍: ${fmtNum(m.heart_rate.avg_bpm)} bpm`);
   if (m.body.avg_weight_kg !== null) lines.push(`- 平均体重: ${fmtNum(m.body.avg_weight_kg)} kg`);
   const s = m.sleep;
@@ -56,7 +74,7 @@ export function renderMonthlyNote(m: MonthlySummary, root?: string): string {
   const prev = shiftMonth(m.month, -1);
   const next = shiftMonth(m.month, 1);
   const query = [
-    "TABLE 歩数, 距離km, 運動時間, 平均心拍, 睡眠時間h, 就寝時刻, 起床時刻",
+    "TABLE 歩数, 摂取カロリー, 距離km, 運動時間, 平均心拍, 睡眠時間h, 就寝時刻, 起床時刻",
     `FROM "${p.dailyDir}"`,
     `WHERE type = "health-daily" AND dateformat(日付, "yyyy-MM") = "${m.month}"`,
     "SORT 日付 ASC",

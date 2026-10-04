@@ -19,6 +19,10 @@ data class RawDay(
     val restingBpm: Long? = null,
     val weightKg: Double? = null,
     val bodyFatPct: Double? = null,
+    val energyKcal: Double? = null,
+    val proteinG: Double? = null,
+    val fatG: Double? = null,
+    val carbsG: Double? = null,
     val exercise: List<ExerciseSpan> = emptyList(),
 )
 
@@ -49,12 +53,19 @@ object DayAggregator {
             weightKg = raw.weightKg?.let { round(it, 2) },
             bodyFatPct = raw.bodyFatPct?.let { round(it, 1) },
         )
+        val nutrition = NutritionSummary(
+            energyKcal = raw.energyKcal?.let { Math.round(it) },
+            proteinG = raw.proteinG?.let { round(it, 1) },
+            fatG = raw.fatG?.let { round(it, 1) },
+            carbsG = raw.carbsG?.let { round(it, 1) },
+        )
         return DailySummary(
             date = date.toString(),
             activity = activity.takeUnless { it.isEmpty() },
             heartRate = hr.takeUnless { it.isEmpty() },
             body = body.takeUnless { it.isEmpty() },
             sleep = sleep,
+            nutrition = nutrition.takeUnless { it.isEmpty() },
         )
     }
 

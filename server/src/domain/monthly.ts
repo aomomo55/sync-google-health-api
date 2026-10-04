@@ -5,9 +5,17 @@ export interface MonthlySummary {
   days_with_data: number;
   activity: {
     avg_steps: number | null;
+    avg_calories_kcal: number | null;
     total_distance_km: number | null;
     total_move_minutes: number | null;
     total_walking_minutes: number | null;
+  };
+  nutrition: {
+    days_logged: number;
+    avg_energy_kcal: number | null;
+    avg_protein_g: number | null;
+    avg_fat_g: number | null;
+    avg_carbs_g: number | null;
   };
   heart_rate: { avg_bpm: number | null };
   body: { avg_weight_kg: number | null };
@@ -68,13 +76,17 @@ function avgBedtime(xs: number[]): string | null {
 }
 
 function hasData(d: DailySummary): boolean {
-  return [d.activity, d.heart_rate, d.body, d.sleep].some(
+  return [d.activity, d.heart_rate, d.body, d.sleep, d.nutrition].some(
     (s) => s && Object.values(s).some((v) => v !== null && v !== undefined),
   );
 }
 
 export function summarizeMonth(month: string, days: DailySummary[]): MonthlySummary {
   const a = days.map((d) => d.activity);
+  const n = days.map((d) => d.nutrition);
+  const nutritionDays = n.filter(
+    (x) => x && Object.values(x).some((v) => v !== null && v !== undefined),
+  ).length;
   const sleepDays = days.flatMap((d) => (d.sleep ? [d.sleep] : []));
   const nights = sleepDays.filter(
     (s) => s.asleep_minutes != null || s.in_bed_minutes != null || s.start != null || s.end != null,
@@ -91,9 +103,17 @@ export function summarizeMonth(month: string, days: DailySummary[]): MonthlySumm
     days_with_data: days.filter(hasData).length,
     activity: {
       avg_steps: r(avg(vals(a.map((x) => x?.steps))), 0),
+      avg_calories_kcal: r(avg(vals(a.map((x) => x?.calories_kcal))), 0),
       total_distance_km: distanceM === null ? null : round(distanceM / 1000, 2),
       total_move_minutes: sum(vals(a.map((x) => x?.move_minutes))),
       total_walking_minutes: sum(vals(a.map((x) => x?.walking_minutes))),
+    },
+    nutrition: {
+      days_logged: nutritionDays,
+      avg_energy_kcal: r(avg(vals(n.map((x) => x?.energy_kcal))), 0),
+      avg_protein_g: r(avg(vals(n.map((x) => x?.protein_g))), 1),
+      avg_fat_g: r(avg(vals(n.map((x) => x?.fat_g))), 1),
+      avg_carbs_g: r(avg(vals(n.map((x) => x?.carbs_g))), 1),
     },
     heart_rate: {
       avg_bpm: r(avg(vals(days.map((d) => d.heart_rate?.avg_bpm))), 1),

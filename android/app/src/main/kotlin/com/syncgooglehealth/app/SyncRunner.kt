@@ -42,11 +42,12 @@ object SyncRunner {
 
         val reader = HealthReader(context)
         val granted = reader.grantedPermissions()
-        val required = if (requireBackground) HealthPermissions.all else HealthPermissions.all - BACKGROUND
+        val required = PermissionPolicy.required(HealthPermissions.all, requireBackground)
         if (!granted.containsAll(required)) {
             return SyncOutcome(SyncStatus.FAILED, "ヘルスコネクトの権限が不足しています。「権限を付与」を押してください")
         }
 
+        val includeNutrition = PermissionPolicy.canReadNutrition(granted)
         val zone = ZoneId.systemDefault()
         val to = LocalDate.now(zone)
         val from = to.minusDays(days - 1L)
@@ -57,7 +58,7 @@ object SyncRunner {
         var notesFailed = 0
         val noteErrors = mutableListOf<String>()
         for ((s, e) in chunkRanges(from, to)) {
-            val summaries = reader.readDays(s, e)
+            val summaries = reader.readDays(s, e, includeNutrition)
             for (chunk in chunkDays(summaries)) {
                 when (val r = IngestClient.post(store.serverUrl, token, chunk)) {
                     is IngestResult.Success -> {
@@ -78,13 +79,12 @@ object SyncRunner {
 
         val msg = buildString {
             append("${sent}日分を送信しました")
+            if (!includeNutrition) append("（栄養は権限が無いため送っていません）")
             append(" / ノート 更新${notesWritten}・変更なし${notesUnchanged}・失敗${notesFailed}")
             if (noteErrors.isNotEmpty()) append(" / ノートエラー: ${noteErrors.distinct().joinToString()}")
         }
         return SyncOutcome(SyncStatus.OK, msg)
     }
-
-    private val BACKGROUND = setOf(androidx.health.connect.client.permission.HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
 
     fun formatTime(millis: Long): String =
         if (millis == 0L) "未実行" else SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.JAPAN).format(Date(millis))

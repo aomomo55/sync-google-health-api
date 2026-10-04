@@ -95,6 +95,7 @@ fun MainScreen() {
     var sdkMessage by remember { mutableStateOf<String?>(null) }
     var bgMessage by remember { mutableStateOf<String?>(null) }
     var granted by remember { mutableStateOf(false) }
+    var nutritionGranted by remember { mutableStateOf(true) }
     var sdkOk by remember { mutableStateOf(false) }
 
     val running by AppState.running.collectAsState()
@@ -106,7 +107,9 @@ fun MainScreen() {
             HealthConnectClient.SDK_AVAILABLE -> {
                 sdkOk = true
                 sdkMessage = null
-                granted = HealthReader(context).grantedPermissions().containsAll(HealthPermissions.all)
+                val perms = HealthReader(context).grantedPermissions()
+                granted = perms.containsAll(PermissionPolicy.required(HealthPermissions.all, true))
+                nutritionGranted = PermissionPolicy.canReadNutrition(perms)
                 bgMessage = backgroundReadStatus(context)
             }
             HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> {
@@ -184,6 +187,12 @@ fun MainScreen() {
 
         sdkMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Text(if (granted) "ヘルスコネクトの権限: 付与済み" else "ヘルスコネクトの権限: 未付与または不足")
+        if (sdkOk && !nutritionGranted) {
+            Text(
+                "栄養の権限がありません。摂取カロリーも送るには『権限を付与』を押してください",
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         bgMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
 
         Button(

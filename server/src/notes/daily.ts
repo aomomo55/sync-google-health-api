@@ -34,6 +34,7 @@ export function dailyEntries(day: DailySummary): YamlEntry[] {
   const h = day.heart_rate;
   const b = day.body;
   const s = day.sleep;
+  const n = day.nutrition;
   const steps = numOrNull(a?.steps);
   const asleep = numOrNull(s?.asleep_minutes);
   return [
@@ -43,6 +44,10 @@ export function dailyEntries(day: DailySummary): YamlEntry[] {
     { key: "歩数", value: int(a?.steps) },
     { key: "距離km", value: scaled(a?.distance_m, 1000, 2) },
     { key: "消費カロリー", value: int(a?.calories_kcal) },
+    { key: "摂取カロリー", value: int(n?.energy_kcal) },
+    { key: "たんぱく質g", value: rounded(n?.protein_g, 1) },
+    { key: "脂質g", value: rounded(n?.fat_g, 1) },
+    { key: "炭水化物g", value: rounded(n?.carbs_g, 1) },
     { key: "運動時間", value: numOrNull(a?.move_minutes) },
     { key: "強めの運動", value: numOrNull(a?.vigorous_minutes) },
     { key: "ハートポイント", value: numOrNull(a?.heart_points) },
@@ -82,6 +87,20 @@ function summaryLines(day: DailySummary): string[] {
   const move = numOrNull(a?.move_minutes);
   if (move !== null) act.push(`運動 ${fmtDuration(move)}`);
   if (act.length > 0) lines.push(`- 活動: ${act.join(" / ")}`);
+
+  const kcal = int(day.nutrition?.energy_kcal);
+  const pfc = [
+    ["P", rounded(day.nutrition?.protein_g, 1)],
+    ["F", rounded(day.nutrition?.fat_g, 1)],
+    ["C", rounded(day.nutrition?.carbs_g, 1)],
+  ].flatMap(([label, v]) => (v === null ? [] : [`${label} ${fmtNum(v as number)}g`]));
+  if (kcal !== null || pfc.length > 0) {
+    const text =
+      kcal === null
+        ? pfc.join(" / ")
+        : `${fmtNum(kcal)} kcal${pfc.length > 0 ? `（${pfc.join(" / ")}）` : ""}`;
+    lines.push(`- 食事: ${text}`);
+  }
 
   const avg = numOrNull(h?.avg_bpm);
   const min = numOrNull(h?.min_bpm);

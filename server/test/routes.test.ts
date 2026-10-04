@@ -179,6 +179,26 @@ describe("GET /api/summary", () => {
   });
 });
 
+describe("nutrition セクション", () => {
+  it("マージされ、types=nutrition で絞れ、不正値は 400", async () => {
+    await ingest({ days: [{ date: "2026-01-01", nutrition: { energy_kcal: 1800, fat_g: 50 } }] });
+    await ingest({
+      days: [{ date: "2026-01-01", activity: { steps: 1 }, nutrition: { protein_g: 70 } }],
+    });
+    const res = await call("/api/summary?date=2026-01-01&types=nutrition");
+    const { days } = (await res.json()) as { days: unknown[] };
+    expect(days).toEqual([
+      { date: "2026-01-01", nutrition: { energy_kcal: 1800, fat_g: 50, protein_g: 70 } },
+    ]);
+    expect(
+      (await ingest({ days: [{ date: "2026-01-02", nutrition: { carbs_g: -1 } }] })).status,
+    ).toBe(400);
+    expect((await ingest({ days: [{ date: "2026-01-02", nutrition: { sugar: 1 } }] })).status).toBe(
+      400,
+    );
+  });
+});
+
 describe("GET /api/summary/monthly", () => {
   it("月次集計（日跨ぎの就寝時刻・null の扱い）", async () => {
     await ingest({
@@ -226,9 +246,17 @@ describe("GET /api/summary/monthly", () => {
       days_with_data: 2,
       activity: {
         avg_steps: 1500,
+        avg_calories_kcal: null,
         total_distance_km: 2,
         total_move_minutes: 10,
         total_walking_minutes: null,
+      },
+      nutrition: {
+        days_logged: 0,
+        avg_energy_kcal: null,
+        avg_protein_g: null,
+        avg_fat_g: null,
+        avg_carbs_g: null,
       },
       heart_rate: { avg_bpm: 60 },
       body: { avg_weight_kg: 60.5 },

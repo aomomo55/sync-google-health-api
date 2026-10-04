@@ -8,6 +8,7 @@ import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
@@ -33,6 +34,7 @@ object HealthPermissions {
         HealthPermission.getReadPermission(WeightRecord::class),
         HealthPermission.getReadPermission(BodyFatRecord::class),
         HealthPermission.getReadPermission(SleepSessionRecord::class),
+        HealthPermission.getReadPermission(NutritionRecord::class),
         HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
     )
 
@@ -45,22 +47,14 @@ class HealthReader(context: Context, private val zone: ZoneId = ZoneId.systemDef
     suspend fun grantedPermissions(): Set<String> = client.permissionController.getGrantedPermissions()
 
     // [from, to] の各日を DailySummary にする (データのない日は含めない)
-    suspend fun readDays(from: LocalDate, to: LocalDate): List<DailySummary> {
+    // includeNutrition: 栄養の権限があるときだけ true (権限が無い指標を要求すると例外になる)
+    suspend fun readDays(from: LocalDate, to: LocalDate, includeNutrition: Boolean = false): List<DailySummary> {
         val start = from.atStartOfDay()
         val endExclusive = to.plusDays(1).atStartOfDay()
 
         val aggregates = client.aggregateGroupByPeriod(
             AggregateGroupByPeriodRequest(
-                metrics = setOf(
-                    StepsRecord.COUNT_TOTAL,
-                    DistanceRecord.DISTANCE_TOTAL,
-                    TotalCaloriesBurnedRecord.ENERGY_TOTAL,
-                    HeartRateRecord.BPM_AVG,
-                    HeartRateRecord.BPM_MAX,
-                    HeartRateRecord.BPM_MIN,
-                    RestingHeartRateRecord.BPM_AVG,
-                    WeightRecord.WEIGHT_AVG,
-                ),
+                metrics = baseMetrics + if (includeNutrition) nutritionMetrics else emptySet(),
                 timeRangeFilter = TimeRangeFilter.between(start, endExclusive),
                 timeRangeSlicer = Period.ofDays(1),
             ),
@@ -106,11 +100,33 @@ class HealthReader(context: Context, private val zone: ZoneId = ZoneId.systemDef
                 restingBpm = agg?.result?.get(RestingHeartRateRecord.BPM_AVG),
                 weightKg = agg?.result?.get(WeightRecord.WEIGHT_AVG)?.inKilograms,
                 bodyFatPct = lastBodyFatByDate[date],
+                energyKcal = agg?.result?.get(NutritionRecord.ENERGY_TOTAL)?.inKilocalories,
+                proteinG = agg?.result?.get(NutritionRecord.PROTEIN_TOTAL)?.inGrams,
+                fatG = agg?.result?.get(NutritionRecord.TOTAL_FAT_TOTAL)?.inGrams,
+                carbsG = agg?.result?.get(NutritionRecord.TOTAL_CARBOHYDRATE_TOTAL)?.inGrams,
                 exercise = spans,
             )
             DayAggregator.build(date, zone, raw, sleepByDate[date])
         }.filter { it.hasData() }
     }
+
+    private val baseMetrics = setOf(
+        StepsRecord.COUNT_TOTAL,
+        DistanceRecord.DISTANCE_TOTAL,
+        TotalCaloriesBurnedRecord.ENERGY_TOTAL,
+        HeartRateRecord.BPM_AVG,
+        HeartRateRecord.BPM_MAX,
+        HeartRateRecord.BPM_MIN,
+        RestingHeartRateRecord.BPM_AVG,
+        WeightRecord.WEIGHT_AVG,
+    )
+
+    private val nutritionMetrics = setOf(
+        NutritionRecord.ENERGY_TOTAL,
+        NutritionRecord.PROTEIN_TOTAL,
+        NutritionRecord.TOTAL_FAT_TOTAL,
+        NutritionRecord.TOTAL_CARBOHYDRATE_TOTAL,
+    )
 
     private suspend fun <T : Record> readAll(type: KClass<T>, filter: TimeRangeFilter): List<T> {
         val out = mutableListOf<T>()

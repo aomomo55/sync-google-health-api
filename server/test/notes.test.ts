@@ -29,6 +29,7 @@ const fullDay: DailySummary = {
   },
   heart_rate: { avg_bpm: 70.4, max_bpm: 120, min_bpm: 50 },
   body: {},
+  nutrition: { energy_kcal: 1850.4, protein_g: 70.04, fat_g: 60, carbs_g: 220 },
   sleep: {
     start: "2026-03-14T22:30:00+09:00",
     end: "2026-03-14T21:30:00Z", // = 06:30 JST (別オフセット)
@@ -64,6 +65,10 @@ const DAILY_KEYS = [
   "歩数",
   "距離km",
   "消費カロリー",
+  "摂取カロリー",
+  "たんぱく質g",
+  "脂質g",
+  "炭水化物g",
   "運動時間",
   "強めの運動",
   "ハートポイント",
@@ -155,6 +160,10 @@ type: health-daily
 歩数: 9000
 距離km: 6.2
 消費カロリー: 2000
+摂取カロリー: 1850
+たんぱく質g: 70
+脂質g: 60
+炭水化物g: 220
 運動時間: 90
 強めの運動: 20
 ハートポイント: 20
@@ -183,6 +192,7 @@ tags:
 # 2026-03-15（日）
 
 - 活動: 9,000歩 / 6.2 km / 運動 1時間30分
+- 食事: 1,850 kcal（P 70g / F 60g / C 220g）
 - 心拍: 平均 70.4 bpm / 50〜120
 - 睡眠: 22:30 → 06:30 / 睡眠 7時間30分 / 内訳 深い 100分・浅い 290分・REM 60分
 
@@ -220,6 +230,19 @@ ${MEMO_MARKER}
     expect(parseFm(note).map(([k]) => k)).toEqual(DAILY_KEYS);
     expect(note.split("---\n")[2]).not.toContain("- ");
     expect(note).toContain(MEMO_MARKER);
+  });
+
+  it("食事: 一部の項目だけでも出力し、無ければ行を出さない", () => {
+    const only = renderDailyNote({ date: "2026-03-15", nutrition: { energy_kcal: 1200 } }, {});
+    expect(only).toContain("- 食事: 1,200 kcal\n");
+    expect(only).toContain("摂取カロリー: 1200\n");
+    expect(only).toContain("たんぱく質g:\n");
+    const pfc = renderDailyNote(
+      { date: "2026-03-15", nutrition: { protein_g: 50.5, fat_g: 30 } },
+      {},
+    );
+    expect(pfc).toContain("- 食事: P 50.5g / F 30g\n");
+    expect(renderDailyNote({ date: "2026-03-15", nutrition: {} }, {})).not.toContain("- 食事:");
   });
 
   it("睡眠時刻は入力オフセットによらず JST", () => {
@@ -295,7 +318,14 @@ describe("renderMonthlyNote", () => {
   const m = summarizeMonth("2026-03", [
     {
       date: "2026-03-01",
-      activity: { steps: 10000, distance_m: 8000, move_minutes: 60, walking_minutes: 40.4 },
+      activity: {
+        steps: 10000,
+        distance_m: 8000,
+        calories_kcal: 2400.4,
+        move_minutes: 60,
+        walking_minutes: 40.4,
+      },
+      nutrition: { energy_kcal: 1850, protein_g: 70.04, fat_g: 60, carbs_g: 220 },
       heart_rate: { avg_bpm: 70 },
       body: { weight_kg: 60 },
       sleep: {
@@ -318,9 +348,15 @@ type: health-monthly
 月初日: 2026-03-01
 計測日数: 1
 平均歩数: 10000
+平均消費カロリー: 2400
 総距離km: 8
 運動時間合計: 60
 ウォーキング分合計: 40
+摂取記録日数: 1
+平均摂取カロリー: 1850
+平均たんぱく質g: 70
+平均脂質g: 60
+平均炭水化物g: 220
 平均心拍: 70
 平均体重kg: 60
 睡眠記録日数: 1
@@ -340,6 +376,7 @@ tags:
 
 - 計測日数: 1日
 - 活動: 平均 10,000歩/日 / 合計 8 km / 運動 1時間0分
+- 食事: 1日記録 / 平均 1,850 kcal/日 / P 70g / F 60g / C 220g
 - 平均心拍: 70 bpm
 - 平均体重: 60 kg
 - 睡眠: 1夜 / 平均 7 時間 / 23:00 → 06:00
@@ -349,7 +386,7 @@ tags:
 ## 日別一覧
 
 \`\`\`dataview
-TABLE 歩数, 距離km, 運動時間, 平均心拍, 睡眠時間h, 就寝時刻, 起床時刻
+TABLE 歩数, 摂取カロリー, 距離km, 運動時間, 平均心拍, 睡眠時間h, 就寝時刻, 起床時刻
 FROM "Health/Daily"
 WHERE type = "health-daily" AND dateformat(日付, "yyyy-MM") = "2026-03"
 SORT 日付 ASC
@@ -359,7 +396,7 @@ SORT 日付 ASC
 
   it("空の月でもキーは揃い、月跨ぎのリンクが正しい", () => {
     const e = renderMonthlyNote(summarizeMonth("2026-01", []));
-    expect(parseFm(e)).toHaveLength(20);
+    expect(parseFm(e)).toHaveLength(26);
     expect(parseFm(e).find(([k]) => k === "平均歩数")![1]).toBe("");
     expect(e).toContain("[[Health/Monthly/2025-12|2025年12月]]");
     expect(e).toContain("[[Health/Monthly/2026-02|2026年2月]]");
@@ -385,7 +422,12 @@ describe("静的ノート", () => {
     expect(d).toContain("![[Health/_bases/月次サマリー.base]]");
     expect(d).toContain("[[Health/睡眠ダッシュボード|睡眠ダッシュボード]]");
     expect(d).toContain("Health Connect");
-    expect(jsBlocks(d)).toHaveLength(6);
+    expect(jsBlocks(d)).toHaveLength(8);
+    expect(d).toContain("## カロリー");
+    expect(d.indexOf("## カロリー")).toBeGreaterThan(d.indexOf("## 直近90日"));
+    expect(d.indexOf("## カロリー")).toBeLessThan(d.indexOf("## 月次の推移"));
+    expect(d).toContain("摂取カロリー");
+    expect(d).toContain("平均摂取カロリー");
     expect(d).toContain("window.renderChart");
     expect(d).toContain("dv.pages('\"Health/Daily\"')");
     expect(d).toContain("dv.pages('\"Health/Monthly\"')");
@@ -472,6 +514,7 @@ describe("静的ノート", () => {
       "歩数",
       "距離km",
       "運動時間",
+      "摂取カロリー",
       "平均心拍",
       "体重kg",
       "8000歩達成",
@@ -488,6 +531,8 @@ describe("静的ノート", () => {
     expect(mb).toContain('file.inFolder("Health/Monthly")');
     expect(mb).toContain("property: note.月初日");
     expect(mb).toContain("direction: DESC");
+    expect(mb).toContain("- note.平均消費カロリー\n");
+    expect(mb).toContain("- note.平均摂取カロリー\n");
   });
 
   it("Bases の埋め込み先ビュー名が実在する", () => {

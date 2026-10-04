@@ -22,6 +22,7 @@ Takeout（Google Fit）由来の日次ノートには、Health Connect に対応
 | 体重・体脂肪率 | Weight の日次平均 / その日最後の BodyFat | |
 | 睡眠 | SleepSession（ステージ付き） | 起床日に振り分け、データ元を 1 つに絞り（睡眠ステージを持つ記録を優先し、その中で合計時間が最も長いもの）、最長を本睡眠・残りを仮眠とする（Takeout と同じ規則） |
 | 運動時間・ウォーキング分 | ExerciseSession の記録時間の合計（重なりは除く） | **Google Fit の Move Minutes とは定義が違う近似** |
+| 摂取カロリー・たんぱく質・脂質・炭水化物 | Nutrition の日次合計 | 2026-10-04 追加。食事の記録アプリが Health Connect に書いたもの。権限が無い端末でも他の項目は送る。Takeout 期間は Google Fit の nutrition から取り込む。記録によっては炭水化物などが欠けており、その日の値は記録のある食事だけの合計になる（欠けた分を 0 とはみなさない） |
 | ハートポイント・強めの運動 | なし | 2026-09-08 以降は空欄 |
 
 - 送信元は `source: "health_connect"` とする。Takeout と重なる日は、サーバーのマージで Health Connect の値が上書きし、Health Connect にない項目（ハートポイントなど）は Takeout の値が残る。

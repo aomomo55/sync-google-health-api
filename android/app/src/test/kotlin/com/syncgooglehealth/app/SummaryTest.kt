@@ -100,6 +100,70 @@ class DayAggregatorTest {
     }
 }
 
+class NutritionTest {
+    private val date = LocalDate.of(2026, 3, 5)
+
+    @Test
+    fun 丸め_kcalは整数でグラムは小数1桁() {
+        val raw = RawDay(energyKcal = 1999.5, proteinG = 60.04, fatG = 55.56, carbsG = 250.25)
+        val n = DayAggregator.build(date, TOKYO, raw, null).nutrition!!
+        assertEquals(2000L, n.energyKcal)
+        assertEquals(60.0, n.proteinG!!, 0.0)
+        assertEquals(55.6, n.fatG!!, 0.0)
+        assertEquals(250.3, n.carbsG!!, 0.0)
+    }
+
+    @Test
+    fun データの無い項目は省略し部分的でも出力する() {
+        val day = DayAggregator.build(date, TOKYO, RawDay(energyKcal = 1800.0), null)
+        val json = encode(day)
+        assertEquals(setOf("date", "nutrition", "source"), json.keys)
+        assertEquals(setOf("energy_kcal"), json["nutrition"]!!.jsonObject.keys)
+        assertTrue(day.hasData())
+    }
+
+    @Test
+    fun 全項目のキーは厳密() {
+        val raw = RawDay(energyKcal = 1.0, proteinG = 2.0, fatG = 3.0, carbsG = 4.0)
+        val keys = encode(DayAggregator.build(date, TOKYO, raw, null))["nutrition"]!!.jsonObject.keys
+        assertEquals(setOf("energy_kcal", "protein_g", "fat_g", "carbs_g"), keys)
+    }
+
+    @Test
+    fun 栄養が空ならセクションごと省略() {
+        val day = DayAggregator.build(date, TOKYO, RawDay(steps = 10), null)
+        assertNull(day.nutrition)
+        assertFalse(encode(day).containsKey("nutrition"))
+    }
+
+    @Test
+    fun ゼロは値として残す() {
+        val n = DayAggregator.build(date, TOKYO, RawDay(energyKcal = 0.0, proteinG = 0.0), null).nutrition!!
+        assertEquals(0L, n.energyKcal)
+        assertEquals(0.0, n.proteinG!!, 0.0)
+    }
+}
+
+class PermissionPolicyTest {
+    private val all = setOf(
+        "android.permission.health.READ_STEPS",
+        PermissionPolicy.READ_NUTRITION,
+        PermissionPolicy.READ_IN_BACKGROUND,
+    )
+
+    @Test
+    fun 必須権限に栄養を含めない() {
+        assertEquals(setOf("android.permission.health.READ_STEPS", PermissionPolicy.READ_IN_BACKGROUND), PermissionPolicy.required(all, true))
+        assertEquals(setOf("android.permission.health.READ_STEPS"), PermissionPolicy.required(all, false))
+    }
+
+    @Test
+    fun 栄養は付与されているときだけ読む() {
+        assertTrue(PermissionPolicy.canReadNutrition(all))
+        assertFalse(PermissionPolicy.canReadNutrition(all - PermissionPolicy.READ_NUTRITION))
+    }
+}
+
 class SleepAssignerTest {
     private val nothing = "app.a"
 

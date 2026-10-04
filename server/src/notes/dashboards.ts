@@ -92,6 +92,39 @@ if (withWeight.length === 0) { dv.paragraph("直近90日の体重データがあ
   });
 }`);
 
+  const calories = block(`${prelude()}
+${dailyPages(r, 90, "days")}
+${emptyGuard("直近90日のデータがありません")}
+  draw({
+    type: "bar",
+    data: {
+      labels: pages.map(day),
+      datasets: [
+        { label: "摂取カロリー", data: pages.map((p) => num(p.摂取カロリー)), backgroundColor: "${COLORS.orange}" },
+        { type: "line", label: "消費カロリー", data: pages.map((p) => num(p.消費カロリー)), borderColor: "${COLORS.blue}", backgroundColor: "${COLORS.blue}", tension: 0.2, pointRadius: 2, spanGaps: true },
+      ],
+    },
+    options: { scales: { y: { beginAtZero: true, title: { display: true, text: "kcal" } } } },
+  });
+}`);
+
+  const monthlyCalories = block(`${prelude()}
+${monthlyPages(r)}
+const rows = pages.filter((p) => num(p.平均消費カロリー) !== null || num(p.平均摂取カロリー) !== null);
+if (rows.length === 0) { dv.paragraph("月次データがありません"); } else {
+  draw({
+    type: "bar",
+    data: {
+      labels: rows.map(month),
+      datasets: [
+        { label: "平均摂取カロリー", data: rows.map((p) => num(p.平均摂取カロリー)), backgroundColor: "${COLORS.orange}" },
+        { type: "line", label: "平均消費カロリー", data: rows.map((p) => num(p.平均消費カロリー)), borderColor: "${COLORS.blue}", backgroundColor: "${COLORS.blue}", tension: 0.2, pointRadius: 2, spanGaps: true },
+      ],
+    },
+    options: { scales: { y: { beginAtZero: true, title: { display: true, text: "kcal" } } } },
+  });
+}`);
+
   const monthly = (label: string, key: string, color: string, type: "bar" | "line") =>
     block(`${prelude()}
 ${monthlyPages(r)}
@@ -117,6 +150,9 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
     hr,
     "### 体重\n",
     weight,
+    "## カロリー\n",
+    "### 摂取と消費\n",
+    calories,
     "## 月次の推移\n",
     "### 平均歩数\n",
     monthly("平均歩数", "平均歩数", COLORS.blue, "bar"),
@@ -124,6 +160,8 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
     monthly("平均心拍", "平均心拍", COLORS.red, "line"),
     "### 平均体重\n",
     monthly("平均体重kg", "平均体重kg", COLORS.green, "line"),
+    "### 平均カロリー（摂取と消費）\n",
+    monthlyCalories,
     `![[${p.monthlyBase}]]\n`,
     "## 睡眠\n",
     `[[${linkTarget(p.sleepDashboard)}|睡眠ダッシュボード]] を参照\n`,

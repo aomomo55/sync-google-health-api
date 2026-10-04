@@ -48,11 +48,13 @@ if (values.post && !values["api-url"]) fail("--post には --api-url が必要�
 const token = process.env.API_TOKEN;
 if (values.post && !token) fail("環境変数 API_TOKEN が未設定です");
 
-const { csvDays, segments, files } = await loadTakeout(values.takeout);
-const { days, sleepByDate } = buildDays(csvDays, segments, {
-  from: values.from,
-  to: values.to,
-});
+const { csvDays, segments, nutrition, files, nutritionFiles } = await loadTakeout(values.takeout);
+const { days, sleepByDate } = buildDays(
+  csvDays,
+  segments,
+  { from: values.from, to: values.to },
+  nutrition,
+);
 
 // 全日を DailySummarySchema で検証
 const invalid: string[] = [];
@@ -67,7 +69,7 @@ await mkdir(dirname(values.out), { recursive: true });
 await writeFile(values.out, `${JSON.stringify(days)}\n`, "utf8");
 
 // --- 統計 ---
-const has = (s: "activity" | "heart_rate" | "body" | "sleep") =>
+const has = (s: "activity" | "heart_rate" | "body" | "sleep" | "nutrition") =>
   days.filter((d) => d[s] !== undefined).length;
 const inRange = (date: string) =>
   (!values.from || date >= values.from) && (!values.to || date <= values.to);
@@ -88,7 +90,11 @@ console.log(
 );
 console.log(`days: ${days.length} (${days[0]?.date ?? "-"} .. ${days.at(-1)?.date ?? "-"})`);
 console.log(
-  `with section: activity=${has("activity")} heart_rate=${has("heart_rate")} body=${has("body")} sleep=${has("sleep")}`,
+  `with section: activity=${has("activity")} heart_rate=${has("heart_rate")} body=${has("body")} sleep=${has("sleep")} nutrition=${has("nutrition")}`,
+);
+const nutritionDates = days.filter((d) => d.nutrition !== undefined).map((d) => d.date);
+console.log(
+  `nutrition: ${nutritionFiles.length} files, ${nutrition.length} items, ${nutritionDates.length} days (${nutritionDates[0] ?? "-"} .. ${nutritionDates.at(-1) ?? "-"})`,
 );
 console.log(
   `sleep nights: ${nights.length}, with stages: ${nights.filter(([, c]) => c.hasStages).length}`,

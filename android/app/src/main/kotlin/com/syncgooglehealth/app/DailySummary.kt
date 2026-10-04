@@ -36,6 +36,16 @@ data class BodySummary(
 }
 
 @Serializable
+data class NutritionSummary(
+    @SerialName("energy_kcal") val energyKcal: Long? = null,
+    @SerialName("protein_g") val proteinG: Double? = null,
+    @SerialName("fat_g") val fatG: Double? = null,
+    @SerialName("carbs_g") val carbsG: Double? = null,
+) {
+    fun isEmpty() = energyKcal == null && proteinG == null && fatG == null && carbsG == null
+}
+
+@Serializable
 data class SleepSummary(
     val start: String,
     val end: String,
@@ -55,9 +65,11 @@ data class DailySummary(
     @SerialName("heart_rate") val heartRate: HeartRateSummary? = null,
     val body: BodySummary? = null,
     val sleep: SleepSummary? = null,
+    val nutrition: NutritionSummary? = null,
     val source: String = "health_connect",
 ) {
-    fun hasData() = activity != null || heartRate != null || body != null || sleep != null
+    fun hasData() = activity != null || heartRate != null || body != null || sleep != null ||
+        nutrition != null
 }
 
 @Serializable

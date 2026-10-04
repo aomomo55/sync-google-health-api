@@ -44,6 +44,10 @@ APK は `app/build/outputs/apk/debug/app-debug.apk` に出力されます。
 | body.weight_kg | WeightRecord の平均 |
 | body.body_fat_pct | その日の最後の BodyFatRecord |
 | sleep.* | SleepSessionRecord。終了時刻の日付 (起床日) に割り当て |
+| nutrition.energy_kcal | NutritionRecord の ENERGY_TOTAL の日内合計 (kcal、整数に丸める) |
+| nutrition.protein_g / fat_g / carbs_g | NutritionRecord の PROTEIN_TOTAL / TOTAL_FAT_TOTAL / TOTAL_CARBOHYDRATE_TOTAL の日内合計 (g、小数 1 桁) |
+
+栄養 (READ_NUTRITION) は任意の権限です。付与されていなければ栄養だけ送らず、他の項目は送信します。v1.1.0 より前からインストールしている場合は、アップデート後に「権限を付与」をもう一度押してください。
 
 睡眠の詳細:
 

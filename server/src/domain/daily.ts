@@ -26,6 +26,13 @@ export const BodySchema = z.strictObject({
   body_fat_pct: num,
 });
 
+export const NutritionSchema = z.strictObject({
+  energy_kcal: num,
+  protein_g: num,
+  fat_g: num,
+  carbs_g: num,
+});
+
 export const SleepSchema = z.strictObject({
   start: isoDateTime,
   end: isoDateTime,
@@ -46,12 +53,13 @@ export const DailySummarySchema = z.strictObject({
   heart_rate: HeartRateSchema.optional(),
   body: BodySchema.optional(),
   sleep: SleepSchema.optional(),
+  nutrition: NutritionSchema.optional(),
   source: z.string().min(1).max(64).optional(),
 });
 
 export type DailySummary = z.infer<typeof DailySummarySchema>;
 
-export const SECTIONS = ["activity", "heart_rate", "body", "sleep"] as const;
+export const SECTIONS = ["activity", "heart_rate", "body", "sleep", "nutrition"] as const;
 export type Section = (typeof SECTIONS)[number];
 
 // セクション単位の浅いマージ。incoming に存在するキー（null含む）が上書きする
