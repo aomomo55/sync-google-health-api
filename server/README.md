@@ -47,7 +47,7 @@ pnpm start       # node dist/index.js（環境変数は自前で渡す）
 
 - `GET /healthz` — 認証なし。`{"status":"ok"}`
 - `GET /api/ping` — `Authorization: Bearer <API_TOKEN>` 必須。`{"pong":true}`
-- `POST /api/ingest` — `{"days":[DailySummary]}`（1〜400件、日付重複不可）。セクション単位でマージ保存し（セクションは `activity` / `heart_rate` / `body` / `sleep` / `nutrition`）、Vault 設定があれば影響するノート（該当日・前後の日・月次）を同期する。`{"written":n,"notes":{"written":n,"unchanged":n,"failed":[{"path","error"}]}}`。Vault 未設定なら `notes:null`、同期が例外で失敗しても保存済みなので 200 で `notes:{"error":"..."}`。数値には上限があり（歩数は整数）、睡眠は `start <= end` が必要（[ADR 0010](../docs/adr/0010-input-validation-and-error-exposure.md)）。`failed[].error` と `notes.error` は、メモ欄のマーカー欠落と Vault パスの違反以外は固定の文で、詳細はサーバーのログに出る
+- `POST /api/ingest` — `{"days":[DailySummary]}`（1〜400件、日付重複不可）。セクション単位でマージ保存し（セクションは `activity` / `heart_rate` / `body` / `sleep` / `nutrition`）、Vault 設定があれば影響するノート（該当日・前後の日・月次）を同期する。`{"written":n,"notes":{"written":n,"unchanged":n,"failed":[{"path","error"}]}}`。Vault 未設定なら `notes:null`、同期が例外で失敗しても保存済みなので 200 で `notes:{"error":"..."}`。数値には上限があり（歩数は整数）、睡眠は `start <= end` が必要（[ADR 0012](../docs/adr/0012-input-validation-and-error-exposure.md)）。`failed[].error` と `notes.error` は、メモ欄のマーカー欠落と Vault パスの違反以外は固定の文で、詳細はサーバーのログに出る
 - `POST /api/notes/sync` — `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","includeStatic":bool?}`（最大400日）。範囲内のノートを再生成し、内容が同じものは書き込まない。`{"written":n,"unchanged":n,"failed":[...]}`。Vault 未設定は 503
 - `GET /api/summary?date=YYYY-MM-DD` または `?from=&to=`（最大400日）— `{"days":[...]}`。`types=activity,heart_rate,body,sleep,nutrition` で絞り込み
 - `GET /api/summary/monthly?from=YYYY-MM&to=YYYY-MM`（最大120か月）— 月次集計 `{"months":[...]}`（データのある月のみ）
