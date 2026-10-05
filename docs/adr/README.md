@@ -13,6 +13,7 @@
 | [0007](0007-write-via-obsidian-sync-mcp.md) | Vault への書き込みと Claude との接続を obsidian-sync-mcp に任せる | 採用 |
 | [0008](0008-android-app-health-connect-mapping.md) | Android アプリの送信方式と Health Connect の項目の対応 | 採用 |
 | [0009](0009-protect-daily-note-memo.md) | 日次ノートのメモ欄を消さないよう、不在の判定とマーカーの無いノートの扱いを厳しくする | 採用 |
+| [0010](0010-pin-dependencies-and-dependabot.md) | CI・ビルドの依存を固定し、Dependabot で月に一度更新する | 採用 |
 
 ## 書き方
 
