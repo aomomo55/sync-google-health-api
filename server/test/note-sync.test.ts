@@ -188,6 +188,52 @@ describe("NoteSync", () => {
     for (const f of r.failed) expect(f.error).toMatch(/不正な Vault パスです/);
   });
 
+  it("DB に不正な日付があれば、その日はノートを作らず failed に載せ、前後のリンクは正しい日をつなぐ", async () => {
+    const { store, sync, writer } = setup();
+    // 書き込み時の検証を通らない日付が DB に入っている想定（MemoryStore は検証しない）
+    await store.upsertDays([
+      { date: "2026-02-01", activity: { steps: 1 } },
+      { date: "2026-02-1/../x", activity: { steps: 2 } },
+      { date: "2026-02-31", activity: { steps: 3 } },
+      { date: "2026-03-01", activity: { steps: 4 } },
+    ]);
+    const r = await sync.syncRange("2026-02-01", "2026-03-31");
+    expect(r.failed.map((f) => f.path).sort()).toEqual([
+      '日付 "2026-02-1/../x"',
+      '日付 "2026-02-31"',
+    ]);
+    for (const f of r.failed) expect(f.error).toMatch(/日付が不正/);
+    expect([...writer.notes.keys()].sort()).toEqual([
+      "Health/Daily/2026-02-01.md",
+      "Health/Daily/2026-03-01.md",
+      "Health/Monthly/2026-02.md",
+      "Health/Monthly/2026-03.md",
+    ]);
+    expect(writer.notes.get("Health/Daily/2026-02-01.md")).toContain(
+      "[[Health/Daily/2026-03-01|翌日]]",
+    );
+    expect(writer.notes.get("Health/Daily/2026-03-01.md")).toContain(
+      "[[Health/Daily/2026-02-01|前日]]",
+    );
+    expect(errorLog).toHaveBeenCalled();
+  });
+
+  it("隣の日が不正な日付でも、その先の正しい日まで読み飛ばしてリンクする", async () => {
+    const { store, sync, writer } = setup();
+    // 月をまたいで離れた日を置き、月単位の読み込みでは拾えないようにする
+    await store.upsertDays([
+      { date: "2025-12-20", activity: { steps: 1 } },
+      { date: "2026-01-31", activity: { steps: 2 } },
+      { date: "2026-01-32", activity: { steps: 3 } },
+      { date: "2026-03-05", activity: { steps: 4 } },
+    ]);
+    await sync.syncDates(["2026-03-05"]);
+    // 2026-01-31 は翌日リンクが変わるので書き込まれ、前日リンクも保たれる
+    const note = writer.notes.get("Health/Daily/2026-01-31.md")!;
+    expect(note).toContain("[[Health/Daily/2025-12-20|前日]]");
+    expect(note).toContain("[[Health/Daily/2026-03-05|翌日]]");
+  });
+
   it("syncRange は範囲内の全日・月と静的ノートを扱う", async () => {
     const { store, sync, writer } = setup();
     const days = Array.from({ length: 70 }, (_, i) => ({

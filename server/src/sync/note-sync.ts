@@ -1,8 +1,13 @@
+import { isRealDate } from "../domain/dates.js";
 import { MemoMarkerMissingError } from "../notes/index.js";
 import type { HealthStore } from "../store/health-store.js";
 import type { VaultWriter } from "../vault/vault-writer.js";
 import { noteRootFromPrefix, VaultPathError } from "../vault/vault-writer.js";
-import { type PlanItem, planNotes } from "./plan.js";
+import { type PlanItem, planNotes, splitValidDays } from "./plan.js";
+
+const INVALID_DATE_MESSAGE =
+  "保存されている日付が不正なため、ノートを生成しませんでした。CouchDB の該当する文書を確認してください";
+const MAX_INVALID_SKIP = 20;
 
 export const NOTE_FAILURE_MESSAGE =
   "Vault への書き込みに失敗しました。詳細はサーバーのログを確認してください";
@@ -71,25 +76,46 @@ export class NoteSync {
   ): Promise<SyncReport> {
     // 範囲の外で最も近い日（前後リンクが変わる）と、その更に外側の日（その日自身のリンク用）。
     // データが何か月途切れていても正しくつながるよう、窓ではなく直接問い合わせる
-    const prev = await this.store.findAdjacentDate(from, "prev");
-    const next = await this.store.findAdjacentDate(to, "next");
-    const prevPrev = prev ? await this.store.findAdjacentDate(prev, "prev") : null;
-    const nextNext = next ? await this.store.findAdjacentDate(next, "next") : null;
+    const prev = await this.adjacent(from, "prev");
+    const next = await this.adjacent(to, "next");
+    const prevPrev = prev ? await this.adjacent(prev, "prev") : null;
+    const nextNext = next ? await this.adjacent(next, "next") : null;
 
     // 影響を受ける日は [prev, next] に収まる。月次集計のため、その月は全日読む
     const inner = { start: prev ?? from, end: next ?? to };
     const start = minDate(prevPrev ?? inner.start, `${inner.start.slice(0, 7)}-01`);
     const end = maxDate(nextNext ?? inner.end, `${inner.end.slice(0, 7)}-31`);
-    const days = await this.store.getDays(start, end);
+    // DB の日付は書き込み時に検証済みのはずだが、手で直された文書などに備えて再検証する。
+    // 不正な日付はパスや YAML にそのまま入るので、ノートを作らず失敗として報告する
+    const { valid: days, invalid } = splitValidDays(await this.store.getDays(start, end));
+    const failed = invalid.map((d) => {
+      const label = `日付 ${JSON.stringify(d.date)}`;
+      console.error(`保存されている日付が不正なため、ノートを生成しません: ${label}`);
+      return { path: label, error: INVALID_DATE_MESSAGE };
+    });
 
     const targetDates =
       targets ?? days.filter((d) => d.date >= from && d.date <= to).map((d) => d.date);
     const items = planNotes(days, targetDates, this.root, { includeStatic });
-    return this.apply(items);
+    return this.apply(items, failed);
   }
 
-  private async apply(items: PlanItem[]): Promise<SyncReport> {
-    const report: SyncReport = { written: [], unchanged: [], failed: [] };
+  // 前後の日を、不正な日付を読み飛ばして求める
+  private async adjacent(date: string, direction: "prev" | "next"): Promise<string | null> {
+    let cur = date;
+    for (let i = 0; i < MAX_INVALID_SKIP; i++) {
+      const found = await this.store.findAdjacentDate(cur, direction);
+      if (found === null || isRealDate(found)) return found;
+      cur = found;
+    }
+    return null;
+  }
+
+  private async apply(
+    items: PlanItem[],
+    preFailed: SyncReport["failed"] = [],
+  ): Promise<SyncReport> {
+    const report: SyncReport = { written: [], unchanged: [], failed: [...preFailed] };
     const toWrite: { path: string; content: string }[] = [];
     const fail = (path: string, e: unknown) => {
       console.error(`ノートの同期に失敗: ${path}: ${describeForLog(e)}`);
