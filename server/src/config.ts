@@ -54,6 +54,14 @@ const obsidianMcpUrl = z.url().refine(
   { message: "https: の URL を指定してください（http: は localhost / 127.0.0.1 / [::1] のみ可）" },
 );
 
+// ノートのパスや dataviewjs のコードに埋め込むため、引用符や記号、`.` / `..` を入れられないようにする
+const vaultPrefix = z
+  .string()
+  .regex(
+    /^[\p{L}\p{N} _-]+(\/[\p{L}\p{N} _-]+)*\/?$/u,
+    "文字・数字・空白・_・- からなるフォルダ名を / で区切って指定してください（先頭の / や . / .. は不可）",
+  );
+
 const schema = z
   .object({
     PORT: z.coerce.number().int().min(1).max(65535).default(8080),
@@ -69,7 +77,7 @@ const schema = z
     COUCHDB_HEALTH_DB: z.string().min(1).default("health"),
     OBSIDIAN_MCP_URL: obsidianMcpUrl.optional(),
     OBSIDIAN_MCP_TOKEN: token(16).optional(),
-    VAULT_HEALTH_PREFIX: z.string().min(1).default("Health/"),
+    VAULT_HEALTH_PREFIX: vaultPrefix.default("Health/"),
     NODE_ENV: z.string().optional(),
   })
   .refine((c) => !!c.OBSIDIAN_MCP_URL === !!c.OBSIDIAN_MCP_TOKEN, {
