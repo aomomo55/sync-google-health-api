@@ -1,6 +1,6 @@
 import type { HealthStore } from "../store/health-store.js";
 import type { VaultWriter } from "../vault/vault-writer.js";
-import { writeMany } from "../vault/vault-writer.js";
+import { noteRootFromPrefix, writeMany } from "../vault/vault-writer.js";
 import { type PlanItem, planNotes } from "./plan.js";
 
 export interface SyncReport {
@@ -112,4 +112,18 @@ async function mapLimit<T>(
     while (next < items.length) await fn(items[next++]!);
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
+// 書き込みを許可したフォルダ（VAULT_HEALTH_PREFIX）の下にノートを生成する NoteSync を作る。
+// 検証と生成で別のフォルダを使うと、すべての書き込みが拒否される
+export function createNoteSync(deps: {
+  store: HealthStore;
+  writer: VaultWriter;
+  prefix: string;
+}): NoteSync {
+  return new NoteSync({
+    store: deps.store,
+    writer: deps.writer,
+    root: noteRootFromPrefix(deps.prefix),
+  });
 }

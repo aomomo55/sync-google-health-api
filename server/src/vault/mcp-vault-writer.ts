@@ -30,9 +30,6 @@ export interface McpVaultWriterOptions {
 type ErrorKind = "session" | "transient" | "permanent";
 
 const ERROR_PREFIXES = ["Write access denied", "Error"];
-// obsidian-sync-mcp がノート不在のときに isError 付きで返す文言。
-// 他のエラー（チャンク欠損など）を「不在」と取り違えると既存ノートを上書きしてしまうため、先頭一致に限る
-const NOT_FOUND_RE = /^Note not found\b/;
 
 // ツールが返したエラー（リトライしない）
 class ToolFailure extends VaultWriteError {}
@@ -91,7 +88,9 @@ export class McpVaultWriter implements VaultWriter {
     assertVaultPath(path, this.prefix);
     const { text, isError } = await this.callTool("read_note", { path });
     if (text.startsWith("[Open in Obsidian]")) return stripOpenPrefix(text);
-    if (isError && NOT_FOUND_RE.test(text)) return null;
+    // obsidian-sync-mcp はノートが無いとき、isError を付けずに `Note not found: <path>` を返す。
+    // 他のエラー（チャンク欠損など）を不在と取り違えると既存ノートを上書きするため、完全一致に限る
+    if (text === `Note not found: ${path}`) return null;
     if (isError || isErrorText(text)) throw new ToolFailure(this.scrub(text));
     return text;
   }

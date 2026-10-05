@@ -129,6 +129,24 @@ describe("OBSIDIAN_MCP_URL", () => {
       expect(() => loadConfig(mcp(url))).toThrow(/OBSIDIAN_MCP_URL: https:/);
     }
   });
+
+  it("ユーザー名・パスワードを含む URL は値を出さずに拒否する", () => {
+    for (const url of [
+      "https://fakeuser:FAKEPASS@mcp.example.com/mcp",
+      "https://fakeuser@mcp.example.com/mcp",
+      "http://:FAKEPASS@127.0.0.1:3000/mcp",
+    ]) {
+      let message = "";
+      try {
+        loadConfig(mcp(url));
+      } catch (e) {
+        message = String((e as Error).message);
+      }
+      expect(message).toMatch(/OBSIDIAN_MCP_URL: URL にユーザー名・パスワードを含めないでください/);
+      expect(message).not.toContain("FAKEPASS");
+      expect(message).not.toContain("fakeuser");
+    }
+  });
 });
 
 describe("VAULT_HEALTH_PREFIX", () => {
@@ -161,6 +179,20 @@ describe("VAULT_HEALTH_PREFIX", () => {
       expect(() => loadConfig({ ...BASE, VAULT_HEALTH_PREFIX: prefix })).toThrow(
         /VAULT_HEALTH_PREFIX/,
       );
+    }
+  });
+
+  it("空白だけのフォルダ名や、フォルダ名の前後の空白は拒否する", () => {
+    for (const prefix of [" ", " Health", "Health /", "Health/ ", "Health/ Daily/"]) {
+      expect(() => loadConfig({ ...BASE, VAULT_HEALTH_PREFIX: prefix })).toThrow(
+        /VAULT_HEALTH_PREFIX/,
+      );
+    }
+  });
+
+  it("1 文字のフォルダ名や、途中の空白は受け付ける", () => {
+    for (const prefix of ["H", "H/", "a/b", "My Health/"]) {
+      expect(loadConfig({ ...BASE, VAULT_HEALTH_PREFIX: prefix }).VAULT_HEALTH_PREFIX).toBe(prefix);
     }
   });
 });

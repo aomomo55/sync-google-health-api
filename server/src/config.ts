@@ -45,21 +45,38 @@ const couchdbUrl = z
 
 // トークンを平文で流さないため https: に限る。ローカルでの試験用に localhost だけ http: を許す
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-const obsidianMcpUrl = z.url().refine(
-  (v) => {
-    const u = parseUrl(v);
-    if (!u) return true;
-    return u.protocol === "https:" || (u.protocol === "http:" && LOCAL_HOSTS.has(u.hostname));
-  },
-  { message: "https: の URL を指定してください（http: は localhost / 127.0.0.1 / [::1] のみ可）" },
-);
+const obsidianMcpUrl = z
+  .url()
+  .refine(
+    (v) => {
+      const u = parseUrl(v);
+      if (!u) return true;
+      return u.protocol === "https:" || (u.protocol === "http:" && LOCAL_HOSTS.has(u.hostname));
+    },
+    {
+      message: "https: の URL を指定してください（http: は localhost / 127.0.0.1 / [::1] のみ可）",
+    },
+  )
+  // COUCHDB_URL と同じく、fetch の失敗時に資格情報入りの URL がエラー文に出るのを防ぐ
+  .refine(
+    (v) => {
+      const u = parseUrl(v);
+      return !u || (u.username === "" && u.password === "");
+    },
+    {
+      message:
+        "URL にユーザー名・パスワードを含めないでください（OBSIDIAN_MCP_TOKEN を使ってください）",
+    },
+  );
 
-// ノートのパスや dataviewjs のコードに埋め込むため、引用符や記号、`.` / `..` を入れられないようにする
+// ノートのパスや dataviewjs のコードに埋め込むため、引用符や記号、`.` / `..` を入れられないようにする。
+// フォルダ名の前後の空白は貼り付けの混入とみなして弾く（obsidian-sync-mcp の許可フォルダとずれるため）
+const PREFIX_SEGMENT = "[\\p{L}\\p{N}_-](?:[\\p{L}\\p{N} _-]*[\\p{L}\\p{N}_-])?";
 const vaultPrefix = z
   .string()
   .regex(
-    /^[\p{L}\p{N} _-]+(\/[\p{L}\p{N} _-]+)*\/?$/u,
-    "文字・数字・空白・_・- からなるフォルダ名を / で区切って指定してください（先頭の / や . / .. は不可）",
+    new RegExp(`^${PREFIX_SEGMENT}(?:/${PREFIX_SEGMENT})*/?$`, "u"),
+    "文字・数字・空白・_・- からなるフォルダ名を / で区切って指定してください（先頭の / や . / ..、フォルダ名の前後の空白は不可）",
   );
 
 const schema = z
