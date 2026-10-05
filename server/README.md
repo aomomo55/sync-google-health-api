@@ -9,7 +9,7 @@ Android アプリから送られる日次ヘルスデータを受け取るサー
 | --- | --- | --- | --- |
 | `PORT` | いいえ | `8080` | 待ち受けポート |
 | `API_TOKEN` | はい | - | `/api/*` 用の Bearer トークン（32文字以上） |
-| `COUCHDB_URL` | はい | - | CouchDB のベース URL |
+| `COUCHDB_URL` | はい | - | CouchDB のベース URL（`http:` / `https:`。ユーザー名・パスワードは含めず `COUCHDB_USER` / `COUCHDB_PASSWORD` で指定） |
 | `COUCHDB_USER` | はい | - | CouchDB ユーザー |
 | `COUCHDB_PASSWORD` | はい | - | CouchDB パスワード |
 | `COUCHDB_HEALTH_DB` | いいえ | `health` | データベース名（起動時に無ければ作成） |
@@ -27,6 +27,8 @@ COUCHDB_URL=http://localhost:5984
 COUCHDB_USER=admin
 COUCHDB_PASSWORD=ここにパスワード
 ```
+
+`COUCHDB_URL` に `http://user:pass@...` のように資格情報を含めると起動時に拒否する（接続エラーのメッセージに URL がそのまま入り、パスワードがログに出るのを防ぐため）。
 
 トークン生成例: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
