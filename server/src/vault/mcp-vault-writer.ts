@@ -149,6 +149,7 @@ export class McpVaultWriter implements VaultWriter {
     name: string,
     args: Record<string, unknown>,
   ): Promise<{ text: string; isError: boolean }> {
+    // リトライの制御（回数と再接続の有無）と、catch でも使う接続は let にする
     let sessionRetried = false;
     let attempt = 0;
     for (;;) {

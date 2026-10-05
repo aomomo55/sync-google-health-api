@@ -2,6 +2,7 @@
 export function parseCsv(text: string): string[][] {
   const src = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
   const rows: string[][] = [];
+  // 状態機械のため let にする
   let row: string[] = [];
   let field = "";
   let inQuotes = false;

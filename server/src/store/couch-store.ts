@@ -51,22 +51,19 @@ export class CouchStore implements HealthStore {
     // 認証情報やクエリ、レスポンス本文はエラー文に含めない
     const label = `CouchDB ${method} ${path.split("?")[0] || "/"}`;
     const timeoutError = () => new Error(`${label} がタイムアウトしました（${this.timeoutMs} ms）`);
-    let res: Response;
-    try {
-      res = await this.fetchFn(`${this.base}/${this.db}${path}`, {
-        method,
-        headers: {
-          Authorization: this.auth,
-          Accept: "application/json",
-          ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-        },
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
-    } catch (e) {
+    const res = await this.fetchFn(`${this.base}/${this.db}${path}`, {
+      method,
+      headers: {
+        Authorization: this.auth,
+        Accept: "application/json",
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(this.timeoutMs),
+    }).catch((e: unknown) => {
       if (isTimeout(e)) throw timeoutError();
       throw new Error(`${label} に接続できません`, { cause: e });
-    }
+    });
     if (!okStatuses.includes(res.status)) {
       throw new Error(`${label} が失敗: HTTP ${res.status}`);
     }
@@ -141,6 +138,7 @@ export class CouchStore implements HealthStore {
     // 同一日付が複数あれば先にマージしておく
     const merged = new Map<string, DailySummary>();
     for (const d of days) merged.set(d.date, mergeDay(merged.get(d.date), d));
+    // 競合した分だけを再送するリトライの制御なので let にする
     let pending = [...merged.values()];
     let written = 0;
 

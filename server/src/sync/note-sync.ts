@@ -102,6 +102,7 @@ export class NoteSync {
 
   // 前後の日を、不正な日付を読み飛ばして求める
   private async adjacent(date: string, direction: "prev" | "next"): Promise<string | null> {
+    // 辿った先を次の起点にするループの制御なので let にする
     let cur = date;
     for (let i = 0; i < MAX_INVALID_SKIP; i++) {
       const found = await this.store.findAdjacentDate(cur, direction);
@@ -153,6 +154,7 @@ async function mapLimit<T>(
   limit: number,
   fn: (item: T) => Promise<void>,
 ): Promise<void> {
+  // 複数の worker が共有する取り出し位置なので let にする
   let next = 0;
   async function worker() {
     while (next < items.length) await fn(items[next++]!);

@@ -150,23 +150,19 @@ function parseRejected(value: unknown): { date: string; error: string }[] {
     error: scrubToken(String(r?.error ?? "?"), token),
   }));
 }
-let rejectedByServer = 0;
+const rejectedCounts: number[] = [];
 const batchNotes: IngestNotes[] = [];
 if (values.post) {
   const url = `${values["api-url"]!.replace(/\/+$/, "")}/api/ingest`;
+  // バッチの切り出し位置そのものがループの制御なので let にする
   for (let i = 0; i < days.length; i += BATCH) {
     const batch = days.slice(i, i + BATCH);
     const range = `days ${i + 1}-${i + batch.length}`;
-    let res: Response;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ days: batch }),
-      });
-    } catch (e) {
-      fail(`POST 失敗 (${range}): ${describeError(e, token)}`);
-    }
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ days: batch }),
+    }).catch((e: unknown) => fail(`POST 失敗 (${range}): ${describeError(e, token)}`));
     if (!res.ok) {
       const body = (await res.text()).slice(0, 500);
       fail(`POST 失敗 (${range}): ${res.status} ${scrubToken(body, token)}`);
@@ -181,7 +177,7 @@ if (values.post) {
     console.log(`posted ${i + batch.length}/${days.length} (${period})${formatNotes(notes)}`);
     if (rejected.length > 0) {
       printRejected(`サーバーが拒否した日 (${range})`, rejected);
-      rejectedByServer += rejected.length;
+      rejectedCounts.push(rejected.length);
     }
     if (notes.kind === "synced") {
       for (const f of notes.failed) console.error(`  ${f.path}: ${f.error}`);
@@ -192,6 +188,7 @@ if (values.post) {
   }
 }
 
+const rejectedByServer = rejectedCounts.reduce((a, b) => a + b, 0);
 const notesTotal = batchNotes.reduce(addNotes, {
   written: 0,
   unchanged: 0,

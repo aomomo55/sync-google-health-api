@@ -51,17 +51,16 @@ export function parseNutritionJson(
     const fv = p.fitValue as { value?: { mapVal?: unknown } }[] | undefined;
     const map = fv?.[0]?.value?.mapVal;
     if (!Array.isArray(map)) continue;
-    const item: NutritionItem = { source, time: Math.round(t) };
-    let found = false;
-    for (const e of map as { key?: unknown; value?: { fpVal?: unknown } }[]) {
+    const fields = (map as { key?: unknown; value?: { fpVal?: unknown } }[]).flatMap((e) => {
       const field =
         typeof e.key === "string" ? (KEY_TO_FIELD as Record<string, string>)[e.key] : undefined;
       const v = e.value?.fpVal;
-      if (!field || typeof v !== "number" || !Number.isFinite(v) || v < 0) continue;
-      (item as Record<string, unknown>)[field] = v;
-      found = true;
+      if (!field || typeof v !== "number" || !Number.isFinite(v) || v < 0) return [];
+      return [[field, v] as const];
+    });
+    if (fields.length > 0) {
+      out.push({ source, time: Math.round(t), ...Object.fromEntries(fields) } as NutritionItem);
     }
-    if (found) out.push(item);
   }
   return out;
 }
@@ -84,11 +83,8 @@ export function buildNutritionByDate(items: NutritionItem[]): Map<string, Chosen
   const byDate = new Map<string, Map<string, Acc>>();
   for (const it of items) {
     const date = jstDate(it.time);
-    let sources = byDate.get(date);
-    if (!sources) {
-      sources = new Map();
-      byDate.set(date, sources);
-    }
+    const sources = byDate.get(date) ?? new Map<string, Acc>();
+    byDate.set(date, sources);
     const acc: Acc = sources.get(it.source) ?? { entries: 0 };
     acc.entries++;
     acc.energy = add(acc.energy, it.energy);
