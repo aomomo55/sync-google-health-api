@@ -46,7 +46,12 @@ const couchdbUrl = z
 const schema = z
   .object({
     PORT: z.coerce.number().int().min(1).max(65535).default(8080),
-    API_TOKEN: token(32),
+    // Hono の bearerAuth が受け付ける文字（RFC 6750 の b64token）に限る。
+    // それ以外の文字を含むと起動はできても全リクエストが 400 になる
+    API_TOKEN: token(32).regex(
+      /^[A-Za-z0-9._~+/-]+=*$/,
+      "英数字と . _ ~ + / - （末尾の = は可）だけで指定してください",
+    ),
     COUCHDB_URL: couchdbUrl,
     COUCHDB_USER: credential,
     COUCHDB_PASSWORD: credential,
