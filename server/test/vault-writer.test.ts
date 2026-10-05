@@ -79,6 +79,22 @@ describe("McpVaultWriter", () => {
     expect(await make().readNote("Health/Daily/2026-01-01.md")).toBeNull();
   });
 
+  it("実機と同じ isError なしの「Note not found: <パス>」も不在とみなす", async () => {
+    fake.readResponses.set("Health/Daily/2026-01-02.md", {
+      text: "Note not found: Health/Daily/2026-01-02.md",
+      isError: false,
+    });
+    expect(await make().readNote("Health/Daily/2026-01-02.md")).toBeNull();
+  });
+
+  it("isError なしでも、要求と別のパスの「Note not found」は不在とみなさない", async () => {
+    fake.readResponses.set("Health/Daily/2026-01-02.md", {
+      text: "Note not found: Health/Daily/2026-01-03.md",
+      isError: false,
+    });
+    expect(await make().readNote("Health/Daily/2026-01-02.md")).not.toBeNull();
+  });
+
   it("読み出しのエラー文にトークンが含まれても伏せる", async () => {
     fake.readResponses.set("Health/a.md", { text: `Error: bad ${TOKEN}`, isError: true });
     const err = await make()

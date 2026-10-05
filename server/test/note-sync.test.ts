@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MemoryStore } from "../src/store/memory-store.js";
-import { NoteSync } from "../src/sync/note-sync.js";
+import { createNoteSync, NoteSync } from "../src/sync/note-sync.js";
 import { MemoryVaultWriter } from "../src/vault/memory-vault-writer.js";
 import {
   assertVaultPath,
@@ -234,6 +234,15 @@ describe("VAULT_HEALTH_PREFIX に合わせたルート", () => {
       }
     },
   );
+
+  it("createNoteSync はプレフィックスの下にノートを生成する", async () => {
+    const store = new MemoryStore();
+    const writer = new MemoryVaultWriter({ prefix: "Other/" });
+    await store.upsertDays([{ date: "2026-02-01", activity: { steps: 1 } }]);
+    const r = await createNoteSync({ store, writer, prefix: "Other/" }).syncDates(["2026-02-01"]);
+    expect(r.failed).toEqual([]);
+    expect(writer.notes.has("Other/Daily/2026-02-01.md")).toBe(true);
+  });
 
   it("既定のプレフィックスから求めたルートは、ルート省略時と同じ出力になる", async () => {
     const store = new MemoryStore();
