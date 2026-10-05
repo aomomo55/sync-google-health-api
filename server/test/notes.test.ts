@@ -3,6 +3,7 @@ import type { DailySummary } from "../src/domain/daily.js";
 import { summarizeMonth } from "../src/domain/monthly.js";
 import {
   MEMO_MARKER,
+  MemoMarkerMissingError,
   mergeMemo,
   notePaths,
   renderAllStaticNotes,
@@ -284,8 +285,13 @@ describe("mergeMemo", () => {
   it("既存なしなら generated", () => {
     expect(mergeMemo(null, generated)).toBe(generated);
   });
-  it("マーカーなしの既存は generated で置換", () => {
-    expect(mergeMemo("# 手書きのノート\n本文\n", generated)).toBe(generated);
+  it("空や空白だけの既存は generated で置換", () => {
+    expect(mergeMemo("", generated)).toBe(generated);
+    expect(mergeMemo(" \n\t\r\n", generated)).toBe(generated);
+  });
+  it("マーカーなしの空でない既存は上書きせず throw", () => {
+    expect(() => mergeMemo("# 手書きのノート\n本文\n", generated)).toThrow(MemoMarkerMissingError);
+    expect(() => mergeMemo("# 手書きのノート\n本文\n", generated)).toThrow(/health:memo/);
   });
   it("ユーザーのメモを保持し、上側は再生成", () => {
     const old = renderDailyNote({ date: "2026-03-15", activity: { steps: 1 } }, {});
@@ -310,7 +316,9 @@ describe("mergeMemo", () => {
     expect(merged).not.toContain("古い");
   });
   it("マーカーが行頭以外にしか無ければ（本文での言及）マーカー扱いしない", () => {
-    expect(mergeMemo("text %% health:memo in line\n", generated)).toBe(generated);
+    expect(() => mergeMemo("text %% health:memo in line\n", generated)).toThrow(
+      MemoMarkerMissingError,
+    );
   });
 });
 

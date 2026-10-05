@@ -3,7 +3,13 @@ import { renderHealthDashboard, renderSleepDashboard } from "./dashboards.js";
 import { notePaths } from "./paths.js";
 
 export { renderDailyLogBase, renderMonthlyBase, renderSleepLogBase } from "./bases.js";
-export { type DailyNav, MEMO_MARKER, mergeMemo, renderDailyNote } from "./daily.js";
+export {
+  type DailyNav,
+  MEMO_MARKER,
+  MemoMarkerMissingError,
+  mergeMemo,
+  renderDailyNote,
+} from "./daily.js";
 export { renderHealthDashboard, renderSleepDashboard } from "./dashboards.js";
 export { renderMonthlyNote } from "./monthly.js";
 export { DEFAULT_ROOT, type NotePaths, notePaths } from "./paths.js";

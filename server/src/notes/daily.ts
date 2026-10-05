@@ -161,11 +161,23 @@ export function renderDailyNote(day: DailySummary, nav: DailyNav = {}, root?: st
   return parts.join("\n");
 }
 
-// 再生成時にユーザーのメモ（マーカー以降）を保持する
+// 既存ノートにメモ欄のマーカーが無く、上書きすると利用者の文章を失うおそれがある
+export class MemoMarkerMissingError extends Error {
+  constructor() {
+    super(
+      "既存のノートにメモ欄のマーカー（%% health:memo の行）が無いため、上書きしませんでした。マーカーの行を戻すか、ノートを削除すると再生成されます",
+    );
+    this.name = "MemoMarkerMissingError";
+  }
+}
+
+// 再生成時にユーザーのメモ（マーカー以降）を保持する。
+// 空でない既存ノートにマーカーが無ければ MemoMarkerMissingError を投げる
 export function mergeMemo(existing: string | null, generated: string): string {
-  if (existing === null) return generated;
-  const exMatch = MEMO_MARKER_RE.exec(existing);
+  if (existing === null || existing.trim() === "") return generated;
   const genMatch = MEMO_MARKER_RE.exec(generated);
-  if (!exMatch || !genMatch) return generated;
+  if (!genMatch) return generated;
+  const exMatch = MEMO_MARKER_RE.exec(existing);
+  if (!exMatch) throw new MemoMarkerMissingError();
   return generated.slice(0, genMatch.index) + existing.slice(exMatch.index);
 }
