@@ -26,6 +26,7 @@ const draw = (config) => {
 const line = (label, data, color, extra) => Object.assign({ label, data, borderColor: color, backgroundColor: color, tension: 0.2, pointRadius: 2, spanGaps: true }, extra || {});`;
 }
 
+// root は dataviewjs の文字列リテラルに埋め込む。使える文字は設定の検証で制限している
 function dailyPages(root: string, count: number, unit: "days" | "nights"): string {
   const filter =
     unit === "days"

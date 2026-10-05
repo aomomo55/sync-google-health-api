@@ -34,6 +34,11 @@ export function normalizePrefix(prefix: string): string {
   return prefix.endsWith("/") ? prefix : `${prefix}/`;
 }
 
+// 書き込みを許可するフォルダ（"Health/"）から、ノートを生成するルート（"Health"）を求める
+export function noteRootFromPrefix(prefix: string): string {
+  return normalizePrefix(prefix).replace(/\/+$/, "");
+}
+
 const OPEN_PREFIX_RE = /^\[Open in Obsidian\]\([^)]*\)\n\n---\n\n/;
 
 export function stripOpenPrefix(text: string): string {
