@@ -66,12 +66,12 @@ describe("McpVaultWriter", () => {
     expect(fake.toolCalls).toBe(1);
   });
 
-  it("isError でない応答の「Note not found」は null にしない", async () => {
+  it("要求したパスと一致しない「Note not found」は不在とみなさない", async () => {
     fake.readResponses.set("Health/a.md", { text: "Note not found: memo", isError: false });
     expect(await make().readNote("Health/a.md")).toBe("Note not found: memo");
   });
 
-  it("isError 付きの「Note not found: <パス>」だけを不在とみなす", async () => {
+  it("isError 付きでも「Note not found: <要求したパス>」と完全一致すれば不在とみなす", async () => {
     fake.readResponses.set("Health/Daily/2026-01-01.md", {
       text: "Note not found: Health/Daily/2026-01-01.md",
       isError: true,

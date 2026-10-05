@@ -80,7 +80,8 @@ export class FakeObsidianMcp {
       const forced = this.readResponses.get(path);
       if (forced) return text(forced.text, forced.isError);
       const body = this.notes.get(path);
-      if (body === undefined) return text(`Note not found: ${path}`, true);
+      // 実機（obsidian-sync-mcp）と同じく、不在は isError なしの文字列で返す
+      if (body === undefined) return text(`Note not found: ${path}`);
       return text(`[Open in Obsidian](obsidian://open?path=${path})\n\n---\n\n${body}`);
     });
     return mcp;
