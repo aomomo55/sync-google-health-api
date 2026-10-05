@@ -6,7 +6,7 @@ import { isRealDate } from "../src/domain/dates.js";
 import { buildDays } from "../src/takeout/index.js";
 import { loadTakeout } from "../src/takeout/load.js";
 import { checkApiToken, checkApiUrl, describeError, scrubToken } from "./cli-guard.js";
-import { addNotes, formatNotes, type NotesTotal, parseIngestNotes } from "./ingest-report.js";
+import { addNotes, formatNotes, type IngestNotes, parseIngestNotes } from "./ingest-report.js";
 
 const DEFAULT_OUT = "out/takeout-days.json";
 const DEFAULT_BATCH = 300;
@@ -151,8 +151,7 @@ function parseRejected(value: unknown): { date: string; error: string }[] {
   }));
 }
 let rejectedByServer = 0;
-let notesTotal: NotesTotal = { written: 0, unchanged: 0, failed: 0, batchErrors: 0 };
-let notesReported = false;
+const batchNotes: IngestNotes[] = [];
 if (values.post) {
   const url = `${values["api-url"]!.replace(/\/+$/, "")}/api/ingest`;
   for (let i = 0; i < days.length; i += BATCH) {
@@ -189,12 +188,17 @@ if (values.post) {
     } else if (notes.kind === "error") {
       console.error(`  ${notes.error}`);
     }
-    if (notes.kind !== "none") notesReported = true;
-    notesTotal = addNotes(notesTotal, notes);
+    batchNotes.push(notes);
   }
 }
 
-if (notesReported) {
+const notesTotal = batchNotes.reduce(addNotes, {
+  written: 0,
+  unchanged: 0,
+  failed: 0,
+  batchErrors: 0,
+});
+if (batchNotes.some((n) => n.kind !== "none")) {
   const t = notesTotal;
   console.log(
     `ノート合計: 書き込み ${t.written} / 変更なし ${t.unchanged} / 失敗 ${t.failed}` +
