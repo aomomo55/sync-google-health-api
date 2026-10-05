@@ -1,2 +1,5 @@
 allowBuilds:
   esbuild: true
+
+# 公開から 1440 分（1 日）経っていない版は入れない（乗っ取られて公開された版を避けるため）
+minimumReleaseAge: 1440
