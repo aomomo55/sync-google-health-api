@@ -5,6 +5,7 @@ import { type DailySummary, DailySummarySchema } from "../src/domain/daily.js";
 import { isRealDate } from "../src/domain/dates.js";
 import { buildDays } from "../src/takeout/index.js";
 import { loadTakeout } from "../src/takeout/load.js";
+import { checkApiToken, checkApiUrl, describeError, scrubToken } from "./cli-guard.js";
 
 const DEFAULT_OUT = "out/takeout-days.json";
 const DEFAULT_BATCH = 300;
@@ -46,7 +47,10 @@ if (!values.takeout)
   fail("--takeout か環境変数 TAKEOUT_DIR で Takeout の Fit フォルダを指定してください");
 if (values.post && !values["api-url"]) fail("--post には --api-url が必要です");
 const token = process.env.API_TOKEN;
-if (values.post && !token) fail("環境変数 API_TOKEN が未設定です");
+if (values.post) {
+  const error = checkApiUrl(values["api-url"]) ?? checkApiToken(token);
+  if (error) fail(error);
+}
 
 const { csvDays, segments, nutrition, files, nutritionFiles } = await loadTakeout(values.takeout);
 const { days, sleepByDate } = buildDays(
@@ -121,14 +125,20 @@ if (values.post) {
   const url = `${values["api-url"]!.replace(/\/+$/, "")}/api/ingest`;
   for (let i = 0; i < days.length; i += BATCH) {
     const batch = days.slice(i, i + BATCH);
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-      body: JSON.stringify({ days: batch }),
-    });
+    const range = `days ${i + 1}-${i + batch.length}`;
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ days: batch }),
+      });
+    } catch (e) {
+      fail(`POST 失敗 (${range}): ${describeError(e, token)}`);
+    }
     if (!res.ok) {
       const body = (await res.text()).slice(0, 500);
-      fail(`POST 失敗 (days ${i + 1}-${i + batch.length}): ${res.status} ${body}`);
+      fail(`POST 失敗 (${range}): ${res.status} ${scrubToken(body, token)}`);
     }
     console.log(`posted ${i + batch.length}/${days.length}`);
   }
