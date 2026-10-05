@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { DailySummary } from "../src/domain/daily.js";
 import { summarizeMonth } from "../src/domain/monthly.js";
+import { GENERATED_NOTICE } from "../src/notes/format.js";
 import {
   MEMO_MARKER,
   MemoMarkerMissingError,
@@ -382,6 +383,8 @@ tags:
 
 # 2026年3月の健康サマリー
 
+%% このノートは sync-google-health-api のサーバーが自動で作ります。直接編集しても次の同期で元に戻ります。変えたいときは、リポジトリの server/src/notes/ を変更してください %%
+
 - 計測日数: 1日
 - 活動: 平均 10,000歩/日 / 合計 8 km / 運動 1時間0分
 - 食事: 1日記録 / 平均 1,850 kcal/日 / P 70g / F 60g / C 220g
@@ -448,6 +451,8 @@ describe("静的ノート", () => {
     expect(d).toContain("h + 24");
     expect(d).toContain("[[Health/ヘルスケアダッシュボード|ヘルスケアダッシュボード]]");
     expect(jsBlocks(d)).toHaveLength(6);
+    expect(d).toContain(GENERATED_NOTICE);
+    expect(renderHealthDashboard()).toContain(GENERATED_NOTICE);
     // 直近1週間の睡眠時間が一番上にある
     expect(d.indexOf("## 直近1週間の睡眠時間")).toBeLessThan(d.indexOf("## 直近90夜"));
   });
@@ -561,8 +566,17 @@ describe("静的ノート", () => {
     });
     const ds = calls[0].data.datasets;
     expect(ds[0].data).toEqual([24.5, 24.5]); // 00:30 は +24
-    expect(ds[1].data).toEqual([7, 7]);
+    expect(ds[1].data).toEqual([31, 31]); // 起床は翌日扱いで常に +24
     expect(calls[0].data.labels).toEqual(["2026-03-01", "2026-03-02"]);
+    // 20:00〜翌10:00 の 2 時間刻みで、目盛りは 24 で割った余りの時刻を出す
+    const y = calls[0].options.scales.y;
+    expect([y.min, y.max, y.ticks.stepSize]).toEqual([20, 34, 2]);
+    expect([20, 24, 30, 34].map((v) => y.ticks.callback(v))).toEqual([
+      "20:00",
+      "0:00",
+      "6:00",
+      "10:00",
+    ]);
   });
 
   it("Bases: フィルタ・ビュー・列", () => {
