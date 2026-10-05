@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import { createApp } from "../src/app.js";
 import { MemoryStore } from "../src/store/memory-store.js";
 import { NoteSync } from "../src/sync/note-sync.js";
@@ -6,6 +6,13 @@ import { MemoryVaultWriter } from "../src/vault/memory-vault-writer.js";
 
 const TOKEN = "t".repeat(32);
 let app: ReturnType<typeof createApp>;
+let errorLog: MockInstance<typeof console.error>;
+beforeEach(() => {
+  errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+});
+afterEach(() => {
+  errorLog.mockRestore();
+});
 
 function call(path: string, body: unknown, auth = true) {
   return app.request(path, {
@@ -61,8 +68,11 @@ describe("POST /api/ingest（ノート同期）", () => {
     expect(res.status).toBe(200);
     const json = (await res.json()) as { written: number; notes: { error: string } };
     expect(json.written).toBe(1);
-    expect(json.notes.error).toBe("vault down");
+    // 内部のエラー文は返さず、固定の文にする
+    expect(json.notes.error).toMatch(/サーバーのログを確認してください/);
+    expect(JSON.stringify(json)).not.toContain("vault down");
     expect(JSON.stringify(json)).not.toContain(TOKEN);
+    expect(errorLog.mock.calls.flat().join("\n")).toContain("vault down");
   });
 });
 
@@ -107,5 +117,27 @@ describe("POST /api/notes/sync", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ written: 5, unchanged: 2, failed: [] });
     expect(writer.notes.size).toBe(7);
+  });
+
+  it("failed には既知のエラーだけ文面を載せ、内部のエラーは固定の文にする", async () => {
+    const writer = build();
+    await ingest({
+      days: [
+        { date: "2026-01-01", activity: { steps: 1 } },
+        { date: "2026-01-02", activity: { steps: 2 } },
+      ],
+    });
+    writer.notes.set("Health/Daily/2026-01-01.md", "手書きのノート\n");
+    // 書き換えが必要になるよう、マーカーだけ残して古い内容にしておく
+    writer.notes.set("Health/Daily/2026-01-02.md", "古い内容\n%% health:memo\n");
+    writer.writeNote = async () => {
+      throw new Error("socket hang up at internal-host:1234");
+    };
+    const res = await call("/api/notes/sync", { from: "2026-01-01", to: "2026-01-02" });
+    const json = (await res.json()) as { failed: { path: string; error: string }[] };
+    const byPath = new Map(json.failed.map((f) => [f.path, f.error]));
+    expect(byPath.get("Health/Daily/2026-01-01.md")).toMatch(/マーカー/);
+    expect(byPath.get("Health/Daily/2026-01-02.md")).toMatch(/サーバーのログを確認してください/);
+    expect(JSON.stringify(json)).not.toContain("internal-host");
   });
 });

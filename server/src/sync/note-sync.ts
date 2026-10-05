@@ -1,7 +1,23 @@
+import { MemoMarkerMissingError } from "../notes/index.js";
 import type { HealthStore } from "../store/health-store.js";
 import type { VaultWriter } from "../vault/vault-writer.js";
-import { noteRootFromPrefix, writeMany } from "../vault/vault-writer.js";
+import { noteRootFromPrefix, VaultPathError } from "../vault/vault-writer.js";
 import { type PlanItem, planNotes } from "./plan.js";
+
+export const NOTE_FAILURE_MESSAGE =
+  "Vault への書き込みに失敗しました。詳細はサーバーのログを確認してください";
+
+// 応答に載せるエラー文。利用者が対処できる既知のエラーだけ文面を返し、
+// それ以外（内部の通信エラーなど）は固定の文にする
+export function publicErrorMessage(e: unknown): string {
+  if (e instanceof MemoMarkerMissingError || e instanceof VaultPathError) return e.message;
+  return NOTE_FAILURE_MESSAGE;
+}
+
+// ログ用の要約。cause をたどるとトークンを含む値が出るおそれがあるので、名前と文面だけにする
+export function describeForLog(e: unknown): string {
+  return e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+}
 
 export interface SyncReport {
   written: string[];
@@ -75,6 +91,10 @@ export class NoteSync {
   private async apply(items: PlanItem[]): Promise<SyncReport> {
     const report: SyncReport = { written: [], unchanged: [], failed: [] };
     const toWrite: { path: string; content: string }[] = [];
+    const fail = (path: string, e: unknown) => {
+      console.error(`ノートの同期に失敗: ${path}: ${describeForLog(e)}`);
+      report.failed.push({ path, error: publicErrorMessage(e) });
+    };
 
     await mapLimit(items, this.concurrency, async (item) => {
       try {
@@ -83,19 +103,19 @@ export class NoteSync {
         if (existing === content) report.unchanged.push(item.path);
         else toWrite.push({ path: item.path, content });
       } catch (e) {
-        report.failed.push({
-          path: item.path,
-          error: e instanceof Error ? e.message : String(e),
-        });
+        fail(item.path, e);
       }
     });
 
-    const res = await writeMany(this.writer, toWrite, {
-      concurrency: this.concurrency,
+    // 個々の失敗では止めない
+    await mapLimit(toWrite, this.concurrency, async (w) => {
+      try {
+        await this.writer.writeNote(w.path, w.content);
+        report.written.push(w.path);
+      } catch (e) {
+        fail(w.path, e);
+      }
     });
-    const failedPaths = new Set(res.failed.map((f) => f.path));
-    report.written = toWrite.map((w) => w.path).filter((p) => !failedPaths.has(p));
-    report.failed.push(...res.failed);
     report.written.sort();
     report.unchanged.sort();
     return report;

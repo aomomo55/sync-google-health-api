@@ -12,11 +12,13 @@ import {
 import { inclusiveDays, inclusiveMonths, isRealMonth } from "../domain/dates.js";
 import { summarizeMonths } from "../domain/monthly.js";
 import type { HealthStore } from "../store/health-store.js";
-import type { NoteSync } from "../sync/note-sync.js";
+import { describeForLog, type NoteSync } from "../sync/note-sync.js";
 
 const MAX_INGEST_DAYS = 400;
 const MAX_SPAN_DAYS = 400;
 const MAX_SPAN_MONTHS = 120;
+const SYNC_FAILURE_MESSAGE =
+  "ノートの同期に失敗しました。データは保存済みです。詳細はサーバーのログを確認してください";
 
 const SyncNotesSchema = z.strictObject({
   from: DateSchema,
@@ -88,10 +90,11 @@ export function healthRoutes(store: HealthStore, noteSync: NoteSync | null = nul
           },
         });
       } catch (e) {
-        console.error("note sync failed", e);
+        // 内部のエラー文は応答に含めず、ログにだけ残す
+        console.error(`ノートの同期に失敗: ${describeForLog(e)}`);
         return c.json({
           written,
-          notes: { error: e instanceof Error ? e.message : String(e) },
+          notes: { error: SYNC_FAILURE_MESSAGE },
         });
       }
     },

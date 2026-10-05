@@ -1,12 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import { MemoryStore } from "../src/store/memory-store.js";
-import { createNoteSync, NoteSync } from "../src/sync/note-sync.js";
+import { createNoteSync, NOTE_FAILURE_MESSAGE, NoteSync } from "../src/sync/note-sync.js";
 import { MemoryVaultWriter } from "../src/vault/memory-vault-writer.js";
 import {
   assertVaultPath,
   DEFAULT_VAULT_PREFIX,
   noteRootFromPrefix,
+  VaultWriteError,
 } from "../src/vault/vault-writer.js";
+
+let errorLog: MockInstance<typeof console.error>;
+beforeEach(() => {
+  errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+});
+afterEach(() => {
+  errorLog.mockRestore();
+});
 
 function setup() {
   const store = new MemoryStore();
@@ -135,9 +144,11 @@ describe("NoteSync", () => {
       { date: "2026-02-02", activity: { steps: 2 } },
     ]);
     const r = await sync.syncDates(["2026-02-01", "2026-02-02"]);
-    expect(r.failed).toEqual([{ path: bad, error: "boom" }]);
+    // 内部のエラー文は応答に出さず、固定の文にしてログにだけ残す
+    expect(r.failed).toEqual([{ path: bad, error: NOTE_FAILURE_MESSAGE }]);
     expect(r.written).toHaveLength(2);
     expect(writer.notes.has(bad)).toBe(false);
+    expect(errorLog.mock.calls.flat().join("\n")).toContain("boom");
   });
 
   it("読み取り失敗も failed に入る", async () => {
@@ -149,7 +160,32 @@ describe("NoteSync", () => {
     await store.upsertDays([{ date: "2026-02-01", activity: { steps: 1 } }]);
     const r = await sync.syncDates(["2026-02-01"]);
     expect(r.failed).toHaveLength(2);
+    expect(r.failed.every((f) => f.error === NOTE_FAILURE_MESSAGE)).toBe(true);
     expect(r.written).toEqual([]);
+  });
+
+  it("Vault の内部エラー（URL などを含む）は応答に出さない", async () => {
+    const { store, writer } = setup();
+    writer.writeNote = async () => {
+      throw new VaultWriteError("Vault の write_note が失敗: connect ECONNREFUSED 10.0.0.1:443");
+    };
+    const sync = new NoteSync({ store, writer });
+    await store.upsertDays([{ date: "2026-02-01", activity: { steps: 1 } }]);
+    const r = await sync.syncDates(["2026-02-01"]);
+    expect(JSON.stringify(r)).not.toContain("ECONNREFUSED");
+    expect(r.failed.map((f) => f.error)).toEqual([NOTE_FAILURE_MESSAGE, NOTE_FAILURE_MESSAGE]);
+    expect(errorLog.mock.calls.flat().join("\n")).toContain("ECONNREFUSED");
+  });
+
+  it("利用者が対処できるパスのエラーは文面をそのまま返す", async () => {
+    const store = new MemoryStore();
+    // 生成先（Health）と許可フォルダ（Other/）が食い違う設定
+    const writer = new MemoryVaultWriter({ prefix: "Other/" });
+    const sync = new NoteSync({ store, writer });
+    await store.upsertDays([{ date: "2026-02-01", activity: { steps: 1 } }]);
+    const r = await sync.syncDates(["2026-02-01"]);
+    expect(r.failed).toHaveLength(2);
+    for (const f of r.failed) expect(f.error).toMatch(/不正な Vault パスです/);
   });
 
   it("syncRange は範囲内の全日・月と静的ノートを扱う", async () => {
