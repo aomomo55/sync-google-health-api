@@ -1,0 +1,46 @@
+# 依存の更新を月に一度まとめて提案する。マイナー・パッチはエコシステムごとに 1 つの PR にまとめる
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      github-actions-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /server
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    groups:
+      docker-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: /server
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    groups:
+      gradle-minor-patch:
+        update-types:
+          - minor
+          - patch
