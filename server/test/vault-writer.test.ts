@@ -3,7 +3,13 @@ import { loadConfig } from "../src/config.js";
 import { createVaultWriter } from "../src/vault/index.js";
 import { McpVaultWriter } from "../src/vault/mcp-vault-writer.js";
 import { MemoryVaultWriter } from "../src/vault/memory-vault-writer.js";
-import { VaultWriteError, type VaultWriter, writeMany } from "../src/vault/vault-writer.js";
+import {
+  assertVaultPath,
+  VaultPathError,
+  VaultWriteError,
+  type VaultWriter,
+  writeMany,
+} from "../src/vault/vault-writer.js";
 import { FakeObsidianMcp } from "./vault-fake-server.js";
 
 const TOKEN = "vault-test-token-0123456789";
@@ -206,6 +212,51 @@ describe("McpVaultWriter", () => {
     expect(progress).toHaveLength(10);
     expect(fake.maxInflight).toBeLessThanOrEqual(2);
     expect(fake.maxInflight).toBeGreaterThan(1);
+  });
+});
+
+describe("assertVaultPath", () => {
+  it.each([
+    "Health/Daily/2026-02-01.md",
+    "Health/Monthly/2026-02.md",
+    "Health/ヘルスケアダッシュボード.md",
+    "Health/睡眠ダッシュボード.md",
+    "Health/_bases/日次ログ.base",
+    "Health/_bases/睡眠ログ.base",
+    "Health/_bases/月次サマリー.base",
+  ])("生成するノートのパス %s は通す", (path) => {
+    expect(() => assertVaultPath(path, "Health/")).not.toThrow();
+  });
+
+  it.each([
+    ["プレフィックスの外", "Other/a.md"],
+    ["プレフィックスそのもの", "Health/"],
+    ["拡張子が違う", "Health/a.txt"],
+    ["親ディレクトリ", "Health/../a.md"],
+    ["親ディレクトリ（末尾）", "Health/x/..md"],
+    ["カレントディレクトリ", "Health/./a.md"],
+    ["空のセグメント", "Health//a.md"],
+    ["バックスラッシュ", "Health\\a.md"],
+    ["絶対パス", "/Health/a.md"],
+    ["改行", "Health/a\n.md"],
+    ["ESC", "Health/\u001b[31ma.md"],
+    ["NUL", "Health/a\u0000.md"],
+    ["DEL", "Health/a\u007f.md"],
+  ])("%s は拒否する", (_name, path) => {
+    expect(() => assertVaultPath(path, "Health/")).toThrow(VaultPathError);
+  });
+
+  it("エラー文に制御文字をそのまま含めない", () => {
+    const err = (() => {
+      try {
+        assertVaultPath("Health/\u001b[2Ja.md", "Health/");
+      } catch (e) {
+        return e as Error;
+      }
+    })();
+    expect(err).toBeInstanceOf(VaultWriteError);
+    expect(err?.message).not.toContain("\u001b");
+    expect(err?.message).toContain("\\u001b");
   });
 });
 
