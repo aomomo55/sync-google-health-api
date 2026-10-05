@@ -107,7 +107,8 @@ APK は `app/build/outputs/apk/release/app-release.apk` に出力されます。
 睡眠の詳細:
 
 - 同じ起床日に複数のデータ提供元がある場合は 1 つだけ使う。その日のセッションに浅い / 深い / REM のステージを含む提供元を優先し、その中で合計時間が最長のものを選ぶ。同点なら提供元 ID の辞書順で最小のもの。
-- 最長のセッションを主睡眠とし、それ以外のセッションの睡眠分数の合計を `nap_minutes` にする。
+- 同じ提供元のセッションの間隔が 2 時間以内なら一晩の睡眠として結合する（起床日は結合後の起床時刻で決める）。セッション間の間隔は中途覚醒に数える（[ADR 0013](../docs/adr/0013-merge-split-sleep-sessions.md)）。
+- 最も長いまとまりを主睡眠とし、それ以外のセッションの睡眠分数の合計を `nap_minutes` にする。
 - `in_bed` は開始から終了まで。`awake` は AWAKE / OUT_OF_BED / AWAKE_IN_BED の合計、`asleep = in_bed - awake`。`deep` / `light` / `rem` は各ステージの合計。
 - ステージが無いセッションは `asleep = in_bed` とし、awake / deep / light / rem は送らない。
 
