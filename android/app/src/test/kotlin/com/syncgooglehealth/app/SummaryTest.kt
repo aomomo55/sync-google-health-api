@@ -474,30 +474,30 @@ class IngestClassifyTest {
 class StoredTokenTest {
     @Test
     fun 未保存ならnullで何も消さない() {
-        var discarded = false
-        assertNull(readStoredToken(null, { it }, { discarded = true }))
-        assertFalse(discarded)
+        val discarded = mutableListOf<String>()
+        assertNull(readStoredToken(null, { it }, { discarded += it }))
+        assertTrue(discarded.isEmpty())
     }
 
     @Test
     fun 復号できればそのまま返す() {
-        var discarded = false
-        assertEquals("tok", readStoredToken("enc", { "tok" }, { discarded = true }))
-        assertFalse(discarded)
+        val discarded = mutableListOf<String>()
+        assertEquals("tok", readStoredToken("enc", { "tok" }, { discarded += it }))
+        assertTrue(discarded.isEmpty())
     }
 
     @Test
     fun 復号できなければ消してnull() {
-        var discarded = false
-        assertNull(readStoredToken("enc", { throw javax.crypto.AEADBadTagException() }, { discarded = true }))
-        assertTrue(discarded)
+        val discarded = mutableListOf<String>()
+        assertNull(readStoredToken("enc", { throw javax.crypto.AEADBadTagException() }, { discarded += it }))
+        assertTrue(discarded.isNotEmpty())
     }
 
     @Test
     fun 空のトークンも消してnull() {
-        var discarded = false
-        assertNull(readStoredToken("enc", { "" }, { discarded = true }))
-        assertTrue(discarded)
+        val discarded = mutableListOf<String>()
+        assertNull(readStoredToken("enc", { "" }, { discarded += it }))
+        assertTrue(discarded.isNotEmpty())
     }
 
     @Test
@@ -510,12 +510,12 @@ class StoredTokenTest {
             RuntimeException("x"),
         )
         for (e in transient) {
-            var discarded: String? = null
-            val r = readStoredTokenState("enc", { throw e }, { discarded = it })
+            val discarded = mutableListOf<String>()
+            val r = readStoredTokenState("enc", { throw e }, { discarded += it })
             assertEquals(e.toString(), StoredToken.Unavailable, r)
-            assertNull(e.toString(), discarded)
-            assertNull(readStoredToken("enc", { throw e }, { discarded = it }))
-            assertNull(e.toString(), discarded)
+            assertTrue(e.toString(), discarded.isEmpty())
+            assertNull(readStoredToken("enc", { throw e }, { discarded += it }))
+            assertTrue(e.toString(), discarded.isEmpty())
         }
     }
 
@@ -528,10 +528,10 @@ class StoredTokenTest {
             UnusableStoredTokenException("暗号文が短すぎます"),
         )
         for (e in definitive) {
-            var discarded: String? = null
-            val r = readStoredTokenState("enc", { throw e }, { discarded = it })
+            val discarded = mutableListOf<String>()
+            val r = readStoredTokenState("enc", { throw e }, { discarded += it })
             assertEquals(e.toString(), StoredToken.None, r)
-            assertEquals(e.toString(), "enc", discarded)
+            assertEquals(e.toString(), listOf("enc"), discarded)
         }
     }
 
