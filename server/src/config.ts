@@ -43,6 +43,17 @@ const couchdbUrl = z
     },
   );
 
+// トークンを平文で流さないため https: に限る。ローカルでの試験用に localhost だけ http: を許す
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const obsidianMcpUrl = z.url().refine(
+  (v) => {
+    const u = parseUrl(v);
+    if (!u) return true;
+    return u.protocol === "https:" || (u.protocol === "http:" && LOCAL_HOSTS.has(u.hostname));
+  },
+  { message: "https: の URL を指定してください（http: は localhost / 127.0.0.1 / [::1] のみ可）" },
+);
+
 const schema = z
   .object({
     PORT: z.coerce.number().int().min(1).max(65535).default(8080),
@@ -56,7 +67,7 @@ const schema = z
     COUCHDB_USER: credential,
     COUCHDB_PASSWORD: credential,
     COUCHDB_HEALTH_DB: z.string().min(1).default("health"),
-    OBSIDIAN_MCP_URL: z.url().optional(),
+    OBSIDIAN_MCP_URL: obsidianMcpUrl.optional(),
     OBSIDIAN_MCP_TOKEN: token(16).optional(),
     VAULT_HEALTH_PREFIX: z.string().min(1).default("Health/"),
     NODE_ENV: z.string().optional(),

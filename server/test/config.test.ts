@@ -95,3 +95,38 @@ describe("API_TOKEN", () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe("OBSIDIAN_MCP_URL", () => {
+  const mcp = (url: string) => ({
+    ...BASE,
+    OBSIDIAN_MCP_URL: url,
+    OBSIDIAN_MCP_TOKEN: "m".repeat(16),
+  });
+
+  it("https は受け付ける", () => {
+    expect(loadConfig(mcp("https://mcp.example.com/mcp")).OBSIDIAN_MCP_URL).toBe(
+      "https://mcp.example.com/mcp",
+    );
+  });
+
+  it("http は localhost / 127.0.0.1 / [::1] だけ受け付ける", () => {
+    for (const url of [
+      "http://localhost:3000/mcp",
+      "http://127.0.0.1:3000/mcp",
+      "http://[::1]:3000/mcp",
+    ]) {
+      expect(loadConfig(mcp(url)).OBSIDIAN_MCP_URL).toBe(url);
+    }
+  });
+
+  it("その他のホストへの http や他のスキームは拒否する", () => {
+    for (const url of [
+      "http://mcp.example.com/mcp",
+      "http://192.168.0.10/mcp",
+      "http://localhost.example.com/mcp",
+      "ftp://mcp.example.com/mcp",
+    ]) {
+      expect(() => loadConfig(mcp(url))).toThrow(/OBSIDIAN_MCP_URL: https:/);
+    }
+  });
+});
