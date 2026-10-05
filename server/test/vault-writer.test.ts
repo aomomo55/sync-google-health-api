@@ -34,6 +34,7 @@ beforeEach(async () => {
   fake.maxInflight = 0;
   fake.failToolCalls = [];
   fake.toolDelayMs = 0;
+  fake.readResponses.clear();
 });
 afterEach(async () => {
   await Promise.all(writers.splice(0).map((w) => w.close()));
@@ -49,6 +50,42 @@ describe("McpVaultWriter", () => {
 
   it("存在しないノートは null", async () => {
     expect(await make().readNote("Health/none.md")).toBeNull();
+  });
+
+  it.each([
+    "Error: chunk not found",
+    "database does not exist",
+    "Error reading note: Note not found in chunk index",
+  ])("ノート不在以外のエラー（%s）は null にせず throw", async (msg) => {
+    fake.readResponses.set("Health/a.md", { text: msg, isError: true });
+    const err = await make()
+      .readNote("Health/a.md")
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(VaultWriteError);
+    expect(String(err.message)).toContain(msg);
+    expect(fake.toolCalls).toBe(1);
+  });
+
+  it("isError でない応答の「Note not found」は null にしない", async () => {
+    fake.readResponses.set("Health/a.md", { text: "Note not found: memo", isError: false });
+    expect(await make().readNote("Health/a.md")).toBe("Note not found: memo");
+  });
+
+  it("isError 付きの「Note not found: <パス>」だけを不在とみなす", async () => {
+    fake.readResponses.set("Health/Daily/2026-01-01.md", {
+      text: "Note not found: Health/Daily/2026-01-01.md",
+      isError: true,
+    });
+    expect(await make().readNote("Health/Daily/2026-01-01.md")).toBeNull();
+  });
+
+  it("読み出しのエラー文にトークンが含まれても伏せる", async () => {
+    fake.readResponses.set("Health/a.md", { text: `Error: bad ${TOKEN}`, isError: true });
+    const err = await make()
+      .readNote("Health/a.md")
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(VaultWriteError);
+    expect(String(err.message)).not.toContain(TOKEN);
   });
 
   it("セッションを使い回す（initialize は 1 回）", async () => {

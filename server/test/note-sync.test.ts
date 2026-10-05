@@ -68,6 +68,37 @@ describe("NoteSync", () => {
     expect(note).toContain("999");
   });
 
+  it("マーカーの無い手書きノートは上書きせず failed に載せる", async () => {
+    const { store, sync, writer } = setup();
+    await store.upsertDays([
+      { date: "2026-02-01", activity: { steps: 1 } },
+      { date: "2026-02-02", activity: { steps: 2 } },
+    ]);
+    const path = "Health/Daily/2026-02-01.md";
+    const handwritten = "# 2月1日\n手書きの日記\n";
+    writer.notes.set(path, handwritten);
+    const r = await sync.syncDates(["2026-02-01", "2026-02-02"]);
+    expect(writer.notes.get(path)).toBe(handwritten);
+    expect(r.written).not.toContain(path);
+    expect(r.failed).toHaveLength(1);
+    expect(r.failed[0]!.path).toBe(path);
+    expect(r.failed[0]!.error).toMatch(/マーカー/);
+    // 他のノートは通常どおり書き込まれる
+    expect(r.written).toContain("Health/Daily/2026-02-02.md");
+    expect(r.written).toContain("Health/Monthly/2026-02.md");
+  });
+
+  it("空白だけの既存ノートは上書きする", async () => {
+    const { store, sync, writer } = setup();
+    await store.upsertDays([{ date: "2026-02-01", activity: { steps: 1 } }]);
+    const path = "Health/Daily/2026-02-01.md";
+    writer.notes.set(path, "\n  \n");
+    const r = await sync.syncDates(["2026-02-01"]);
+    expect(r.failed).toEqual([]);
+    expect(r.written).toContain(path);
+    expect(writer.notes.get(path)).toContain("%% health:memo");
+  });
+
   it("後日のデータ追加で前日ノートの翌日リンクと月次が更新される", async () => {
     const { store, sync, writer } = setup();
     await store.upsertDays([{ date: "2026-02-20", activity: { steps: 1 } }]);

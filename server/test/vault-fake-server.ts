@@ -16,6 +16,8 @@ export class FakeObsidianMcp {
   // 次の tools/call に対して返す HTTP ステータス（消費される）
   failToolCalls: number[] = [];
   toolDelayMs = 0;
+  // read_note がパスごとに返す応答（ノート不在以外のエラーなどを再現する）
+  readonly readResponses = new Map<string, { text: string; isError: boolean }>();
   private server!: Server;
   url = "";
 
@@ -75,6 +77,8 @@ export class FakeObsidianMcp {
     );
     mcp.registerTool("read_note", { inputSchema: { path: z.string() } }, async ({ path }) => {
       this.toolCalls++;
+      const forced = this.readResponses.get(path);
+      if (forced) return text(forced.text, forced.isError);
       const body = this.notes.get(path);
       if (body === undefined) return text(`Note not found: ${path}`, true);
       return text(`[Open in Obsidian](obsidian://open?path=${path})\n\n---\n\n${body}`);
