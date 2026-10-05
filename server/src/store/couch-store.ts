@@ -109,12 +109,23 @@ export class CouchStore implements HealthStore {
       `/_all_docs?include_docs=true&startkey=${key(`day:${from}`)}&endkey=${key(`day:${to}`)}`,
     );
     return CouchStore.docsOf(json)
-      .map((d) => CouchStore.toDay(d))
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .map((d) => ({ id: String(d._id), doc: d }))
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map(({ id, doc }) => CouchStore.dayFromDoc(id, doc));
+  }
+
+  // 日付の正は文書の _id（day:YYYY-MM-DD）とする。範囲の取得も findAdjacentDate も _id のキー順で引くため。
+  // 本文の date が無い・文字列でない・_id と食い違う文書は、date に _id を入れて返す。
+  // 実在する日付にならないので、同期処理（splitValidDays）が不正な日として失敗に載せ、該当する文書も示せる
+  private static dayFromDoc(id: string, doc: CouchDoc): DailySummary {
+    const day = CouchStore.toDay(doc);
+    const date: unknown = doc.date;
+    if (typeof date === "string" && `day:${date}` === id) return day;
+    return { ...day, date: id };
   }
 
   async findAdjacentDate(date: string, direction: "prev" | "next"): Promise<string | null> {
-    // キー順で前後を 2 件取り、date 自身を除いた最初の日を返す
+    // キー順で前後を 2 件取り、date 自身を除いた最初の日を返す（日付の正は _id。getDays と同じ）
     const key = (s: string) => encodeURIComponent(JSON.stringify(s));
     const query =
       direction === "prev"
