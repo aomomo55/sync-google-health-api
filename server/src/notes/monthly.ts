@@ -1,5 +1,12 @@
 import type { MonthlySummary } from "../domain/monthly.js";
-import { fmtDuration, fmtNum, monthLabelJa, numOrNull, shiftMonth } from "./format.js";
+import {
+  fmtDuration,
+  fmtNum,
+  GENERATED_NOTICE,
+  monthLabelJa,
+  numOrNull,
+  shiftMonth,
+} from "./format.js";
 import { linkTarget, notePaths } from "./paths.js";
 import { frontmatter, type YamlEntry } from "./yaml.js";
 
@@ -82,6 +89,7 @@ export function renderMonthlyNote(m: MonthlySummary, root?: string): string {
   return [
     frontmatter(monthlyEntries(m), ["health/monthly"]),
     `# ${monthLabelJa(m.month)}の健康サマリー\n`,
+    GENERATED_NOTICE,
     `${summaryLines(m).join("\n")}\n`,
     `← [[${linkTarget(p.monthly(prev))}|${monthLabelJa(prev)}]] | [[${linkTarget(p.monthly(next))}|${monthLabelJa(next)}]] →\n`,
     "## 日別一覧\n",

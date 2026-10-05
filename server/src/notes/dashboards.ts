@@ -1,3 +1,4 @@
+import { GENERATED_NOTICE } from "./format.js";
 import { linkTarget, notePaths } from "./paths.js";
 
 // dataviewjs + Charts プラグイン (window.renderChart は Chart.js の設定オブジェクトをそのまま受け取る)
@@ -142,6 +143,7 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
 
   return [
     "# ヘルスケアダッシュボード\n",
+    GENERATED_NOTICE,
     "> [!info] データについて\n> Google Fit の Takeout と、Android アプリ経由の Health Connect のデータから自動生成・自動更新されます。\n> このノートは静的で、グラフと表は Dataview / Charts / Bases が Daily・Monthly ノートから描画します。\n",
     "## 直近90日\n",
     `![[${p.dailyBase}#直近90日]]\n`,
@@ -177,8 +179,11 @@ export function renderSleepDashboard(root?: string): string {
   return m ? Number(m[1]) + Number(m[2]) / 60 : null;
 };
 const bed = (s) => { const h = hm(s); return h === null ? null : (h < 12 ? h + 24 : h); };
+const wake = (s) => { const h = hm(s); return h === null ? null : h + 24; };
 const clock = (v) => { const m = Math.round((((v % 24) + 24) % 24) * 60); return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); };
-const timeAxis = { title: { display: true, text: "時刻" }, ticks: { callback: (v) => clock(v) } };`;
+const timeAxis = { min: 20, max: 34, title: { display: true, text: "時刻" }, ticks: { stepSize: 2, autoSkip: false, callback: (v) => clock(v) } };`;
+  // 起床は翌日扱い（+24）にして、就寝（下）→起床（上）と時間が一方向に進む軸にする。
+  // 軸は 20:00〜翌10:00 に固定。外れる日が出てきたら範囲を広げる
 
   // 直近 7 日（暦日）の睡眠時間。記録の無い日も空けて並べ、7 時間の目安線を引く
   const week = block(`${prelude()}
@@ -229,7 +234,7 @@ ${emptyGuard("睡眠データがありません")}
       labels: pages.map(day),
       datasets: [
         line("就寝時刻", pages.map((p) => bed(p.就寝時刻)), "${COLORS.purple}"),
-        line("起床時刻", pages.map((p) => hm(p.起床時刻)), "${COLORS.orange}"),
+        line("起床時刻", pages.map((p) => wake(p.起床時刻)), "${COLORS.orange}"),
       ],
     },
     options: { scales: { y: timeAxis } },
@@ -276,7 +281,7 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
       labels: rows.map(month),
       datasets: [
         line("平均就寝時刻", rows.map((p) => bed(p.平均就寝時刻)), "${COLORS.purple}"),
-        line("平均起床時刻", rows.map((p) => hm(p.平均起床時刻)), "${COLORS.orange}"),
+        line("平均起床時刻", rows.map((p) => wake(p.平均起床時刻)), "${COLORS.orange}"),
       ],
     },
     options: { scales: { y: timeAxis } },
@@ -285,6 +290,7 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
 
   return [
     "# 睡眠ダッシュボード\n",
+    GENERATED_NOTICE,
     `[[${linkTarget(p.dashboard)}|ヘルスケアダッシュボード]] に戻る\n`,
     "## 直近1週間の睡眠時間\n",
     week,
