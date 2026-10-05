@@ -56,11 +56,15 @@ jobs:
         with:
           node-version: 22
 
-      # Dockerfile と同じ pnpm バージョンを corepack で有効化
+      # server/package.json の packageManager の版を sha512 を検査して入れる
+      # (corepack prepare はハッシュを検査せずにキャッシュするので使わない)
       - name: pnpm を有効化
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
         run: |
           corepack enable
-          corepack prepare pnpm@12.8.1 --activate
+          corepack install
+          pnpm --version
 
       - name: pnpm store のパスを取得
         id: pnpm-store
