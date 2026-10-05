@@ -2,4 +2,6 @@ allowBuilds:
   esbuild: true
 
 # 公開から 1440 分（1 日）経っていない版は入れない（乗っ取られて公開された版を避けるため）
+# pnpm 12 ではこれを明示すると minimumReleaseAgeStrict の既定が true になり、新しすぎる版を黙って除かず install が失敗する。
+# そのため公開から 1 日未満の版を入れる Dependabot のセキュリティ更新は CI が失敗しうる
 minimumReleaseAge: 1440
