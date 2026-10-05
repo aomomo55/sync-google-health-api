@@ -55,6 +55,19 @@ describe("POST /api/ingest", () => {
       { days: [{ date: "2026-01-01", sleep: { start: "2026-01-01T23:00:00" } }] },
     ],
     ["ルートの未知キー", { days: [{ date: "2026-01-01" }], extra: 1 }],
+    ["桁違いに大きい値", { days: [{ date: "2026-01-01", activity: { steps: 1e308 } }] }],
+    ["小数の歩数", { days: [{ date: "2026-01-01", activity: { steps: 10.5 } }] }],
+    [
+      "起床が就寝より前",
+      {
+        days: [
+          {
+            date: "2026-01-01",
+            sleep: { start: "2026-01-01T07:00:00+09:00", end: "2025-12-31T23:00:00+09:00" },
+          },
+        ],
+      },
+    ],
   ])("400: %s", async (_name, body) => {
     const res = await ingest(body);
     expect(res.status).toBe(400);
