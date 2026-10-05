@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { MemoryStore } from "../src/store/memory-store.js";
 import { NoteSync } from "../src/sync/note-sync.js";
 import { MemoryVaultWriter } from "../src/vault/memory-vault-writer.js";
+import {
+  assertVaultPath,
+  DEFAULT_VAULT_PREFIX,
+  noteRootFromPrefix,
+} from "../src/vault/vault-writer.js";
 
 function setup() {
   const store = new MemoryStore();
@@ -140,5 +145,79 @@ describe("NoteSync", () => {
     ]);
     await sync.syncRange("2026-02-20", "2026-02-20");
     expect(writer.notes.get("Health/Monthly/2026-02.md")).toContain("2000");
+  });
+});
+
+describe("VAULT_HEALTH_PREFIX に合わせたルート", () => {
+  it.each([
+    ["Health/", "Health"],
+    ["Health", "Health"],
+    ["MyHealth/", "MyHealth"],
+    ["Areas/Health/", "Areas/Health"],
+  ])("noteRootFromPrefix(%s) は %s", (prefix, root) => {
+    expect(noteRootFromPrefix(prefix)).toBe(root);
+  });
+
+  it.each(["MyHealth/", "Areas/Health/"])(
+    "プレフィックス %s の下に全てのノートを書き込む",
+    async (prefix) => {
+      const root = noteRootFromPrefix(prefix);
+      const store = new MemoryStore();
+      // MemoryVaultWriter は読み書きのたびに assertVaultPath でプレフィックスを検証する
+      const writer = new MemoryVaultWriter({ prefix });
+      const sync = new NoteSync({ store, writer, root });
+      await store.upsertDays([
+        { date: "2026-02-01", activity: { steps: 1 } },
+        { date: "2026-02-02", activity: { steps: 2 } },
+      ]);
+      const r = await sync.syncRange("2026-02-01", "2026-02-02", { includeStatic: true });
+      expect(r.failed).toEqual([]);
+      expect([...writer.notes.keys()].sort()).toEqual(
+        [
+          `${root}/Daily/2026-02-01.md`,
+          `${root}/Daily/2026-02-02.md`,
+          `${root}/Monthly/2026-02.md`,
+          `${root}/ヘルスケアダッシュボード.md`,
+          `${root}/睡眠ダッシュボード.md`,
+          `${root}/_bases/日次ログ.base`,
+          `${root}/_bases/睡眠ログ.base`,
+          `${root}/_bases/月次サマリー.base`,
+        ].sort(),
+      );
+      for (const path of writer.notes.keys()) {
+        expect(() => assertVaultPath(path, prefix)).not.toThrow();
+      }
+
+      // リンクやフォルダの参照も同じルートを指す
+      expect(writer.notes.get(`${root}/Daily/2026-02-01.md`)).toContain(
+        `[[${root}/Daily/2026-02-02|翌日]]`,
+      );
+      expect(writer.notes.get(`${root}/ヘルスケアダッシュボード.md`)).toContain(
+        `dv.pages('"${root}/Daily"')`,
+      );
+      expect(writer.notes.get(`${root}/_bases/月次サマリー.base`)).toContain(
+        `file.inFolder("${root}/Monthly")`,
+      );
+      for (const content of writer.notes.values()) {
+        expect(content).not.toMatch(/(^|[^/\w])Health\/(Daily|Monthly)/);
+      }
+    },
+  );
+
+  it("既定のプレフィックスから求めたルートは、ルート省略時と同じ出力になる", async () => {
+    const store = new MemoryStore();
+    await store.upsertDays([{ date: "2026-02-01", activity: { steps: 1 } }]);
+    const a = new MemoryVaultWriter();
+    const b = new MemoryVaultWriter();
+    await new NoteSync({ store, writer: a }).syncRange("2026-02-01", "2026-02-01", {
+      includeStatic: true,
+    });
+    await new NoteSync({
+      store,
+      writer: b,
+      root: noteRootFromPrefix(DEFAULT_VAULT_PREFIX),
+    }).syncRange("2026-02-01", "2026-02-01", { includeStatic: true });
+    expect(b.notes.size).toBeGreaterThan(0);
+    expect([...b.notes.entries()]).toEqual([...a.notes.entries()]);
   });
 });

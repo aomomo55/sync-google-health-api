@@ -3,7 +3,7 @@ import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { CouchStore } from "./store/couch-store.js";
 import { NoteSync } from "./sync/note-sync.js";
-import { createVaultWriter } from "./vault/index.js";
+import { createVaultWriter, noteRootFromPrefix } from "./vault/index.js";
 
 const config = loadConfig();
 const store = new CouchStore({
@@ -14,7 +14,10 @@ const store = new CouchStore({
 });
 await store.ensureReady();
 const writer = createVaultWriter(config);
-const noteSync = writer ? new NoteSync({ store, writer }) : null;
+// ノートは書き込みを許可したフォルダの下に生成する（検証と同じプレフィックスを使う）
+const noteSync = writer
+  ? new NoteSync({ store, writer, root: noteRootFromPrefix(config.VAULT_HEALTH_PREFIX) })
+  : null;
 const app = createApp({ config, store, noteSync });
 
 const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
