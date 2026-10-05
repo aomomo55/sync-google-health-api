@@ -4,7 +4,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
@@ -19,7 +22,10 @@ import java.util.concurrent.TimeUnit
 
 data class NotesResult(val written: Int, val unchanged: Int, val failed: Int, val error: String?)
 
-data class IngestOk(val written: Int, val notes: NotesResult?)
+// 値が範囲外などで保存されなかった日 (同じリクエストの他の日は保存されている)
+data class RejectedDay(val date: String, val error: String)
+
+data class IngestOk(val written: Int, val notes: NotesResult?, val rejected: List<RejectedDay> = emptyList())
 
 sealed interface IngestResult {
     data class Success(val ok: IngestOk) : IngestResult
@@ -43,7 +49,20 @@ fun parseIngestResponse(body: String): IngestOk {
             error = err,
         )
     }
-    return IngestOk(written, notes)
+    return IngestOk(written, notes, parseRejected(obj["rejected"]))
+}
+
+// rejected が無いのは古いサーバー (拒否される日が無い) なので空とみなす。
+// あるのに解釈できないときは、保存されなかった日を見落とさないよう例外にする
+private fun parseRejected(el: JsonElement?): List<RejectedDay> {
+    if (el == null || el is JsonNull) return emptyList()
+    val arr = el as? JsonArray ?: throw IllegalArgumentException("rejected が配列ではありません")
+    return arr.map { item ->
+        val o = item as? JsonObject ?: throw IllegalArgumentException("rejected の要素が不正です")
+        val date = (o["date"] as? JsonPrimitive)?.contentOrNull
+            ?: throw IllegalArgumentException("rejected に date がありません")
+        RejectedDay(date, (o["error"] as? JsonPrimitive)?.contentOrNull ?: "")
+    }
 }
 
 fun parseErrorMessage(body: String): String? = try {

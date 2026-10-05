@@ -493,3 +493,93 @@ class StoredTokenTest {
         assertFalse(removeIfUnchanged({ prefs["token"] }, "old") { prefs.remove("token") })
     }
 }
+
+class IngestRejectedTest {
+    @Test
+    fun rejectedを読む() {
+        val ok = parseIngestResponse(
+            """{"written":2,"notes":null,"rejected":[{"date":"2026-01-02","error":"歩数が範囲外です"}]}""",
+        )
+        assertEquals(2, ok.written)
+        assertEquals(listOf(RejectedDay("2026-01-02", "歩数が範囲外です")), ok.rejected)
+    }
+
+    @Test
+    fun rejectedが無い古いサーバーは空() {
+        assertEquals(emptyList<RejectedDay>(), parseIngestResponse("""{"written":2,"notes":null}""").rejected)
+        assertEquals(emptyList<RejectedDay>(), parseIngestResponse("""{"written":2,"rejected":[]}""").rejected)
+        assertEquals(emptyList<RejectedDay>(), parseIngestResponse("""{"written":2,"rejected":null}""").rejected)
+    }
+
+    @Test
+    fun 知らない項目は無視する() {
+        val ok = parseIngestResponse(
+            """{"written":1,"extra":{"a":1},"rejected":[{"date":"2026-01-02","error":"x","extra":true}]}""",
+        )
+        assertEquals(listOf(RejectedDay("2026-01-02", "x")), ok.rejected)
+    }
+
+    @Test
+    fun 解釈できないrejectedはエラー() {
+        assertTrue(classifyIngestResponse(200, """{"written":1,"rejected":"x"}""") is IngestResult.ClientError)
+        assertTrue(classifyIngestResponse(200, """{"written":1,"rejected":[1]}""") is IngestResult.ClientError)
+        assertTrue(classifyIngestResponse(200, """{"written":1,"rejected":[{"error":"x"}]}""") is IngestResult.ClientError)
+    }
+
+    @Test
+    fun rejectedがあっても成功() {
+        val r = classifyIngestResponse(200, """{"written":1,"notes":null,"rejected":[{"date":"2026-01-03","error":"x"}]}""")
+        assertEquals(IngestResult.Success(IngestOk(1, null, listOf(RejectedDay("2026-01-03", "x")))), r)
+    }
+}
+
+class SyncMessageTest {
+    private val notes = NotesResult(written = 2, unchanged = 1, failed = 0, error = null)
+
+    @Test
+    fun 拒否が無ければ従来どおり() {
+        val t = SyncTally().add(3, IngestOk(3, notes))
+        assertEquals("3日分を送信しました / ノート 更新2・変更なし1・失敗0", buildSyncMessage(t, includeNutrition = true))
+    }
+
+    @Test
+    fun 栄養とノートエラー() {
+        val t = SyncTally().add(1, IngestOk(1, NotesResult(0, 0, 1, "boom")))
+        assertEquals(
+            "1日分を送信しました（栄養は権限が無いため送っていません） / ノート 更新0・変更なし0・失敗1 / ノートエラー: boom",
+            buildSyncMessage(t, includeNutrition = false),
+        )
+    }
+
+    @Test
+    fun 拒否された日を複数のチャンクから集める() {
+        val t = SyncTally()
+            .add(30, IngestOk(29, notes, listOf(RejectedDay("2026-01-05", "歩数が範囲外です"))))
+            .add(5, IngestOk(4, null, listOf(RejectedDay("2026-01-02", "歩数が範囲外です"))))
+        assertEquals(35, t.sent)
+        assertEquals(
+            "35日分を送信しました（2日分は値が範囲外のため保存されませんでした: 2026-01-02, 2026-01-05 / 理由: 歩数が範囲外です） " +
+                "/ ノート 更新2・変更なし1・失敗0",
+            buildSyncMessage(t, includeNutrition = true),
+        )
+    }
+
+    @Test
+    fun 拒否が多いときは省略する() {
+        val rejected = (1..7).map { RejectedDay("2026-01-0$it", "理由$it") }
+        val t = SyncTally().add(7, IngestOk(0, null, rejected))
+        val msg = buildSyncMessage(t, includeNutrition = true)
+        assertTrue(msg, msg.contains("7日分は値が範囲外のため保存されませんでした: 2026-01-01, 2026-01-02, 2026-01-03, 2026-01-04, 2026-01-05 ほか2日"))
+        assertTrue(msg, msg.contains("理由: 理由1、理由2 ほか）"))
+        assertFalse(msg, msg.contains("2026-01-06"))
+    }
+
+    @Test
+    fun 長い理由は切り詰める() {
+        val long = "あ".repeat(100)
+        val t = SyncTally().add(1, IngestOk(0, null, listOf(RejectedDay("2026-01-01", long))))
+        val msg = buildSyncMessage(t, includeNutrition = true)
+        assertTrue(msg, msg.contains("あ".repeat(40) + "…）"))
+        assertFalse(msg, msg.contains("あ".repeat(41)))
+    }
+}
