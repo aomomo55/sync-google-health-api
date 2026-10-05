@@ -28,10 +28,11 @@ sealed interface IngestResult {
     data class Retryable(val message: String) : IngestResult
 }
 
-// レスポンス JSON の解析 (テスト可能にするため分離)
+// レスポンス JSON の解析 (テスト可能にするため分離)。written が無い応答は保存できた証拠にならないので例外にする
 fun parseIngestResponse(body: String): IngestOk {
     val obj = Json.parseToJsonElement(body).jsonObject
-    val written = obj["written"]?.jsonPrimitive?.intOrNull ?: 0
+    val written = obj["written"]?.jsonPrimitive?.intOrNull
+        ?: throw IllegalArgumentException("written がありません")
     val notesEl = obj["notes"]
     val notes = (notesEl as? JsonObject)?.let { n ->
         val err = n["error"]?.jsonPrimitive?.contentOrNull
@@ -51,8 +52,29 @@ fun parseErrorMessage(body: String): String? = try {
     null
 }
 
+// ステータスコードと本文から結果を決める (テスト可能にするため分離)
+fun classifyIngestResponse(code: Int, body: String): IngestResult = when {
+    code == 401 -> IngestResult.Unauthorized
+    // リダイレクトには従わない (POST の本文やトークンを別の宛先へ送らないため)
+    code in 300..399 -> IngestResult.ClientError(
+        "サーバーがリダイレクト ($code) を返しました。サーバー URL が正しいか確認してください",
+    )
+    code in 200..299 -> try {
+        IngestResult.Success(parseIngestResponse(body))
+    } catch (_: Exception) {
+        IngestResult.ClientError("サーバーの応答を解釈できませんでした (保存できたか確認できません)")
+    }
+    // タイムアウトと流量制限は時間をおけば通るので再試行する
+    code == 408 || code == 429 -> IngestResult.Retryable("サーバーが一時的に受け付けませんでした ($code)")
+    code in 400..499 ->
+        IngestResult.ClientError("送信エラー ($code): ${parseErrorMessage(body) ?: "不明なエラー"}")
+    else -> IngestResult.Retryable("サーバーエラー ($code)")
+}
+
 object IngestClient {
     private val client = OkHttpClient.Builder()
+        .followRedirects(false)
+        .followSslRedirects(false)
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .writeTimeout(60, TimeUnit.SECONDS)
@@ -78,18 +100,7 @@ object IngestClient {
             .build()
         return try {
             client.newCall(request).execute().use { res ->
-                val text = res.body.string()
-                when {
-                    res.code == 401 -> IngestResult.Unauthorized
-                    res.isSuccessful -> try {
-                        IngestResult.Success(parseIngestResponse(text))
-                    } catch (e: Exception) {
-                        IngestResult.ClientError("サーバーの応答を解釈できませんでした")
-                    }
-                    res.code in 400..499 ->
-                        IngestResult.ClientError("送信エラー (${res.code}): ${parseErrorMessage(text) ?: "不明なエラー"}")
-                    else -> IngestResult.Retryable("サーバーエラー (${res.code})")
-                }
+                classifyIngestResponse(res.code, res.body.string())
             }
         } catch (e: IOException) {
             IngestResult.Retryable("通信エラー: ${e.message ?: e.javaClass.simpleName}")

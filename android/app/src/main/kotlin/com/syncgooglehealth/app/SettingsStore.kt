@@ -12,6 +12,22 @@ import javax.crypto.spec.GCMParameterSpec
 
 const val DEFAULT_SERVER_URL = ""
 
+// 保存済みの暗号文を復号する。復号できない暗号文 (鍵が失われた、別の端末から移った等) は
+// 残しておいても使えないので消し、未設定として扱って再入力を促す
+fun readStoredToken(stored: String?, decrypt: (String) -> String, discard: () -> Unit): String? {
+    if (stored == null) return null
+    val token = try {
+        decrypt(stored)
+    } catch (_: Exception) {
+        null
+    }
+    if (token.isNullOrEmpty()) {
+        discard()
+        return null
+    }
+    return token
+}
+
 // トークンを Keystore の AES-GCM 鍵で暗号化して保存する。ログには出さない。
 class SettingsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -20,20 +36,20 @@ class SettingsStore(context: Context) {
         get() = prefs.getString(KEY_URL, DEFAULT_SERVER_URL) ?: DEFAULT_SERVER_URL
         set(v) = prefs.edit().putString(KEY_URL, v.trim()).apply()
 
-    fun hasToken(): Boolean = prefs.contains(KEY_TOKEN)
+    // 保存されているだけでなく、実際に復号できるときに true
+    fun hasToken(): Boolean = loadToken() != null
 
-    fun loadToken(): String? {
-        val enc = prefs.getString(KEY_TOKEN, null) ?: return null
-        return try {
+    fun loadToken(): String? = readStoredToken(
+        stored = prefs.getString(KEY_TOKEN, null),
+        decrypt = { enc ->
             val raw = Base64.decode(enc, Base64.NO_WRAP)
             val iv = raw.copyOfRange(0, IV_SIZE)
             val cipher = Cipher.getInstance(TRANSFORM)
             cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, iv))
             String(cipher.doFinal(raw, IV_SIZE, raw.size - IV_SIZE), Charsets.UTF_8)
-        } catch (_: Exception) {
-            null
-        }
-    }
+        },
+        discard = { prefs.edit().remove(KEY_TOKEN).apply() },
+    )
 
     fun saveToken(token: String) {
         val cipher = Cipher.getInstance(TRANSFORM)

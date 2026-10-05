@@ -33,7 +33,7 @@ object SyncRunner {
 
     private suspend fun execute(context: Context, store: SettingsStore, days: Int, requireBackground: Boolean): SyncOutcome {
         val token = store.loadToken()
-        if (token.isNullOrEmpty()) return SyncOutcome(SyncStatus.FAILED, "API トークンが設定されていません")
+        if (token.isNullOrEmpty()) return SyncOutcome(SyncStatus.FAILED, "API トークンが設定されていません。設定画面で入力し直してください")
 
         val status = HealthConnectClient.getSdkStatus(context)
         if (status != HealthConnectClient.SDK_AVAILABLE) {

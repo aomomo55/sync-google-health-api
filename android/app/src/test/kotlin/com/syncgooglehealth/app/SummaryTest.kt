@@ -336,6 +336,11 @@ class IngestResponseTest {
         assertNull(parseIngestResponse("""{"written":1,"notes":null}""").notes)
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun writtenが無い応答は例外() {
+        parseIngestResponse("""{"notes":null}""")
+    }
+
     @Test
     fun エラーメッセージ抽出() {
         assertEquals("bad", parseErrorMessage("""{"error":"bad"}"""))
@@ -347,5 +352,83 @@ class IngestResponseTest {
         assertTrue(SettingsStore.isValidToken("abc123-_"))
         assertFalse(SettingsStore.isValidToken("abc\n"))
         assertFalse(SettingsStore.isValidToken(""))
+    }
+}
+
+class IngestClassifyTest {
+    @Test
+    fun 成功() {
+        val r = classifyIngestResponse(200, """{"written":2,"notes":null}""")
+        assertEquals(IngestResult.Success(IngestOk(2, null)), r)
+    }
+
+    @Test
+    fun writtenが無い2xxはエラー() {
+        assertTrue(classifyIngestResponse(200, """{"ok":true}""") is IngestResult.ClientError)
+        assertTrue(classifyIngestResponse(200, "<html></html>") is IngestResult.ClientError)
+        assertTrue(classifyIngestResponse(204, "") is IngestResult.ClientError)
+    }
+
+    @Test
+    fun リダイレクトはエラー() {
+        for (code in listOf(301, 302, 307, 308)) {
+            val r = classifyIngestResponse(code, "")
+            assertTrue("$code", r is IngestResult.ClientError)
+            assertTrue((r as IngestResult.ClientError).message.contains("リダイレクト"))
+        }
+    }
+
+    @Test
+    fun 認証エラー() {
+        assertEquals(IngestResult.Unauthorized, classifyIngestResponse(401, """{"error":"unauthorized"}"""))
+    }
+
+    @Test
+    fun タイムアウトと流量制限は再試行() {
+        assertTrue(classifyIngestResponse(408, "") is IngestResult.Retryable)
+        assertTrue(classifyIngestResponse(429, """{"error":"too many"}""") is IngestResult.Retryable)
+    }
+
+    @Test
+    fun その他の4xxは再試行しない() {
+        val r = classifyIngestResponse(400, """{"error":"bad"}""")
+        assertEquals(IngestResult.ClientError("送信エラー (400): bad"), r)
+        assertTrue(classifyIngestResponse(413, "") is IngestResult.ClientError)
+    }
+
+    @Test
+    fun サーバーエラーは再試行() {
+        assertTrue(classifyIngestResponse(500, "") is IngestResult.Retryable)
+        assertTrue(classifyIngestResponse(503, "") is IngestResult.Retryable)
+    }
+}
+
+class StoredTokenTest {
+    @Test
+    fun 未保存ならnullで何も消さない() {
+        var discarded = false
+        assertNull(readStoredToken(null, { it }, { discarded = true }))
+        assertFalse(discarded)
+    }
+
+    @Test
+    fun 復号できればそのまま返す() {
+        var discarded = false
+        assertEquals("tok", readStoredToken("enc", { "tok" }, { discarded = true }))
+        assertFalse(discarded)
+    }
+
+    @Test
+    fun 復号できなければ消してnull() {
+        var discarded = false
+        assertNull(readStoredToken("enc", { throw javax.crypto.AEADBadTagException() }, { discarded = true }))
+        assertTrue(discarded)
+    }
+
+    @Test
+    fun 空のトークンも消してnull() {
+        var discarded = false
+        assertNull(readStoredToken("enc", { "" }, { discarded = true }))
+        assertTrue(discarded)
     }
 }
