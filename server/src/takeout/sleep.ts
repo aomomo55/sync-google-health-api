@@ -23,6 +23,16 @@ export type ChosenSleep = {
 };
 
 export const SESSION_GAP_MS = 60 * 60_000;
+// Takeout の時刻として受け付ける範囲。範囲外は壊れた記録として捨てる（toISOString の RangeError も防ぐ）
+export const MIN_TIME_MS = Date.UTC(2000, 0, 1);
+export const MAX_TIME_MS = Date.UTC(2100, 0, 1);
+
+export function isSaneTime(ms: number): boolean {
+  return Number.isFinite(ms) && ms >= MIN_TIME_MS && ms < MAX_TIME_MS;
+}
+
+// 解析中に捨てた記録の件数（取り込み結果に表示する）
+export type ParseStats = { invalidTime: number };
 const JST_OFFSET_MS = 9 * 3_600_000;
 const MIN = 60_000;
 
@@ -41,8 +51,8 @@ export function jstIso(ms: number): string {
   return `${new Date(sec + JST_OFFSET_MS).toISOString().slice(0, 19)}+09:00`;
 }
 
-// Takeout の raw sleep segment JSON を Segment[] にする
-export function parseSleepJson(json: unknown, source: string): Segment[] {
+// Takeout の raw sleep segment JSON を Segment[] にする。時刻が不正な記録は捨てて stats に数える
+export function parseSleepJson(json: unknown, source: string, stats?: ParseStats): Segment[] {
   const points = (json as { "Data Points"?: unknown } | null)?.["Data Points"];
   if (!Array.isArray(points)) return [];
   const out: Segment[] = [];
@@ -51,7 +61,10 @@ export function parseSleepJson(json: unknown, source: string): Segment[] {
     const e = Number(p.endTimeNanos) / 1e6;
     const fv = p.fitValue as { value?: { intVal?: unknown } }[] | undefined;
     const stage = Number(fv?.[0]?.value?.intVal ?? 0);
-    if (!Number.isFinite(s) || !Number.isFinite(e) || e <= s) continue;
+    if (!isSaneTime(s) || !isSaneTime(e) || e <= s) {
+      if (stats) stats.invalidTime++;
+      continue;
+    }
     out.push({ source, start: Math.round(s), end: Math.round(e), stage });
   }
   return out;

@@ -52,7 +52,9 @@ if (values.post) {
   if (error) fail(error);
 }
 
-const { csvDays, segments, nutrition, files, nutritionFiles } = await loadTakeout(values.takeout);
+const { csvDays, segments, nutrition, files, nutritionFiles, dropped } = await loadTakeout(
+  values.takeout,
+);
 const { days, sleepByDate } = buildDays(
   csvDays,
   segments,
@@ -100,6 +102,11 @@ const nutritionDates = days.filter((d) => d.nutrition !== undefined).map((d) => 
 console.log(
   `nutrition: ${nutritionFiles.length} files, ${nutrition.length} items, ${nutritionDates.length} days (${nutritionDates[0] ?? "-"} .. ${nutritionDates.at(-1) ?? "-"})`,
 );
+if (dropped.sleep > 0 || dropped.nutrition > 0) {
+  console.log(
+    `dropped (invalid time): sleep segments=${dropped.sleep} nutrition items=${dropped.nutrition}`,
+  );
+}
 console.log(
   `sleep nights: ${nights.length}, with stages: ${nights.filter(([, c]) => c.hasStages).length}`,
 );
