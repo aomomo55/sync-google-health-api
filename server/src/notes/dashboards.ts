@@ -186,6 +186,7 @@ const timeAxis = { min: 20, max: 34, title: { display: true, text: "時刻" }, t
   // 軸は 20:00〜翌10:00 に固定。外れる日が出てきたら範囲を広げる
 
   // 直近 7 日（暦日）の睡眠時間。記録の無い日も空けて並べ、7 時間の目安線を引く
+  // 以下のテンプレート内は、ダッシュボードに出力する JavaScript の文字列（この TS のコードではない）
   const week = block(`${prelude()}
 ${dailyPages(r, 7, "days")}
 const labels = [];

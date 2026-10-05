@@ -21,16 +21,13 @@ function cell(row: string[], idx: number | undefined): number | undefined {
 function compact<K extends string>(
   o: Record<K, number | undefined>,
 ): Partial<Record<K, number>> | undefined {
-  const out: Partial<Record<K, number>> = {};
-  let any = false;
-  for (const k of Object.keys(o) as K[]) {
+  const entries = (Object.keys(o) as K[]).flatMap((k) => {
     const v = o[k];
-    if (v !== undefined) {
-      out[k] = v;
-      any = true;
-    }
-  }
-  return any ? out : undefined;
+    return v === undefined ? [] : [[k, v] as const];
+  });
+  return entries.length > 0
+    ? (Object.fromEntries(entries) as Partial<Record<K, number>>)
+    : undefined;
 }
 
 const opt = (v: number | undefined, f: (n: number) => number) =>

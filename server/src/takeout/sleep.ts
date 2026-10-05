@@ -84,19 +84,18 @@ export function parseSleepJson(json: unknown, source: string, stats?: ParseStats
 export function sessionize(segments: Segment[], gapMs = SESSION_GAP_MS): Session[] {
   const sorted = [...segments].sort((a, b) => a.start - b.start || a.end - b.end);
   const sessions: Session[] = [];
-  let cur: Session | undefined;
   for (const seg of sorted) {
+    const cur = sessions.at(-1);
     if (cur && seg.start - cur.end <= gapMs) {
       cur.segments.push(seg);
       cur.end = Math.max(cur.end, seg.end);
     } else {
-      cur = {
+      sessions.push({
         source: seg.source,
         segments: [seg],
         start: seg.start,
         end: seg.end,
-      };
-      sessions.push(cur);
+      });
     }
   }
   return sessions;
@@ -106,14 +105,13 @@ export function sessionize(segments: Segment[], gapMs = SESSION_GAP_MS): Session
 export function mergeNights(sessions: Session[], gapMs = NIGHT_MERGE_GAP_MS): Night[] {
   const sorted = [...sessions].sort((a, b) => a.start - b.start || a.end - b.end);
   const nights: Night[] = [];
-  let cur: Night | undefined;
   for (const s of sorted) {
+    const cur = nights.at(-1);
     if (cur && s.start - cur.end <= gapMs) {
       cur.sessions.push(s);
       cur.end = Math.max(cur.end, s.end);
     } else {
-      cur = { source: s.source, sessions: [s], start: s.start, end: s.end };
-      nights.push(cur);
+      nights.push({ source: s.source, sessions: [s], start: s.start, end: s.end });
     }
   }
   return nights;
@@ -122,9 +120,7 @@ export function mergeNights(sessions: Session[], gapMs = NIGHT_MERGE_GAP_MS): Ni
 const isAwake = (stage: number) => stage === 1 || stage === 3;
 
 function stageMs(s: Session, pred: (stage: number) => boolean): number {
-  let t = 0;
-  for (const g of s.segments) if (pred(g.stage)) t += g.end - g.start;
-  return t;
+  return s.segments.filter((g) => pred(g.stage)).reduce((t, g) => t + g.end - g.start, 0);
 }
 
 const asleepMs = (s: Session) => s.end - s.start - stageMs(s, isAwake);
@@ -135,6 +131,7 @@ const nightStageMs = (n: Night, pred: (stage: number) => boolean) =>
 // まとまりの中で、どの segment にも覆われていない時間の合計
 function gapMs(n: Night): number {
   const segs = n.sessions.flatMap((s) => s.segments).sort((a, b) => a.start - b.start);
+  // 走査しながら「ここまでの終端」を持ち回る処理なので let にする
   let total = 0;
   let end = n.start;
   for (const g of segs) {
@@ -197,11 +194,8 @@ export function buildSleepByDate(segments: Segment[]): Map<string, ChosenSleep> 
   for (const [source, segs] of bySource) {
     for (const night of mergeNights(sessionize(segs))) {
       const date = jstDate(night.end);
-      let m = byDate.get(date);
-      if (!m) {
-        m = new Map();
-        byDate.set(date, m);
-      }
+      const m = byDate.get(date) ?? new Map<string, Night[]>();
+      byDate.set(date, m);
       const list = m.get(source);
       if (list) list.push(night);
       else m.set(source, [night]);
