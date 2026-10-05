@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { addDays, inclusiveDays, isRealDate } from "../src/domain/dates.js";
+import { checkApiToken, checkApiUrl, describeError, scrubToken } from "./cli-guard.js";
 
 const DEFAULT_CHUNK_DAYS = 120;
 const RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
@@ -35,19 +36,15 @@ if (!Number.isInteger(CHUNK_DAYS) || CHUNK_DAYS < 1 || CHUNK_DAYS > 400) {
   fail("--days は 1〜400 の整数で指定してください");
 }
 const apiUrl = values["api-url"];
-if (!apiUrl) fail("--api-url を指定してください");
+const urlError = checkApiUrl(apiUrl);
+if (urlError || !apiUrl) fail(urlError ?? "--api-url を指定してください");
 const token = process.env.API_TOKEN;
-if (!token) fail("環境変数 API_TOKEN が未設定です");
+const tokenError = checkApiToken(token);
+if (tokenError || !token) fail(tokenError ?? "環境変数 API_TOKEN が未設定です");
 
 const endpoint = `${apiUrl.replace(/\/+$/, "")}/api/notes/sync`;
 
-// fetch failed だけでは原因が分からないので、cause（タイムアウト、接続拒否など）も表示する
-function describe(e: unknown): string {
-  if (!(e instanceof Error)) return String(e);
-  const cause = e.cause as { code?: string; message?: string } | undefined;
-  const detail = cause ? ` (${[cause.code, cause.message].filter(Boolean).join(": ")})` : "";
-  return `${e.message}${detail}`;
-}
+const describe = (e: unknown) => describeError(e, token);
 
 // 同期は何度やり直しても同じ結果になるので、通信エラーと 5xx は待ってから再試行する
 async function postWithRetry(body: unknown): Promise<Response> {
@@ -102,5 +99,6 @@ for (let start = from, first = true; start <= to; first = false) {
 }
 
 console.log(`合計: 書き込み ${written} / 変更なし ${unchanged} / 失敗 ${failures.length}`);
-for (const f of failures.slice(0, 20)) console.error(`  失敗: ${f.path}: ${f.error}`);
+for (const f of failures.slice(0, 20))
+  console.error(`  失敗: ${f.path}: ${scrubToken(f.error, token)}`);
 if (failures.length > 0 || chunkError) process.exit(1);
