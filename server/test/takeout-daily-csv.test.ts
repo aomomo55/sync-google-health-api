@@ -57,6 +57,11 @@ describe("parseDailyCsv", () => {
     ]);
   });
 
+  it("歩数は整数に丸める（受信側のスキーマが整数に限るため）", () => {
+    const csv = "日付,歩数\n2026-02-01,100.6\n";
+    expect(parseDailyCsv(csv)[0]?.activity?.steps).toBe(101);
+  });
+
   it("歩行時間 ms を分に変換（小数1桁）", () => {
     const csv = `${HEADER}\n2026-01-05,,,,,,,,,,,100000\n`;
     expect(parseDailyCsv(csv)[0]?.activity?.walking_minutes).toBe(1.7);

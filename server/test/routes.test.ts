@@ -55,12 +55,80 @@ describe("POST /api/ingest", () => {
       { days: [{ date: "2026-01-01", sleep: { start: "2026-01-01T23:00:00" } }] },
     ],
     ["ルートの未知キー", { days: [{ date: "2026-01-01" }], extra: 1 }],
+    ["数値の代わりに文字列", { days: [{ date: "2026-01-01", activity: { steps: "100" } }] }],
+    ["days が配列でない", { days: { date: "2026-01-01" } }],
+    [
+      "範囲外の日と形の誤りが混在",
+      {
+        days: [
+          { date: "2026-01-01", activity: { steps: 1e308 } },
+          { date: "2026-01-02", body: { weight: 60 } },
+        ],
+      },
+    ],
   ])("400: %s", async (_name, body) => {
     const res = await ingest(body);
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error: string };
     expect(typeof json.error).toBe("string");
     expect(json.error).not.toMatch(/\n\s+at /);
+  });
+
+  it.each([
+    ["桁違いに大きい値", { activity: { steps: 1e308 } }, ["activity.steps"]],
+    ["小数の歩数", { activity: { steps: 10.5 } }, ["activity.steps"]],
+    [
+      "起床が就寝より前",
+      { sleep: { start: "2026-01-01T07:00:00+09:00", end: "2025-12-31T23:00:00+09:00" } },
+      ["sleep.end"],
+    ],
+    [
+      "複数の項目が範囲外",
+      { heart_rate: { max_bpm: 301 }, nutrition: { protein_g: 5001 } },
+      ["heart_rate.max_bpm", "nutrition.protein_g"],
+    ],
+  ])("範囲外（%s）の日だけを拒否し、他の日は保存する", async (_name, section, fields) => {
+    const res = await ingest({
+      days: [
+        { date: "2026-01-01", ...section },
+        { date: "2026-01-02", activity: { steps: 100 } },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      written: number;
+      rejected: { date: string; error: string }[];
+      notes: null;
+    };
+    expect(json.written).toBe(1);
+    expect(json.notes).toBeNull();
+    expect(json.rejected).toHaveLength(1);
+    expect(json.rejected[0]?.date).toBe("2026-01-01");
+    for (const f of fields) expect(json.rejected[0]?.error).toContain(f);
+    expect(Object.keys(json.rejected[0] ?? {}).sort()).toEqual(["date", "error"]);
+
+    const saved = await call("/api/summary?from=2026-01-01&to=2026-01-02");
+    expect(await saved.json()).toEqual({
+      days: [{ date: "2026-01-02", activity: { steps: 100 } }],
+    });
+  });
+
+  it("全日が範囲外でも 200 で written は 0、既存の値は変わらない", async () => {
+    await ingest({ days: [{ date: "2026-01-01", activity: { steps: 100 } }] });
+    const res = await ingest({
+      days: [
+        { date: "2026-01-01", activity: { steps: 200_001 } },
+        { date: "2026-01-02", body: { weight_kg: 501 } },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { written: number; rejected: { date: string }[] };
+    expect(json.written).toBe(0);
+    expect(json.rejected.map((r) => r.date)).toEqual(["2026-01-01", "2026-01-02"]);
+    const saved = await call("/api/summary?from=2026-01-01&to=2026-01-02");
+    expect(await saved.json()).toEqual({
+      days: [{ date: "2026-01-01", activity: { steps: 100 } }],
+    });
   });
 
   it("JSON が壊れていれば 400", async () => {
@@ -88,7 +156,7 @@ describe("POST /api/ingest", () => {
       ],
     });
     expect(r1.status).toBe(200);
-    expect(await r1.json()).toEqual({ written: 1, notes: null });
+    expect(await r1.json()).toEqual({ written: 1, rejected: [], notes: null });
 
     await ingest({
       days: [

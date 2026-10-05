@@ -1,61 +1,125 @@
 import { z } from "zod";
 import { isRealDate } from "./dates.js";
 
-const num = z.number().min(0).nullable().optional();
-const isoDateTime = z.iso.datetime({ offset: true }).nullable().optional();
+// 上限は実在のデータを弾かないよう、人が取りうる値より十分大きくしてある（誤送信や桁違いを止めるため）
+export const LIMITS = {
+  steps: 200_000,
+  distanceM: 500_000,
+  kcal: 50_000,
+  // 1 日の中の分数（Android は日の範囲に切り詰め、Takeout は日別の CSV）
+  dayMinutes: 1440,
+  heartPoints: 5_000,
+  bpm: 300,
+  weightKg: 500,
+  pct: 100,
+  grams: 5_000,
+  // 睡眠は前日から続くため 1 日を超えうる
+  sleepMinutes: 2880,
+} as const;
 
-export const ActivitySchema = z.strictObject({
-  steps: num,
-  distance_m: num,
-  calories_kcal: num,
-  move_minutes: num,
-  heart_points: num,
-  vigorous_minutes: num,
-  walking_minutes: num,
-});
+// 検証は 2 段に分ける（ADR 0012）。
+// 形の検証（キー・型・形式・負の数）に反する日はリクエスト全体を拒否し、
+// 範囲の検証（上限・整数・睡眠の前後）に反する日はその日だけを拒否する
+function buildSchemas(withRanges: boolean) {
+  const nonNegative = () => z.number().min(0, "0 以上である必要があります");
+  const num = (max: number) =>
+    (withRanges ? nonNegative().max(max, `${max} 以下である必要があります`) : nonNegative())
+      .nullable()
+      .optional();
+  const count = (max: number) =>
+    (withRanges
+      ? nonNegative().int("整数である必要があります").max(max, `${max} 以下である必要があります`)
+      : nonNegative()
+    )
+      .nullable()
+      .optional();
+  const isoDateTime = z.iso.datetime({ offset: true }).nullable().optional();
 
-export const HeartRateSchema = z.strictObject({
-  avg_bpm: num,
-  max_bpm: num,
-  min_bpm: num,
-  resting_bpm: num,
-});
+  const activity = z.strictObject({
+    steps: count(LIMITS.steps),
+    distance_m: num(LIMITS.distanceM),
+    calories_kcal: num(LIMITS.kcal),
+    move_minutes: num(LIMITS.dayMinutes),
+    heart_points: num(LIMITS.heartPoints),
+    vigorous_minutes: num(LIMITS.dayMinutes),
+    walking_minutes: num(LIMITS.dayMinutes),
+  });
 
-export const BodySchema = z.strictObject({
-  weight_kg: num,
-  body_fat_pct: num,
-});
+  const heartRate = z.strictObject({
+    avg_bpm: num(LIMITS.bpm),
+    max_bpm: num(LIMITS.bpm),
+    min_bpm: num(LIMITS.bpm),
+    resting_bpm: num(LIMITS.bpm),
+  });
 
-export const NutritionSchema = z.strictObject({
-  energy_kcal: num,
-  protein_g: num,
-  fat_g: num,
-  carbs_g: num,
-});
+  const body = z.strictObject({
+    weight_kg: num(LIMITS.weightKg),
+    body_fat_pct: num(LIMITS.pct),
+  });
 
-export const SleepSchema = z.strictObject({
-  start: isoDateTime,
-  end: isoDateTime,
-  asleep_minutes: num,
-  in_bed_minutes: num,
-  awake_minutes: num,
-  deep_minutes: num,
-  light_minutes: num,
-  rem_minutes: num,
-  nap_minutes: num,
-});
+  const nutrition = z.strictObject({
+    energy_kcal: num(LIMITS.kcal),
+    protein_g: num(LIMITS.grams),
+    fat_g: num(LIMITS.grams),
+    carbs_g: num(LIMITS.grams),
+  });
+
+  const sleepShape = z.strictObject({
+    start: isoDateTime,
+    end: isoDateTime,
+    asleep_minutes: num(LIMITS.sleepMinutes),
+    in_bed_minutes: num(LIMITS.sleepMinutes),
+    awake_minutes: num(LIMITS.sleepMinutes),
+    deep_minutes: num(LIMITS.sleepMinutes),
+    light_minutes: num(LIMITS.sleepMinutes),
+    rem_minutes: num(LIMITS.sleepMinutes),
+    nap_minutes: num(LIMITS.sleepMinutes),
+  });
+  // 受け取ったデータの中だけで比べる。保存済みの値とマージした後の前後関係は保証しない
+  const sleep = withRanges
+    ? sleepShape.refine((s) => !s.start || !s.end || Date.parse(s.start) <= Date.parse(s.end), {
+        message: "start 以降である必要があります",
+        path: ["end"],
+      })
+    : sleepShape;
+
+  const day = z.strictObject({
+    date: DateSchema,
+    activity: activity.optional(),
+    heart_rate: heartRate.optional(),
+    body: body.optional(),
+    sleep: sleep.optional(),
+    nutrition: nutrition.optional(),
+    source: z.string().min(1).max(64).optional(),
+  });
+  return { activity, heartRate, body, nutrition, sleep, day };
+}
 
 export const DateSchema = z.string().refine(isRealDate, "YYYY-MM-DD 形式の実在する日付が必要です");
 
-export const DailySummarySchema = z.strictObject({
-  date: DateSchema,
-  activity: ActivitySchema.optional(),
-  heart_rate: HeartRateSchema.optional(),
-  body: BodySchema.optional(),
-  sleep: SleepSchema.optional(),
-  nutrition: NutritionSchema.optional(),
-  source: z.string().min(1).max(64).optional(),
-});
+const full = buildSchemas(true);
+export const ActivitySchema = full.activity;
+export const HeartRateSchema = full.heartRate;
+export const BodySchema = full.body;
+export const NutritionSchema = full.nutrition;
+export const SleepSchema = full.sleep;
+
+// 範囲まで含めた検証
+export const DailySummarySchema = full.day;
+// 形だけの検証（上限・整数・睡眠の前後を見ない）
+export const DailySummaryShapeSchema = buildSchemas(false).day;
+
+// 範囲の検証に反する項目を日本語で返す。問題が無ければ null
+export function checkDayRanges(day: unknown): string | null {
+  const r = DailySummarySchema.safeParse(day);
+  if (r.success) return null;
+  const fields = new Map<string, string>();
+  for (const i of r.error.issues) {
+    const path = i.path.join(".") || "(root)";
+    if (!fields.has(path)) fields.set(path, i.message);
+  }
+  return `範囲外の値があります: ${[...fields].map(([p, m]) => `${p}（${m}）`).join("、")}`;
+}
 
 export type DailySummary = z.infer<typeof DailySummarySchema>;
 

@@ -7,7 +7,7 @@ import {
   nutritionSourceFromFilename,
   parseNutritionJson,
 } from "./nutrition.js";
-import { parseSleepJson, type Segment, sourceFromFilename } from "./sleep.js";
+import { type ParseStats, parseSleepJson, type Segment, sourceFromFilename } from "./sleep.js";
 
 export const DAILY_CSV_PATH = ["日別のアクティビティ指標", "日別のアクティビティ指標.csv"];
 export const RAW_DIR = "すべてのデータ";
@@ -19,6 +19,8 @@ export async function loadTakeout(root: string): Promise<{
   nutrition: NutritionItem[];
   files: string[];
   nutritionFiles: string[];
+  // 時刻が不正で捨てた記録の件数
+  dropped: { sleep: number; nutrition: number };
 }> {
   const csvDays = parseDailyCsv(await readFile(join(root, ...DAILY_CSV_PATH), "utf8"));
   const rawDir = join(root, RAW_DIR);
@@ -26,20 +28,30 @@ export async function loadTakeout(root: string): Promise<{
   const nutrition: NutritionItem[] = [];
   const files: string[] = [];
   const nutritionFiles: string[] = [];
+  const sleepStats: ParseStats = { invalidTime: 0 };
+  const nutritionStats: ParseStats = { invalidTime: 0 };
   for (const name of (await readdir(rawDir)).sort()) {
     const sleepSource = sourceFromFilename(name);
     if (sleepSource) {
       files.push(name);
       const json: unknown = JSON.parse(await readFile(join(rawDir, name), "utf8"));
-      for (const seg of parseSleepJson(json, sleepSource)) segments.push(seg);
+      for (const seg of parseSleepJson(json, sleepSource, sleepStats)) segments.push(seg);
       continue;
     }
     const nutritionSource = nutritionSourceFromFilename(name);
     if (nutritionSource) {
       nutritionFiles.push(name);
       const json: unknown = JSON.parse(await readFile(join(rawDir, name), "utf8"));
-      for (const item of parseNutritionJson(json, nutritionSource)) nutrition.push(item);
+      for (const item of parseNutritionJson(json, nutritionSource, nutritionStats))
+        nutrition.push(item);
     }
   }
-  return { csvDays, segments, nutrition, files, nutritionFiles };
+  return {
+    csvDays,
+    segments,
+    nutrition,
+    files,
+    nutritionFiles,
+    dropped: { sleep: sleepStats.invalidTime, nutrition: nutritionStats.invalidTime },
+  };
 }

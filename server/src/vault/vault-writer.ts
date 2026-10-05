@@ -12,7 +12,18 @@ export class VaultWriteError extends Error {
   }
 }
 
+// 書き込み先のパスが許可範囲の外（設定の見直しが必要）
+export class VaultPathError extends VaultWriteError {
+  constructor(message: string) {
+    super(message);
+    this.name = "VaultPathError";
+  }
+}
+
 export const DEFAULT_VAULT_PREFIX = "Health/";
+
+// biome-ignore lint/suspicious/noControlCharactersInRegex: 制御文字の検出が目的
+const CONTROL_CHAR_RE = /[\u0000-\u001f\u007f]/;
 
 // Vault 内の書き込み可能パスかをクライアント側で検証する（違反時は throw）
 export function assertVaultPath(path: string, prefix: string): void {
@@ -22,10 +33,13 @@ export function assertVaultPath(path: string, prefix: string): void {
     (path.endsWith(".md") || path.endsWith(".base")) &&
     !path.includes("..") &&
     !path.includes("\\") &&
-    !path.startsWith("/");
+    !path.startsWith("/") &&
+    !CONTROL_CHAR_RE.test(path) &&
+    path.split("/").every((seg) => seg !== "" && seg !== "." && seg !== "..");
   if (!ok) {
-    throw new VaultWriteError(
-      `不正な Vault パスです: '${path}'（${prefix} 配下の .md/.base のみ可）`,
+    // 制御文字がそのまま出ないよう JSON 形式で表示する
+    throw new VaultPathError(
+      `不正な Vault パスです: ${JSON.stringify(path)}（${prefix} 配下の .md/.base のみ可）`,
     );
   }
 }

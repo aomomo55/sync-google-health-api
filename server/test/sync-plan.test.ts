@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DailySummary } from "../src/domain/daily.js";
-import { affectedNotes, planNotes } from "../src/sync/plan.js";
+import { affectedNotes, planNotes, splitValidDays } from "../src/sync/plan.js";
 
 const day = (date: string, steps = 1000): DailySummary => ({
   date,
@@ -41,6 +41,16 @@ describe("planNotes", () => {
     const mid = items[1]!.render(null);
     expect(mid).toContain("Daily/2026-02-01|前日");
     expect(mid).toContain("Daily/2026-02-10|翌日");
+  });
+
+  it("不正な日付の日はノートにもリンクにも入れず、正しい日の出力は変えない", () => {
+    const withBad = [...DAYS.slice(0, 3), day("2026-02-0x: injected"), ...DAYS.slice(3)];
+    const items = planNotes(withBad, ["2026-02-05", "2026-02-0x: injected"]);
+    const expected = planNotes(DAYS, ["2026-02-05"]);
+    expect(items.map((i) => [i.path, i.render(null)])).toEqual(
+      expected.map((i) => [i.path, i.render(null)]),
+    );
+    expect(splitValidDays(withBad).invalid.map((d) => d.date)).toEqual(["2026-02-0x: injected"]);
   });
 
   it("月次は月内の全日で集計する", () => {

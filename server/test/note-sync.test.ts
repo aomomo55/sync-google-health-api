@@ -1,12 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
 import { MemoryStore } from "../src/store/memory-store.js";
-import { createNoteSync, NoteSync } from "../src/sync/note-sync.js";
+import { createNoteSync, NOTE_FAILURE_MESSAGE, NoteSync } from "../src/sync/note-sync.js";
 import { MemoryVaultWriter } from "../src/vault/memory-vault-writer.js";
 import {
   assertVaultPath,
   DEFAULT_VAULT_PREFIX,
   noteRootFromPrefix,
+  VaultWriteError,
 } from "../src/vault/vault-writer.js";
+
+let errorLog: MockInstance<typeof console.error>;
+beforeEach(() => {
+  errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+});
+afterEach(() => {
+  errorLog.mockRestore();
+});
 
 function setup() {
   const store = new MemoryStore();
@@ -135,9 +144,11 @@ describe("NoteSync", () => {
       { date: "2026-02-02", activity: { steps: 2 } },
     ]);
     const r = await sync.syncDates(["2026-02-01", "2026-02-02"]);
-    expect(r.failed).toEqual([{ path: bad, error: "boom" }]);
+    // 内部のエラー文は応答に出さず、固定の文にしてログにだけ残す
+    expect(r.failed).toEqual([{ path: bad, error: NOTE_FAILURE_MESSAGE }]);
     expect(r.written).toHaveLength(2);
     expect(writer.notes.has(bad)).toBe(false);
+    expect(errorLog.mock.calls.flat().join("\n")).toContain("boom");
   });
 
   it("読み取り失敗も failed に入る", async () => {
@@ -149,7 +160,78 @@ describe("NoteSync", () => {
     await store.upsertDays([{ date: "2026-02-01", activity: { steps: 1 } }]);
     const r = await sync.syncDates(["2026-02-01"]);
     expect(r.failed).toHaveLength(2);
+    expect(r.failed.every((f) => f.error === NOTE_FAILURE_MESSAGE)).toBe(true);
     expect(r.written).toEqual([]);
+  });
+
+  it("Vault の内部エラー（URL などを含む）は応答に出さない", async () => {
+    const { store, writer } = setup();
+    writer.writeNote = async () => {
+      throw new VaultWriteError("Vault の write_note が失敗: connect ECONNREFUSED 10.0.0.1:443");
+    };
+    const sync = new NoteSync({ store, writer });
+    await store.upsertDays([{ date: "2026-02-01", activity: { steps: 1 } }]);
+    const r = await sync.syncDates(["2026-02-01"]);
+    expect(JSON.stringify(r)).not.toContain("ECONNREFUSED");
+    expect(r.failed.map((f) => f.error)).toEqual([NOTE_FAILURE_MESSAGE, NOTE_FAILURE_MESSAGE]);
+    expect(errorLog.mock.calls.flat().join("\n")).toContain("ECONNREFUSED");
+  });
+
+  it("利用者が対処できるパスのエラーは文面をそのまま返す", async () => {
+    const store = new MemoryStore();
+    // 生成先（Health）と許可フォルダ（Other/）が食い違う設定
+    const writer = new MemoryVaultWriter({ prefix: "Other/" });
+    const sync = new NoteSync({ store, writer });
+    await store.upsertDays([{ date: "2026-02-01", activity: { steps: 1 } }]);
+    const r = await sync.syncDates(["2026-02-01"]);
+    expect(r.failed).toHaveLength(2);
+    for (const f of r.failed) expect(f.error).toMatch(/不正な Vault パスです/);
+  });
+
+  it("DB に不正な日付があれば、その日はノートを作らず failed に載せ、前後のリンクは正しい日をつなぐ", async () => {
+    const { store, sync, writer } = setup();
+    // 書き込み時の検証を通らない日付が DB に入っている想定（MemoryStore は検証しない）
+    await store.upsertDays([
+      { date: "2026-02-01", activity: { steps: 1 } },
+      { date: "2026-02-1/../x", activity: { steps: 2 } },
+      { date: "2026-02-31", activity: { steps: 3 } },
+      { date: "2026-03-01", activity: { steps: 4 } },
+    ]);
+    const r = await sync.syncRange("2026-02-01", "2026-03-31");
+    expect(r.failed.map((f) => f.path).sort()).toEqual([
+      '日付 "2026-02-1/../x"',
+      '日付 "2026-02-31"',
+    ]);
+    for (const f of r.failed) expect(f.error).toMatch(/日付が不正/);
+    expect([...writer.notes.keys()].sort()).toEqual([
+      "Health/Daily/2026-02-01.md",
+      "Health/Daily/2026-03-01.md",
+      "Health/Monthly/2026-02.md",
+      "Health/Monthly/2026-03.md",
+    ]);
+    expect(writer.notes.get("Health/Daily/2026-02-01.md")).toContain(
+      "[[Health/Daily/2026-03-01|翌日]]",
+    );
+    expect(writer.notes.get("Health/Daily/2026-03-01.md")).toContain(
+      "[[Health/Daily/2026-02-01|前日]]",
+    );
+    expect(errorLog).toHaveBeenCalled();
+  });
+
+  it("隣の日が不正な日付でも、その先の正しい日まで読み飛ばしてリンクする", async () => {
+    const { store, sync, writer } = setup();
+    // 月をまたいで離れた日を置き、月単位の読み込みでは拾えないようにする
+    await store.upsertDays([
+      { date: "2025-12-20", activity: { steps: 1 } },
+      { date: "2026-01-31", activity: { steps: 2 } },
+      { date: "2026-01-32", activity: { steps: 3 } },
+      { date: "2026-03-05", activity: { steps: 4 } },
+    ]);
+    await sync.syncDates(["2026-03-05"]);
+    // 2026-01-31 は翌日リンクが変わるので書き込まれ、前日リンクも保たれる
+    const note = writer.notes.get("Health/Daily/2026-01-31.md")!;
+    expect(note).toContain("[[Health/Daily/2025-12-20|前日]]");
+    expect(note).toContain("[[Health/Daily/2026-03-05|翌日]]");
   });
 
   it("syncRange は範囲内の全日・月と静的ノートを扱う", async () => {

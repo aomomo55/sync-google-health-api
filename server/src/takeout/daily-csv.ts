@@ -54,7 +54,8 @@ export function parseDailyCsv(text: string): DailySummary[] {
     const date = row[dateIdx]?.trim() ?? "";
     if (!isRealDate(date)) continue;
     const activity = compact({
-      steps: cell(row, c("歩数")),
+      // 受信側は歩数を整数に限るので、念のため丸める
+      steps: opt(cell(row, c("歩数")), Math.round),
       distance_m: opt(cell(row, c("距離（m）")), (n) => round(n, 1)),
       calories_kcal: opt(cell(row, c("カロリー（kcal）")), (n) => round(n, 1)),
       move_minutes: cell(row, c("通常の運動（分）のカウント")),

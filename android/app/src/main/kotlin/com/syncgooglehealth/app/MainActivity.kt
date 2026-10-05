@@ -121,7 +121,9 @@ fun MainScreen() {
                 sdkMessage = "この端末ではヘルスコネクトを利用できません"
             }
         }
-        if (granted && store.hasToken()) SyncWorker.schedule(context)
+        // 復号できず消されたトークンを画面にも反映する
+        tokenSaved = store.hasToken()
+        if (granted && tokenSaved) SyncWorker.schedule(context)
     }
 
     val launcher = rememberLauncherForActivityResult(HealthPermissions.contract()) { _ ->

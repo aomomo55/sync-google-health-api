@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  設定 (サーバー URL と暗号化したトークン) をクラウドバックアップや端末間の移行に含めない。
+  トークンの鍵は Keystore にあって移行先では復号できない。また allowBackup="false" だけでは
+  Android 12 以降の端末間の移行を止められない。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

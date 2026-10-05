@@ -26,6 +26,10 @@ android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+# リリース署名の鍵と設定 (リポジトリに入れない)
+android/keystore.properties
+*.jks
+*.keystore
 android/.kotlin/
 *.iml
 *.apk

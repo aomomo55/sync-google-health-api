@@ -11,7 +11,7 @@ export {
   nutritionSourceFromFilename,
   parseNutritionJson,
 } from "./nutrition.js";
-export type { ChosenSleep, Segment } from "./sleep.js";
+export type { ChosenSleep, ParseStats, Segment } from "./sleep.js";
 export {
   buildSleepByDate,
   parseSleepJson,

@@ -1,4 +1,5 @@
 import type { DailySummary } from "../domain/daily.js";
+import { isRealDate } from "../domain/dates.js";
 import { summarizeMonth } from "../domain/monthly.js";
 import {
   mergeMemo,
@@ -39,13 +40,27 @@ export function affectedNotes(days: DailySummary[], targetDates: string[]): Affe
   };
 }
 
-// 純粋関数。days は日付昇順で、影響を受ける月の全日を含むこと
+// 実在する YYYY-MM-DD の日と、そうでない日に分ける（順序は保つ）
+export function splitValidDays(days: DailySummary[]): {
+  valid: DailySummary[];
+  invalid: DailySummary[];
+} {
+  const valid: DailySummary[] = [];
+  const invalid: DailySummary[] = [];
+  for (const d of days)
+    (typeof d.date === "string" && isRealDate(d.date) ? valid : invalid).push(d);
+  return { valid, invalid };
+}
+
+// 純粋関数。days は日付昇順で、影響を受ける月の全日を含むこと。
+// 不正な日付の日はノートのパスや YAML に入らないよう除く
 export function planNotes(
-  days: DailySummary[],
+  allDays: DailySummary[],
   targetDates: string[],
   root?: string,
   opts: { includeStatic?: boolean } = {},
 ): PlanItem[] {
+  const days = splitValidDays(allDays).valid;
   const p = notePaths(root);
   const { dates, months } = affectedNotes(days, targetDates);
   const byDate = new Map(days.map((d, i) => [d.date, i]));

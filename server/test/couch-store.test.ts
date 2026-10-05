@@ -1,5 +1,9 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { CouchStore } from "../src/store/couch-store.js";
+import { NoteSync } from "../src/sync/note-sync.js";
+import { MemoryVaultWriter } from "../src/vault/memory-vault-writer.js";
 
 type Call = { url: string; method: string; headers: Record<string, string>; body: unknown };
 
@@ -228,6 +232,144 @@ describe("CouchStore (fake fetch)", () => {
     );
     expect(err?.message).toContain("500");
     expect(err?.message).not.toContain(PASSWORD);
+  });
+
+  it("接続できないときも認証情報をエラー文に含めない", async () => {
+    const store = new CouchStore({
+      baseUrl: "http://couch.test:5984",
+      user: "admin",
+      password: PASSWORD,
+      db: "health",
+      fetch: (async () => {
+        throw new TypeError("fetch failed");
+      }) as typeof fetch,
+    });
+    const err = await store.findAdjacentDate("2026-01-01", "prev").then(
+      () => null,
+      (e: Error) => e,
+    );
+    expect(err?.message).toContain("接続できません");
+    expect(err?.message).not.toContain(PASSWORD);
+    expect(err?.message).not.toContain("startkey");
+  });
+});
+
+// _all_docs の startkey / endkey / descending / limit だけを解釈する偽の CouchDB
+function fakeCouch(docs: Record<string, unknown>[]) {
+  return (async (url: string | URL | Request) => {
+    const u = new URL(String(url));
+    const param = (k: string) => {
+      const v = u.searchParams.get(k);
+      return v === null ? undefined : (JSON.parse(v) as string);
+    };
+    const start = param("startkey") ?? "";
+    const end = param("endkey") ?? "\uffff";
+    const descending = u.searchParams.get("descending") === "true";
+    const limit = Number(u.searchParams.get("limit") ?? Number.POSITIVE_INFINITY);
+    const ids = docs.map((d) => String(d._id)).sort();
+    const inRange = descending
+      ? ids.filter((id) => id <= start && id >= end).reverse()
+      : ids.filter((id) => id >= start && id <= end);
+    const withDocs = u.searchParams.get("include_docs") === "true";
+    const rows = inRange.slice(0, limit).map((id) => ({
+      id,
+      ...(withDocs ? { doc: docs.find((d) => d._id === id) } : {}),
+    }));
+    return new Response(JSON.stringify({ rows }), { status: 200 });
+  }) as typeof fetch;
+}
+
+describe("CouchStore が読む文書の日付（_id を正とする）", () => {
+  const meta = (id: string) => ({ _id: id, _rev: "1-a", type: "daily", updated_at: "x" });
+  const docs = [
+    { ...meta("day:2026-01-01"), date: "2026-01-01", activity: { steps: 1 } },
+    // date が無い
+    { ...meta("day:2026-01-02"), activity: { steps: 2 } },
+    // _id と date が食い違う
+    { ...meta("day:2026-01-03"), date: "2026-01-09", activity: { steps: 3 } },
+    // date が文字列でない
+    { ...meta("day:2026-01-05"), date: 20260105, activity: { steps: 5 } },
+    { ...meta("day:2026-01-04"), date: "2026-01-04", activity: { steps: 4 } },
+  ];
+  const makeStore = () =>
+    new CouchStore({
+      baseUrl: "http://couch.test:5984",
+      user: "admin",
+      password: PASSWORD,
+      db: "health",
+      fetch: fakeCouch(docs),
+    });
+
+  it("getDays は落ちずに _id の順で返し、不正な文書の date には _id を入れる", async () => {
+    const days = await makeStore().getDays("2026-01-01", "2026-01-31");
+    expect(days.map((d) => d.date)).toEqual([
+      "2026-01-01",
+      "day:2026-01-02",
+      "day:2026-01-03",
+      "2026-01-04",
+      "day:2026-01-05",
+    ]);
+    expect(days[2]).toEqual({ date: "day:2026-01-03", activity: { steps: 3 } });
+  });
+
+  it("NoteSync は不正な文書を failed に載せ、有効な日だけノートを書く", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const writer = new MemoryVaultWriter();
+      const sync = new NoteSync({ store: makeStore(), writer });
+      const report = await sync.syncRange("2026-01-01", "2026-01-31");
+      expect(report.failed.map((f) => f.path)).toEqual([
+        '日付 "day:2026-01-02"',
+        '日付 "day:2026-01-03"',
+        '日付 "day:2026-01-05"',
+      ]);
+      const daily = [...writer.notes.keys()].filter((p) => /\d{4}-\d{2}-\d{2}\.md$/.test(p));
+      expect(daily.map((p) => p.match(/(\d{4}-\d{2}-\d{2})\.md$/)?.[1]).sort()).toEqual([
+        "2026-01-01",
+        "2026-01-04",
+      ]);
+      // 不正な日を飛ばして前後がつながる
+      const first = writer.notes.get(daily.find((p) => p.endsWith("2026-01-01.md"))!);
+      expect(first).toContain("2026-01-04");
+      expect(first).not.toContain("2026-01-09");
+    } finally {
+      errorLog.mockRestore();
+    }
+  });
+});
+
+describe("CouchStore のタイムアウト", () => {
+  // 接続は受け付けるが応答を返さないサーバー
+  const server = createServer(() => {});
+  let baseUrl = "";
+
+  beforeAll(async () => {
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  });
+
+  it("応答が無ければ timeoutMs で打ち切り、認証情報を含まないエラーにする", async () => {
+    const store = new CouchStore({
+      baseUrl,
+      user: "admin",
+      password: PASSWORD,
+      db: "health",
+      timeoutMs: 100,
+    });
+    const started = Date.now();
+    const err = await store.getDays("2026-01-01", "2026-01-31").then(
+      () => null,
+      (e: Error) => e,
+    );
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(err?.message).toBe("CouchDB GET /_all_docs がタイムアウトしました（100 ms）");
+    expect(err?.message).not.toContain(PASSWORD);
+    expect(err?.message).not.toContain(AUTH);
   });
 });
 

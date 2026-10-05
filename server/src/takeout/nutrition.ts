@@ -1,5 +1,5 @@
 import type { DailySummary } from "../domain/daily.js";
-import { jstDate } from "./sleep.js";
+import { isSaneTime, jstDate, type ParseStats } from "./sleep.js";
 
 type NutritionFields = NonNullable<DailySummary["nutrition"]>;
 
@@ -33,14 +33,21 @@ const KEY_TO_FIELD = {
   "carbs.total": "carbs",
 } as const;
 
-// Takeout の raw nutrition JSON を NutritionItem[] にする
-export function parseNutritionJson(json: unknown, source: string): NutritionItem[] {
+// Takeout の raw nutrition JSON を NutritionItem[] にする。時刻が不正な記録は捨てて stats に数える
+export function parseNutritionJson(
+  json: unknown,
+  source: string,
+  stats?: ParseStats,
+): NutritionItem[] {
   const points = (json as { "Data Points"?: unknown } | null)?.["Data Points"];
   if (!Array.isArray(points)) return [];
   const out: NutritionItem[] = [];
   for (const p of points as Record<string, unknown>[]) {
     const t = Number(p.startTimeNanos) / 1e6;
-    if (!Number.isFinite(t)) continue;
+    if (!isSaneTime(t)) {
+      if (stats) stats.invalidTime++;
+      continue;
+    }
     const fv = p.fitValue as { value?: { mapVal?: unknown } }[] | undefined;
     const map = fv?.[0]?.value?.mapVal;
     if (!Array.isArray(map)) continue;

@@ -3,7 +3,9 @@ import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import {
-  DailySummarySchema,
+  checkDayRanges,
+  type DailySummary,
+  DailySummaryShapeSchema,
   DateSchema,
   pickSections,
   SECTIONS,
@@ -12,11 +14,13 @@ import {
 import { inclusiveDays, inclusiveMonths, isRealMonth } from "../domain/dates.js";
 import { summarizeMonths } from "../domain/monthly.js";
 import type { HealthStore } from "../store/health-store.js";
-import type { NoteSync } from "../sync/note-sync.js";
+import { describeForLog, type NoteSync } from "../sync/note-sync.js";
 
 const MAX_INGEST_DAYS = 400;
 const MAX_SPAN_DAYS = 400;
 const MAX_SPAN_MONTHS = 120;
+const SYNC_FAILURE_MESSAGE =
+  "ノートの同期に失敗しました。データは保存済みです。詳細はサーバーのログを確認してください";
 
 const SyncNotesSchema = z.strictObject({
   from: DateSchema,
@@ -24,9 +28,10 @@ const SyncNotesSchema = z.strictObject({
   includeStatic: z.boolean().optional(),
 });
 
+// 形の検証だけを行う。範囲の検証は日ごとに行い、反する日だけを rejected で返す
 const IngestSchema = z.strictObject({
   days: z
-    .array(DailySummarySchema)
+    .array(DailySummaryShapeSchema)
     .min(1)
     .max(MAX_INGEST_DAYS)
     .refine(
@@ -73,14 +78,22 @@ export function healthRoutes(store: HealthStore, noteSync: NoteSync | null = nul
     }),
     async (c) => {
       const raw: unknown = await c.req.json().catch(() => badRequest("JSON が不正です"));
-      const { days } = parseWith(IngestSchema, raw, "リクエストが不正です");
-      const { written } = await store.upsertDays(days);
-      if (!noteSync) return c.json({ written, notes: null });
+      const { days: received } = parseWith(IngestSchema, raw, "リクエストが不正です");
+      const days: DailySummary[] = [];
+      const rejected: { date: string; error: string }[] = [];
+      for (const d of received) {
+        const error = checkDayRanges(d);
+        if (error === null) days.push(d);
+        else rejected.push({ date: d.date, error });
+      }
+      const { written } = days.length > 0 ? await store.upsertDays(days) : { written: 0 };
+      if (!noteSync) return c.json({ written, rejected, notes: null });
       // 保存は済んでいるので、ノート同期の失敗は 200 で知らせる
       try {
         const report = await noteSync.syncDates(days.map((d) => d.date));
         return c.json({
           written,
+          rejected,
           notes: {
             written: report.written.length,
             unchanged: report.unchanged.length,
@@ -88,10 +101,12 @@ export function healthRoutes(store: HealthStore, noteSync: NoteSync | null = nul
           },
         });
       } catch (e) {
-        console.error("note sync failed", e);
+        // 内部のエラー文は応答に含めず、ログにだけ残す
+        console.error(`ノートの同期に失敗: ${describeForLog(e)}`);
         return c.json({
           written,
-          notes: { error: e instanceof Error ? e.message : String(e) },
+          rejected,
+          notes: { error: SYNC_FAILURE_MESSAGE },
         });
       }
     },

@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { parseArgs } from "node:util";
-import { type DailySummary, DailySummarySchema } from "../src/domain/daily.js";
+import { checkDayRanges, type DailySummary, DailySummaryShapeSchema } from "../src/domain/daily.js";
 import { isRealDate } from "../src/domain/dates.js";
 import { buildDays } from "../src/takeout/index.js";
 import { loadTakeout } from "../src/takeout/load.js";
@@ -52,22 +52,37 @@ if (values.post) {
   if (error) fail(error);
 }
 
-const { csvDays, segments, nutrition, files, nutritionFiles } = await loadTakeout(values.takeout);
-const { days, sleepByDate } = buildDays(
+const { csvDays, segments, nutrition, files, nutritionFiles, dropped } = await loadTakeout(
+  values.takeout,
+);
+const { days: built, sleepByDate } = buildDays(
   csvDays,
   segments,
   { from: values.from, to: values.to },
   nutrition,
 );
 
-// 全日を DailySummarySchema で検証
+// サーバーと同じ 2 段の検証。形の誤りは取り込みの不具合なので止め、
+// 範囲外の日はその日だけを除いて続け、最後に終了コード 1 にする
 const invalid: string[] = [];
-for (const d of days) {
-  const r = DailySummarySchema.safeParse(d);
-  if (!r.success)
+const outOfRange: { date: string; error: string }[] = [];
+const days: DailySummary[] = [];
+for (const d of built) {
+  const r = DailySummaryShapeSchema.safeParse(d);
+  if (!r.success) {
     invalid.push(`${d.date}: ${r.error.issues[0]?.path.join(".")} ${r.error.issues[0]?.message}`);
+    continue;
+  }
+  const error = checkDayRanges(d);
+  if (error === null) days.push(d);
+  else outOfRange.push({ date: d.date, error });
 }
 if (invalid.length > 0) fail(`検証エラー ${invalid.length} 件\n${invalid.slice(0, 10).join("\n")}`);
+const printRejected = (label: string, items: { date: string; error: string }[]) => {
+  console.error(`${label} ${items.length} 日:`);
+  for (const r of items) console.error(`  ${r.date}: ${r.error}`);
+};
+if (outOfRange.length > 0) printRejected("範囲外の値があるため除いた日", outOfRange);
 
 await mkdir(dirname(values.out), { recursive: true });
 await writeFile(values.out, `${JSON.stringify(days)}\n`, "utf8");
@@ -100,6 +115,11 @@ const nutritionDates = days.filter((d) => d.nutrition !== undefined).map((d) => 
 console.log(
   `nutrition: ${nutritionFiles.length} files, ${nutrition.length} items, ${nutritionDates.length} days (${nutritionDates[0] ?? "-"} .. ${nutritionDates.at(-1) ?? "-"})`,
 );
+if (dropped.sleep > 0 || dropped.nutrition > 0) {
+  console.log(
+    `dropped (invalid time): sleep segments=${dropped.sleep} nutrition items=${dropped.nutrition}`,
+  );
+}
 console.log(
   `sleep nights: ${nights.length}, with stages: ${nights.filter(([, c]) => c.hasStages).length}`,
 );
@@ -121,6 +141,15 @@ for (const date of checkDates) {
 console.log(`wrote ${values.out}`);
 
 // --- POST ---
+// 応答の rejected を読む。想定外の形の要素は表示用に文字列へ寄せる
+function parseRejected(value: unknown): { date: string; error: string }[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((r: { date?: unknown; error?: unknown } | null) => ({
+    date: String(r?.date ?? "?"),
+    error: scrubToken(String(r?.error ?? "?"), token),
+  }));
+}
+let rejectedByServer = 0;
 if (values.post) {
   const url = `${values["api-url"]!.replace(/\/+$/, "")}/api/ingest`;
   for (let i = 0; i < days.length; i += BATCH) {
@@ -140,6 +169,18 @@ if (values.post) {
       const body = (await res.text()).slice(0, 500);
       fail(`POST 失敗 (${range}): ${res.status} ${scrubToken(body, token)}`);
     }
+    const json = (await res.json().catch(() => null)) as { rejected?: unknown } | null;
+    const rejected = parseRejected(json?.rejected);
     console.log(`posted ${i + batch.length}/${days.length}`);
+    if (rejected.length > 0) {
+      printRejected(`サーバーが拒否した日 (${range})`, rejected);
+      rejectedByServer += rejected.length;
+    }
   }
+}
+
+if (outOfRange.length > 0 || rejectedByServer > 0) {
+  fail(
+    `取り込めなかった日があります（範囲外 ${outOfRange.length} 日、サーバーが拒否 ${rejectedByServer} 日）`,
+  );
 }

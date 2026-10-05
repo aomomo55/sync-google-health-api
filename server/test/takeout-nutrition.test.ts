@@ -80,6 +80,26 @@ describe("parseNutritionJson", () => {
     expect(parseNutritionJson(null, "a")).toEqual([]);
     expect(parseNutritionJson({ "Data Points": "x" }, "a")).toEqual([]);
   });
+
+  it("時刻が 2000〜2100 年の範囲外の記録は捨てて数え、日付の計算で例外を出さない", () => {
+    const at = (nanos: string) => ({
+      ...point("2026-03-10T12:00:00+09:00", { calories: 1 }),
+      startTimeNanos: nanos,
+    });
+    const json = {
+      "Data Points": [
+        point("2026-03-10T12:00:00+09:00", { calories: 300 }),
+        at("1e30"),
+        at(String(Date.UTC(1990, 0, 1) * 1e6)),
+        at(String(Date.UTC(2100, 0, 2) * 1e6)),
+      ],
+    };
+    const stats = { invalidTime: 0 };
+    const items = parseNutritionJson(json, "app.a", stats);
+    expect(items).toHaveLength(1);
+    expect(stats.invalidTime).toBe(3);
+    expect(() => buildNutritionByDate(items)).not.toThrow();
+  });
 });
 
 describe("buildNutritionByDate", () => {

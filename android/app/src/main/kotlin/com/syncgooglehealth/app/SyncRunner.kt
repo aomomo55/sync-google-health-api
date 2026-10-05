@@ -32,8 +32,12 @@ object SyncRunner {
     }
 
     private suspend fun execute(context: Context, store: SettingsStore, days: Int, requireBackground: Boolean): SyncOutcome {
-        val token = store.loadToken()
-        if (token.isNullOrEmpty()) return SyncOutcome(SyncStatus.FAILED, "API トークンが設定されていません")
+        val token = when (val t = store.readToken()) {
+            is StoredToken.Available -> t.token
+            StoredToken.None -> return SyncOutcome(SyncStatus.FAILED, "API トークンが設定されていません。設定画面で入力し直してください")
+            // Keystore の一時的な不調。保存データは残しているので時間をおいて再試行する
+            StoredToken.Unavailable -> return SyncOutcome(SyncStatus.RETRYABLE, "API トークンを一時的に読み出せませんでした")
+        }
 
         val status = HealthConnectClient.getSdkStatus(context)
         if (status != HealthConnectClient.SDK_AVAILABLE) {
@@ -52,24 +56,13 @@ object SyncRunner {
         val to = LocalDate.now(zone)
         val from = to.minusDays(days - 1L)
 
-        var sent = 0
-        var notesWritten = 0
-        var notesUnchanged = 0
-        var notesFailed = 0
-        val noteErrors = mutableListOf<String>()
+        var tally = SyncTally()
         for ((s, e) in chunkRanges(from, to)) {
             val summaries = reader.readDays(s, e, includeNutrition)
             for (chunk in chunkDays(summaries)) {
                 when (val r = IngestClient.post(store.serverUrl, token, chunk)) {
-                    is IngestResult.Success -> {
-                        sent += chunk.size
-                        r.ok.notes?.let {
-                            notesWritten += it.written
-                            notesUnchanged += it.unchanged
-                            notesFailed += it.failed
-                            it.error?.let { err -> noteErrors += err }
-                        }
-                    }
+                    // 範囲外で拒否された日があっても他の日は保存されているので、続きのチャンクも送る
+                    is IngestResult.Success -> tally = tally.add(chunk.size, r.ok)
                     IngestResult.Unauthorized -> return SyncOutcome(SyncStatus.AUTH_ERROR, "トークンが正しくありません")
                     is IngestResult.ClientError -> return SyncOutcome(SyncStatus.FAILED, r.message)
                     is IngestResult.Retryable -> return SyncOutcome(SyncStatus.RETRYABLE, r.message)
@@ -77,13 +70,7 @@ object SyncRunner {
             }
         }
 
-        val msg = buildString {
-            append("${sent}日分を送信しました")
-            if (!includeNutrition) append("（栄養は権限が無いため送っていません）")
-            append(" / ノート 更新${notesWritten}・変更なし${notesUnchanged}・失敗${notesFailed}")
-            if (noteErrors.isNotEmpty()) append(" / ノートエラー: ${noteErrors.distinct().joinToString()}")
-        }
-        return SyncOutcome(SyncStatus.OK, msg)
+        return SyncOutcome(SyncStatus.OK, buildSyncMessage(tally, includeNutrition))
     }
 
     fun formatTime(millis: Long): String =

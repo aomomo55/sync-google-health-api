@@ -40,6 +40,43 @@ describe("parseSleepJson / sourceFromFilename", () => {
     expect(parseSleepJson({}, "s")).toEqual([]);
   });
 
+  it("時刻が 2000〜2100 年の範囲外の記録は捨てて数え、buildSleepByDate が例外を出さない", () => {
+    const p = (startNanos: string, endNanos: string) => ({
+      fitValue: [{ value: { intVal: 4 } }],
+      startTimeNanos: startNanos,
+      endTimeNanos: endNanos,
+    });
+    const ok = p(String(T0 * 1e6), String((T0 + 10 * MIN) * 1e6));
+    const json = {
+      "Data Points": [
+        ok,
+        // 有限だが Date で表せないほど大きい（toISOString が RangeError になる）
+        p(String(T0 * 1e6), "1e30"),
+        p("-1e30", String(T0 * 1e6)),
+        // 1999 年
+        p(String(Date.UTC(1999, 11, 31) * 1e6), String(Date.UTC(1999, 11, 31, 1) * 1e6)),
+        // 2100 年ちょうどは範囲外
+        p(String(Date.UTC(2099, 11, 31, 23) * 1e6), String(Date.UTC(2100, 0, 1) * 1e6)),
+        p("x", "y"),
+      ],
+    };
+    const stats = { invalidTime: 0 };
+    const segs = parseSleepJson(json, "s", stats);
+    expect(segs).toEqual([{ source: "s", start: T0, end: T0 + 10 * MIN, stage: 4 }]);
+    expect(stats.invalidTime).toBe(5);
+    expect(() => buildSleepByDate(segs)).not.toThrow();
+    // 範囲の内側ぎりぎりは受け付ける
+    const edge = parseSleepJson(
+      {
+        "Data Points": [
+          p(String(Date.UTC(2000, 0, 1) * 1e6), String(Date.UTC(2000, 0, 1, 1) * 1e6)),
+        ],
+      },
+      "s",
+    );
+    expect(edge).toHaveLength(1);
+  });
+
   it("ファイル名からソースを取り出す（空白入り可、derived は対象外）", () => {
     expect(
       sourceFromFilename("raw_com.google.sleep.segment_app.x_Sleep - activity segments.json"),
