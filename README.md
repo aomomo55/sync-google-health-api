@@ -35,7 +35,7 @@ flowchart LR
 
 | 部分 | 技術 |
 |---|---|
-| サーバー | TypeScript, Hono, Node.js 22, zod, Vitest, MCP TypeScript SDK |
+| サーバー | TypeScript, Hono, Node.js 24, zod, Vitest, MCP TypeScript SDK |
 | データ保存 | CouchDB |
 | Android アプリ | Kotlin, Jetpack Compose, Health Connect, WorkManager, OkHttp, kotlinx.serialization |
 | インフラ | fly.io（Docker、自動停止・自動起動） |
@@ -75,7 +75,7 @@ docs/adr/ 設計判断の記録（Architecture Decision Records）
 | スマートウォッチ | CMF Watch Pro 2 |
 | Obsidian プラグイン | Self-hosted LiveSync 1.0.34、Dataview、Charts |
 | Vault への書き込み | obsidian-sync-mcp 0.7.1 |
-| サーバー | Node.js 22（fly.io）、CouchDB 3 |
+| サーバー | Node.js 24（fly.io）、CouchDB 3 |
 
 スマートウォッチのデータは、メーカーの公式アプリから Health Connect に書き込まれたもの（睡眠ステージ付き）で確認しています。端末やアプリによって Health Connect に書き込まれる項目は異なります。
 
