@@ -56,6 +56,7 @@ object SyncRunner {
         val to = LocalDate.now(zone)
         val from = to.minusDays(days - 1L)
 
+        // チャンクごとの結果を積み上げ、途中で return するループなので var
         var tally = SyncTally()
         for ((s, e) in chunkRanges(from, to)) {
             val summaries = reader.readDays(s, e, includeNutrition)
