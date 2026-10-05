@@ -1,24 +1,26 @@
+# パス区切りを含まないパターンはコンテキストの直下にしか当たらないので、
+# どの階層にもあり得るものは **/ を付ける
 node_modules
 dist
 out
 test
 scripts
 coverage
-*.log
-*.tsbuildinfo
+**/*.log
+**/*.tsbuildinfo
 
 # 秘密情報やローカル設定をイメージに入れない
-dev.vars
-.env
-.env.*
-*.local.*
+**/dev.vars
+**/.env
+**/.env.*
+**/*.local.*
 .git
 .gitignore
 
 # OS / エディタ
-.DS_Store
-Thumbs.db
-Desktop.ini
-.idea
-.vscode
-*.swp
+**/.DS_Store
+**/Thumbs.db
+**/Desktop.ini
+**/.idea
+**/.vscode
+**/*.swp

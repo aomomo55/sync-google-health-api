@@ -61,8 +61,9 @@ docs/adr/ 設計判断の記録（Architecture Decision Records）
 ## 使い方の流れ
 
 1. CouchDB と obsidian-sync-mcp を用意する（Self-hosted LiveSync を使っている前提）
-2. `server/` を fly.io にデプロイし、秘密情報を `fly secrets set` で登録する（[server/README.md](server/README.md)）
-   - 値をシェルの履歴に残さないには、`fly secrets import -a <アプリ名>` を実行して `KEY=value` を 1 行ずつ入力し、Ctrl-D で終える。リポジトリの外に置いた一時ファイルから `fly secrets import -a <アプリ名> < <ファイル>` で読み込み、登録後にファイルを消してもよい
+2. `server/` を fly.io にデプロイし、秘密情報を登録する（[server/README.md](server/README.md)）
+   - `fly secrets import -a <アプリ名>` を実行して `KEY=value` を 1 行ずつ入力し、Ctrl-D で終える。値がシェルの履歴に残らない。リポジトリの外に置いた一時ファイルから `fly secrets import -a <アプリ名> < <ファイル>` で読み込み、登録後にファイルを消してもよい
+   - `fly secrets set KEY=value -a <アプリ名>` でも登録できるが、値がシェルの履歴に残る
 3. 過去データがあれば Google Takeout から取り込み、`sync:notes` でノートとダッシュボードを書き込む
 4. `android/` のアプリをビルドして端末に入れ、サーバーの URL と API トークンを設定する（[android/README.md](android/README.md)）
 

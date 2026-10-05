@@ -61,5 +61,5 @@ Android（`android/` で実行。JDK 21 が必要。`JAVA_HOME` を JDK 21 に�
 ## デプロイ
 
 - サーバーは fly.io。`server/fly.toml` のアプリ名はプレースホルダーなので、`fly deploy -a <アプリ名> --ha=false` で指定する
-- 秘密情報（`API_TOKEN`、`COUCHDB_*`、`OBSIDIAN_MCP_*`）は `fly secrets set` で登録し、リポジトリやログに出さない。シェルの履歴にも残さないよう、案内するときは `fly secrets import -a <アプリ名>` に標準入力から `KEY=value` を渡す方法（入力後に Ctrl-D）を勧める。エージェントが値を扱う必要がある手順は、利用者自身に実行してもらう
+- 秘密情報（`API_TOKEN`、`COUCHDB_*`、`OBSIDIAN_MCP_*`）は fly.io の secrets に登録し、リポジトリやログに出さない。案内するときは、シェルの履歴に残らない `fly secrets import -a <アプリ名>` に標準入力から `KEY=value` を渡す方法（入力後に Ctrl-D）を基本とする。`fly secrets set` は値が履歴に残るので、使う場合はその点を添える。エージェントが値を扱う必要がある手順は、利用者自身に実行してもらう
 - Android アプリはデバッグ署名の APK を手動でインストールする（`android/README.md`）
