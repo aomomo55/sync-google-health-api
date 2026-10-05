@@ -130,3 +130,37 @@ describe("OBSIDIAN_MCP_URL", () => {
     }
   });
 });
+
+describe("VAULT_HEALTH_PREFIX", () => {
+  it("既定値は Health/", () => {
+    expect(loadConfig(BASE).VAULT_HEALTH_PREFIX).toBe("Health/");
+  });
+
+  it("文字・数字・空白・_・- のフォルダを / で区切ったものは受け付ける", () => {
+    for (const prefix of ["Health", "Health/", "Life/Health_2", "健康 記録/日次-data/"]) {
+      expect(loadConfig({ ...BASE, VAULT_HEALTH_PREFIX: prefix }).VAULT_HEALTH_PREFIX).toBe(prefix);
+    }
+  });
+
+  it("引用符・記号・先頭の /・. や .. ・空のフォルダ名は拒否する", () => {
+    for (const prefix of [
+      "",
+      "/Health/",
+      "Health//Daily",
+      "../Health",
+      "Health/./x",
+      "Health/..",
+      ".obsidian/",
+      'Health"/',
+      "Health'/",
+      "Health`/",
+      "Health\\",
+      "Health/a.md",
+      "Health\n",
+    ]) {
+      expect(() => loadConfig({ ...BASE, VAULT_HEALTH_PREFIX: prefix })).toThrow(
+        /VAULT_HEALTH_PREFIX/,
+      );
+    }
+  });
+});
