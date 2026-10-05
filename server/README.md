@@ -13,7 +13,7 @@ Android アプリから送られる日次ヘルスデータを受け取るサー
 | `COUCHDB_USER` | はい | - | CouchDB ユーザー |
 | `COUCHDB_PASSWORD` | はい | - | CouchDB パスワード |
 | `COUCHDB_HEALTH_DB` | いいえ | `health` | データベース名（起動時に無ければ作成） |
-| `OBSIDIAN_MCP_URL` | いいえ | - | obsidian-sync-mcp の `/mcp` URL（`OBSIDIAN_MCP_TOKEN` と両方指定するか両方未設定） |
+| `OBSIDIAN_MCP_URL` | いいえ | - | obsidian-sync-mcp の `/mcp` URL（`https:`。`http:` は `localhost` / `127.0.0.1` / `[::1]` のみ可。`OBSIDIAN_MCP_TOKEN` と両方指定するか両方未設定） |
 | `OBSIDIAN_MCP_TOKEN` | いいえ | - | obsidian-sync-mcp 用 Bearer トークン（16文字以上） |
 | `VAULT_HEALTH_PREFIX` | いいえ | `Health/` | Vault 内で書き込みを許可するフォルダ。ノートもこの下に生成する |
 | `NODE_ENV` | いいえ | - | 実行環境 |
