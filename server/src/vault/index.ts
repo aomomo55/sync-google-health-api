@@ -1,15 +1,14 @@
-import type { Config } from "../config.js";
 import { McpVaultWriter } from "./mcp-vault-writer.js";
 import type { VaultWriter } from "./vault-writer.js";
 
-// 未設定なら null（Vault 連携なし）
-export function createVaultWriter(config: Config): VaultWriter | null {
-  if (!config.OBSIDIAN_MCP_URL || !config.OBSIDIAN_MCP_TOKEN) return null;
-  return new McpVaultWriter({
-    url: config.OBSIDIAN_MCP_URL,
-    token: config.OBSIDIAN_MCP_TOKEN,
-    prefix: config.VAULT_HEALTH_PREFIX,
-  });
+// 設定（Config）には依存せず、必要な値だけを受け取る。URL かトークンが無ければ null（Vault 連携なし）
+export function createVaultWriter(opts: {
+  url: string | undefined;
+  token: string | undefined;
+  prefix: string;
+}): VaultWriter | null {
+  if (!opts.url || !opts.token) return null;
+  return new McpVaultWriter({ url: opts.url, token: opts.token, prefix: opts.prefix });
 }
 
 export { McpVaultWriter } from "./mcp-vault-writer.js";

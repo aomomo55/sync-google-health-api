@@ -24,7 +24,7 @@ class DayAggregatorTest {
     private val date = LocalDate.of(2026, 3, 5)
 
     @Test
-    fun 値が無い項目とセクションは出力しない() {
+    fun omitsEmptyFieldsAndSections() {
         val day = DayAggregator.build(date, TOKYO, RawDay(steps = 1234), null)
         val json = encode(day)
         assertEquals(setOf("date", "activity", "source"), json.keys)
@@ -33,7 +33,7 @@ class DayAggregatorTest {
     }
 
     @Test
-    fun 丸め桁数() {
+    fun roundsToExpectedDigits() {
         val raw = RawDay(
             distanceM = 1234.56, caloriesKcal = 2000.04, hrAvg = 70.26,
             weightKg = 65.456, bodyFatPct = 18.25,
@@ -47,7 +47,7 @@ class DayAggregatorTest {
     }
 
     @Test
-    fun データが全く無い日はhasDataがfalse() {
+    fun hasDataIsFalseWhenNoData() {
         val day = DayAggregator.build(date, TOKYO, RawDay(), null)
         assertFalse(day.hasData())
         assertNull(day.activity)
@@ -56,7 +56,7 @@ class DayAggregatorTest {
     }
 
     @Test
-    fun 運動時間は日の範囲にクリップされる() {
+    fun clipsExerciseDurationToDayRange() {
         val raw = RawDay(
             exercise = listOf(
                 // 前日 23:30 - 当日 00:30 → 当日分は 30 分 (ウォーキング)
@@ -73,7 +73,7 @@ class DayAggregatorTest {
     }
 
     @Test
-    fun 重なる運動セッションは二重に数えない() {
+    fun doesNotDoubleCountOverlappingExerciseSessions() {
         val raw = RawDay(
             exercise = listOf(
                 ExerciseSpan(at(2026, 3, 5, 10), at(2026, 3, 5, 11), true),
@@ -84,7 +84,7 @@ class DayAggregatorTest {
     }
 
     @Test
-    fun 運動セッションが無ければmove系は省略() {
+    fun omitsMoveFieldsWithoutExerciseSessions() {
         val raw = RawDay(steps = 1, exercise = listOf(ExerciseSpan(at(2026, 3, 7, 10), at(2026, 3, 7, 11), true)))
         val a = DayAggregator.build(date, TOKYO, raw, null).activity!!
         assertNull(a.moveMinutes)
@@ -92,7 +92,7 @@ class DayAggregatorTest {
     }
 
     @Test
-    fun ウォーキング以外だけならwalkingは省略() {
+    fun omitsWalkingWhenOnlyNonWalkingExercise() {
         val raw = RawDay(exercise = listOf(ExerciseSpan(at(2026, 3, 5, 10), at(2026, 3, 5, 11), false)))
         val a = DayAggregator.build(date, TOKYO, raw, null).activity!!
         assertEquals(60L, a.moveMinutes)
@@ -104,7 +104,7 @@ class NutritionTest {
     private val date = LocalDate.of(2026, 3, 5)
 
     @Test
-    fun 丸め_kcalは整数でグラムは小数1桁() {
+    fun roundsKcalToIntegerAndGramsToOneDecimal() {
         val raw = RawDay(energyKcal = 1999.5, proteinG = 60.04, fatG = 55.56, carbsG = 250.25)
         val n = DayAggregator.build(date, TOKYO, raw, null).nutrition!!
         assertEquals(2000L, n.energyKcal)
@@ -114,7 +114,7 @@ class NutritionTest {
     }
 
     @Test
-    fun データの無い項目は省略し部分的でも出力する() {
+    fun omitsMissingFieldsAndOutputsPartialData() {
         val day = DayAggregator.build(date, TOKYO, RawDay(energyKcal = 1800.0), null)
         val json = encode(day)
         assertEquals(setOf("date", "nutrition", "source"), json.keys)
@@ -123,21 +123,21 @@ class NutritionTest {
     }
 
     @Test
-    fun 全項目のキーは厳密() {
+    fun allFieldKeysAreExact() {
         val raw = RawDay(energyKcal = 1.0, proteinG = 2.0, fatG = 3.0, carbsG = 4.0)
         val keys = encode(DayAggregator.build(date, TOKYO, raw, null))["nutrition"]!!.jsonObject.keys
         assertEquals(setOf("energy_kcal", "protein_g", "fat_g", "carbs_g"), keys)
     }
 
     @Test
-    fun 栄養が空ならセクションごと省略() {
+    fun omitsNutritionSectionWhenEmpty() {
         val day = DayAggregator.build(date, TOKYO, RawDay(steps = 10), null)
         assertNull(day.nutrition)
         assertFalse(encode(day).containsKey("nutrition"))
     }
 
     @Test
-    fun ゼロは値として残す() {
+    fun keepsZeroAsValue() {
         val n = DayAggregator.build(date, TOKYO, RawDay(energyKcal = 0.0, proteinG = 0.0), null).nutrition!!
         assertEquals(0L, n.energyKcal)
         assertEquals(0.0, n.proteinG!!, 0.0)
@@ -152,13 +152,13 @@ class PermissionPolicyTest {
     )
 
     @Test
-    fun 必須権限に栄養を含めない() {
+    fun requiredPermissionsExcludeNutrition() {
         assertEquals(setOf("android.permission.health.READ_STEPS", PermissionPolicy.READ_IN_BACKGROUND), PermissionPolicy.required(all, true))
         assertEquals(setOf("android.permission.health.READ_STEPS"), PermissionPolicy.required(all, false))
     }
 
     @Test
-    fun 栄養は付与されているときだけ読む() {
+    fun readsNutritionOnlyWhenGranted() {
         assertTrue(PermissionPolicy.canReadNutrition(all))
         assertFalse(PermissionPolicy.canReadNutrition(all - PermissionPolicy.READ_NUTRITION))
     }
@@ -170,7 +170,7 @@ class SleepAssignerTest {
     private fun stage(type: Int, s: Instant, e: Instant) = SleepStage(type, s, e)
 
     @Test
-    fun 日付をまたぐ睡眠は起床日に割り当てる() {
+    fun assignsOvernightSleepToWakeDate() {
         val s = SleepSessionInput("a", at(2026, 3, 4, 22, 30), at(2026, 3, 5, 6, 30), emptyList())
         val map = SleepAssigner.assign(listOf(s), TOKYO)
         assertEquals(setOf(LocalDate.of(2026, 3, 5)), map.keys)
@@ -180,7 +180,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun ステージ無しはasleepがinBedで内訳は省略() {
+    fun withoutStagesAsleepEqualsInBedAndOmitsBreakdown() {
         val s = SleepSessionInput("a", at(2026, 3, 5, 0), at(2026, 3, 5, 7), emptyList())
         val sl = SleepAssigner.assign(listOf(s), TOKYO).values.single()
         assertEquals(420L, sl.inBedMinutes)
@@ -193,7 +193,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun ステージの集計() {
+    fun aggregatesStages() {
         val st = listOf(
             stage(4, at(2026, 3, 5, 0), at(2026, 3, 5, 2)),       // light 120
             stage(5, at(2026, 3, 5, 2), at(2026, 3, 5, 3)),       // deep 60
@@ -214,7 +214,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun ステージ付きの起源は長いステージ無しの起源より優先() {
+    fun prefersOriginWithStagesOverLongerOriginWithout() {
         val unstaged = SleepSessionInput("app.a", at(2026, 3, 5, 0), at(2026, 3, 5, 9), emptyList())
         val staged = SleepSessionInput(
             "app.b", at(2026, 3, 5, 1), at(2026, 3, 5, 6),
@@ -225,7 +225,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun ステージ付きの起源が複数なら合計が長い方() {
+    fun picksLongerTotalAmongOriginsWithStages() {
         val a = SleepSessionInput(
             "app.a", at(2026, 3, 5, 1), at(2026, 3, 5, 4),
             listOf(stage(5, at(2026, 3, 5, 1), at(2026, 3, 5, 4))),
@@ -239,7 +239,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun 同点なら起源idの辞書順で最小を選ぶ() {
+    fun picksLexicographicallySmallestOriginIdOnTie() {
         val a = SleepSessionInput("app.a", at(2026, 3, 5, 0), at(2026, 3, 5, 5), emptyList())
         val b = SleepSessionInput("app.b", at(2026, 3, 5, 1), at(2026, 3, 5, 6), emptyList())
         for (list in listOf(listOf(a, b), listOf(b, a))) {
@@ -249,7 +249,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun ステージが無ければ合計が最長の起源() {
+    fun picksOriginWithLongestTotalWhenNoStages() {
         val a = SleepSessionInput("app.a", at(2026, 3, 5, 0), at(2026, 3, 5, 5), emptyList())
         val b1 = SleepSessionInput("app.b", at(2026, 3, 5, 0), at(2026, 3, 5, 4), emptyList())
         val b2 = SleepSessionInput("app.b", at(2026, 3, 5, 13), at(2026, 3, 5, 15), emptyList())
@@ -260,7 +260,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun 昼寝は最長以外のasleep合計() {
+    fun napIsAsleepTotalExcludingLongest() {
         val main = SleepSessionInput(nothing, at(2026, 3, 5, 0), at(2026, 3, 5, 7), emptyList())
         val nap1 = SleepSessionInput(
             nothing, at(2026, 3, 5, 13), at(2026, 3, 5, 14),
@@ -273,7 +273,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun 別の起床日は別々に割り当てる() {
+    fun assignsDifferentWakeDatesSeparately() {
         val d1 = SleepSessionInput("a", at(2026, 3, 4, 23), at(2026, 3, 5, 6), emptyList())
         val d2 = SleepSessionInput("a", at(2026, 3, 5, 23), at(2026, 3, 6, 6), emptyList())
         val map = SleepAssigner.assign(listOf(d1, d2), TOKYO)
@@ -281,7 +281,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun 間隔が2時間以内のセッションは一晩の睡眠に結合する() {
+    fun mergesSessionsWithinTwoHoursIntoOneNight() {
         val first = SleepSessionInput(
             "a", at(2026, 3, 4, 22, 50), at(2026, 3, 5, 2, 40),
             listOf(
@@ -315,7 +315,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun 間隔がしきい値ちょうどなら結合し超えれば仮眠() {
+    fun mergesAtExactThresholdAndTreatsBeyondAsNap() {
         val first = SleepSessionInput("a", at(2026, 3, 5, 0), at(2026, 3, 5, 2), emptyList())
         val joined = SleepSessionInput("a", at(2026, 3, 5, 4), at(2026, 3, 5, 7), emptyList())
         val sl = SleepAssigner.assign(listOf(first, joined), TOKYO).values.single()
@@ -331,7 +331,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun 日付をまたいで結合した睡眠は最後の起床日に割り当てる() {
+    fun assignsMergedCrossDaySleepToLastWakeDate() {
         val before = SleepSessionInput("a", at(2026, 3, 4, 21), at(2026, 3, 4, 23, 50), emptyList())
         val after = SleepSessionInput("a", at(2026, 3, 5, 0, 30), at(2026, 3, 5, 6), emptyList())
         val map = SleepAssigner.assign(listOf(before, after), TOKYO)
@@ -340,7 +340,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun 別の起源のセッションは結合しない() {
+    fun doesNotMergeSessionsFromDifferentOrigins() {
         val a = SleepSessionInput("app.a", at(2026, 3, 5, 0), at(2026, 3, 5, 3), emptyList())
         val b = SleepSessionInput("app.b", at(2026, 3, 5, 3, 30), at(2026, 3, 5, 7), emptyList())
         val sl = SleepAssigner.assign(listOf(a, b), TOKYO).values.single()
@@ -349,7 +349,7 @@ class SleepAssignerTest {
     }
 
     @Test
-    fun 睡眠JSONは厳密なキーだけ() {
+    fun sleepJsonHasOnlyExactKeys() {
         val s = SleepSessionInput("a", at(2026, 3, 5, 0), at(2026, 3, 5, 7), emptyList())
         val sl = SleepAssigner.assign(listOf(s), TOKYO).values.single()
         val day = DayAggregator.build(LocalDate.of(2026, 3, 5), TOKYO, RawDay(), sl)
@@ -360,7 +360,7 @@ class SleepAssignerTest {
 
 class ChunkingTest {
     @Test
-    fun 範囲を30日ずつに分割() {
+    fun splitsRangeInto30DayChunks() {
         val from = LocalDate.of(2026, 1, 1)
         val r = chunkRanges(from, from.plusDays(64))
         assertEquals(3, r.size)
@@ -370,20 +370,20 @@ class ChunkingTest {
     }
 
     @Test
-    fun ちょうど30日なら1チャンク() {
+    fun exactly30DaysIsOneChunk() {
         val from = LocalDate.of(2026, 1, 1)
         assertEquals(1, chunkRanges(from, from.plusDays(29)).size)
         assertEquals(2, chunkRanges(from, from.plusDays(30)).size)
     }
 
     @Test
-    fun 日付がfromより前なら空() {
+    fun emptyWhenDateIsBeforeFrom() {
         val d = LocalDate.of(2026, 1, 1)
         assertTrue(chunkRanges(d, d.minusDays(1)).isEmpty())
     }
 
     @Test
-    fun リクエスト単位は30件以下() {
+    fun requestUnitIsAtMost30() {
         val days = (1..65).map { DailySummary(date = LocalDate.of(2026, 1, 1).plusDays(it.toLong()).toString()) }
         val chunks = chunkDays(days)
         assertEquals(listOf(30, 30, 5), chunks.map { it.size })
@@ -392,31 +392,31 @@ class ChunkingTest {
 
 class IngestResponseTest {
     @Test
-    fun notesあり() {
+    fun withNotes() {
         val ok = parseIngestResponse("""{"written":3,"notes":{"written":2,"unchanged":1,"failed":[{"path":"a","error":"x"}]}}""")
         assertEquals(3, ok.written)
         assertEquals(NotesResult(2, 1, 1, null), ok.notes)
     }
 
     @Test
-    fun notesエラーとnull() {
+    fun notesErrorAndNull() {
         assertEquals("boom", parseIngestResponse("""{"written":1,"notes":{"error":"boom"}}""").notes!!.error)
         assertNull(parseIngestResponse("""{"written":1,"notes":null}""").notes)
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun writtenが無い応答は例外() {
+    fun responseWithoutWrittenThrows() {
         parseIngestResponse("""{"notes":null}""")
     }
 
     @Test
-    fun エラーメッセージ抽出() {
+    fun extractsErrorMessage() {
         assertEquals("bad", parseErrorMessage("""{"error":"bad"}"""))
         assertNull(parseErrorMessage("not json"))
     }
 
     @Test
-    fun トークンの制御文字検証() {
+    fun validatesControlCharactersInToken() {
         assertTrue(SettingsStore.isValidToken("abc123-_"))
         assertFalse(SettingsStore.isValidToken("abc\n"))
         assertFalse(SettingsStore.isValidToken(""))
@@ -425,20 +425,20 @@ class IngestResponseTest {
 
 class IngestClassifyTest {
     @Test
-    fun 成功() {
+    fun success() {
         val r = classifyIngestResponse(200, """{"written":2,"notes":null}""")
         assertEquals(IngestResult.Success(IngestOk(2, null)), r)
     }
 
     @Test
-    fun writtenが無い2xxはエラー() {
+    fun twoXxWithoutWrittenIsError() {
         assertTrue(classifyIngestResponse(200, """{"ok":true}""") is IngestResult.ClientError)
         assertTrue(classifyIngestResponse(200, "<html></html>") is IngestResult.ClientError)
         assertTrue(classifyIngestResponse(204, "") is IngestResult.ClientError)
     }
 
     @Test
-    fun リダイレクトはエラー() {
+    fun redirectIsError() {
         for (code in listOf(301, 302, 307, 308)) {
             val r = classifyIngestResponse(code, "")
             assertTrue("$code", r is IngestResult.ClientError)
@@ -447,25 +447,25 @@ class IngestClassifyTest {
     }
 
     @Test
-    fun 認証エラー() {
+    fun authError() {
         assertEquals(IngestResult.Unauthorized, classifyIngestResponse(401, """{"error":"unauthorized"}"""))
     }
 
     @Test
-    fun タイムアウトと流量制限は再試行() {
+    fun retriesOnTimeoutAndRateLimit() {
         assertTrue(classifyIngestResponse(408, "") is IngestResult.Retryable)
         assertTrue(classifyIngestResponse(429, """{"error":"too many"}""") is IngestResult.Retryable)
     }
 
     @Test
-    fun その他の4xxは再試行しない() {
+    fun doesNotRetryOther4xx() {
         val r = classifyIngestResponse(400, """{"error":"bad"}""")
         assertEquals(IngestResult.ClientError("送信エラー (400): bad"), r)
         assertTrue(classifyIngestResponse(413, "") is IngestResult.ClientError)
     }
 
     @Test
-    fun サーバーエラーは再試行() {
+    fun retriesOnServerError() {
         assertTrue(classifyIngestResponse(500, "") is IngestResult.Retryable)
         assertTrue(classifyIngestResponse(503, "") is IngestResult.Retryable)
     }
@@ -473,35 +473,35 @@ class IngestClassifyTest {
 
 class StoredTokenTest {
     @Test
-    fun 未保存ならnullで何も消さない() {
+    fun returnsNullAndDiscardsNothingWhenNotStored() {
         val discarded = mutableListOf<String>()
         assertNull(readStoredToken(null, { it }, { discarded += it }))
         assertTrue(discarded.isEmpty())
     }
 
     @Test
-    fun 復号できればそのまま返す() {
+    fun returnsTokenWhenDecryptable() {
         val discarded = mutableListOf<String>()
         assertEquals("tok", readStoredToken("enc", { "tok" }, { discarded += it }))
         assertTrue(discarded.isEmpty())
     }
 
     @Test
-    fun 復号できなければ消してnull() {
+    fun discardsAndReturnsNullWhenNotDecryptable() {
         val discarded = mutableListOf<String>()
         assertNull(readStoredToken("enc", { throw javax.crypto.AEADBadTagException() }, { discarded += it }))
         assertTrue(discarded.isNotEmpty())
     }
 
     @Test
-    fun 空のトークンも消してnull() {
+    fun discardsAndReturnsNullForEmptyToken() {
         val discarded = mutableListOf<String>()
         assertNull(readStoredToken("enc", { "" }, { discarded += it }))
         assertTrue(discarded.isNotEmpty())
     }
 
     @Test
-    fun 一時的な失敗では消さずにUnavailable() {
+    fun returnsUnavailableWithoutDiscardingOnTransientFailure() {
         val transient = listOf(
             java.security.KeyStoreException("busy"),
             java.security.ProviderException("keystore"),
@@ -520,7 +520,7 @@ class StoredTokenTest {
     }
 
     @Test
-    fun 確実に使えないときは読んだ暗号文を渡して消す() {
+    fun discardsPassingReadCiphertextWhenDefinitelyUnusable() {
         val definitive = listOf(
             javax.crypto.AEADBadTagException(),
             java.security.UnrecoverableKeyException(),
@@ -536,14 +536,14 @@ class StoredTokenTest {
     }
 
     @Test
-    fun 状態の読み出し() {
+    fun readsState() {
         assertEquals(StoredToken.None, readStoredTokenState(null, { it }, {}))
         assertEquals(StoredToken.Available("tok"), readStoredTokenState("enc", { "tok" }, {}))
         assertFalse(StoredToken.Available("secret-token").toString().contains("secret-token"))
     }
 
     @Test
-    fun 条件付きの削除は新しい値を消さない() {
+    fun conditionalDiscardKeepsNewerValue() {
         val prefs = mutableMapOf("token" to "old")
         // 読んでから消すまでの間に新しいトークンが保存された
         prefs["token"] = "new"
@@ -553,7 +553,7 @@ class StoredTokenTest {
     }
 
     @Test
-    fun 条件付きの削除は同じ値なら消す() {
+    fun conditionalDiscardRemovesSameValue() {
         val prefs = mutableMapOf("token" to "old")
         assertTrue(removeIfUnchanged({ prefs["token"] }, "old") { prefs.remove("token") })
         assertNull(prefs["token"])
@@ -564,7 +564,7 @@ class StoredTokenTest {
 
 class IngestRejectedTest {
     @Test
-    fun rejectedを読む() {
+    fun readsRejected() {
         val ok = parseIngestResponse(
             """{"written":2,"notes":null,"rejected":[{"date":"2026-01-02","error":"歩数が範囲外です"}]}""",
         )
@@ -573,14 +573,14 @@ class IngestRejectedTest {
     }
 
     @Test
-    fun rejectedが無い古いサーバーは空() {
+    fun emptyRejectedForOldServerWithoutIt() {
         assertEquals(emptyList<RejectedDay>(), parseIngestResponse("""{"written":2,"notes":null}""").rejected)
         assertEquals(emptyList<RejectedDay>(), parseIngestResponse("""{"written":2,"rejected":[]}""").rejected)
         assertEquals(emptyList<RejectedDay>(), parseIngestResponse("""{"written":2,"rejected":null}""").rejected)
     }
 
     @Test
-    fun 知らない項目は無視する() {
+    fun ignoresUnknownFields() {
         val ok = parseIngestResponse(
             """{"written":1,"extra":{"a":1},"rejected":[{"date":"2026-01-02","error":"x","extra":true}]}""",
         )
@@ -588,14 +588,14 @@ class IngestRejectedTest {
     }
 
     @Test
-    fun 解釈できないrejectedはエラー() {
+    fun uninterpretableRejectedIsError() {
         assertTrue(classifyIngestResponse(200, """{"written":1,"rejected":"x"}""") is IngestResult.ClientError)
         assertTrue(classifyIngestResponse(200, """{"written":1,"rejected":[1]}""") is IngestResult.ClientError)
         assertTrue(classifyIngestResponse(200, """{"written":1,"rejected":[{"error":"x"}]}""") is IngestResult.ClientError)
     }
 
     @Test
-    fun rejectedがあっても成功() {
+    fun successEvenWithRejected() {
         val r = classifyIngestResponse(200, """{"written":1,"notes":null,"rejected":[{"date":"2026-01-03","error":"x"}]}""")
         assertEquals(IngestResult.Success(IngestOk(1, null, listOf(RejectedDay("2026-01-03", "x")))), r)
     }
@@ -605,13 +605,13 @@ class SyncMessageTest {
     private val notes = NotesResult(written = 2, unchanged = 1, failed = 0, error = null)
 
     @Test
-    fun 拒否が無ければ従来どおり() {
+    fun unchangedWhenNothingRejected() {
         val t = SyncTally().add(3, IngestOk(3, notes))
         assertEquals("3日分を送信しました / ノート 更新2・変更なし1・失敗0", buildSyncMessage(t, includeNutrition = true))
     }
 
     @Test
-    fun 栄養とノートエラー() {
+    fun nutritionAndNoteError() {
         val t = SyncTally().add(1, IngestOk(1, NotesResult(0, 0, 1, "boom")))
         assertEquals(
             "1日分を送信しました（栄養は権限が無いため送っていません） / ノート 更新0・変更なし0・失敗1 / ノートエラー: boom",
@@ -620,7 +620,7 @@ class SyncMessageTest {
     }
 
     @Test
-    fun 拒否された日を複数のチャンクから集める() {
+    fun collectsRejectedDaysAcrossChunks() {
         val t = SyncTally()
             .add(30, IngestOk(29, notes, listOf(RejectedDay("2026-01-05", "歩数が範囲外です"))))
             .add(5, IngestOk(4, null, listOf(RejectedDay("2026-01-02", "歩数が範囲外です"))))
@@ -633,7 +633,7 @@ class SyncMessageTest {
     }
 
     @Test
-    fun 拒否が多いときは省略する() {
+    fun truncatesWhenManyRejected() {
         val rejected = (1..7).map { RejectedDay("2026-01-0$it", "理由$it") }
         val t = SyncTally().add(7, IngestOk(0, null, rejected))
         val msg = buildSyncMessage(t, includeNutrition = true)
@@ -643,7 +643,7 @@ class SyncMessageTest {
     }
 
     @Test
-    fun 長い理由は切り詰める() {
+    fun truncatesLongReason() {
         val long = "あ".repeat(100)
         val t = SyncTally().add(1, IngestOk(0, null, listOf(RejectedDay("2026-01-01", long))))
         val msg = buildSyncMessage(t, includeNutrition = true)

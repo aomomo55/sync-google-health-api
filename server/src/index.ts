@@ -13,7 +13,11 @@ const store = new CouchStore({
   db: config.COUCHDB_HEALTH_DB,
 });
 await store.ensureReady();
-const writer = createVaultWriter(config);
+const writer = createVaultWriter({
+  url: config.OBSIDIAN_MCP_URL,
+  token: config.OBSIDIAN_MCP_TOKEN,
+  prefix: config.VAULT_HEALTH_PREFIX,
+});
 const noteSync = writer
   ? createNoteSync({ store, writer, prefix: config.VAULT_HEALTH_PREFIX })
   : null;
