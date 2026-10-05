@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { createVaultWriter } from "../src/vault/index.js";
 import { McpVaultWriter } from "../src/vault/mcp-vault-writer.js";
@@ -41,9 +41,13 @@ beforeEach(async () => {
   fake.failToolCalls = [];
   fake.toolDelayMs = 0;
   fake.readResponses.clear();
+  fake.toolErrors = [];
+  // やり直しのログはテストの出力に出さない（回数の確認には使う）
+  vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 afterEach(async () => {
   await Promise.all(writers.splice(0).map((w) => w.close()));
+  vi.restoreAllMocks();
 });
 
 describe("McpVaultWriter", () => {
@@ -62,14 +66,15 @@ describe("McpVaultWriter", () => {
     "Error: chunk not found",
     "database does not exist",
     "Error reading note: Note not found in chunk index",
-  ])("ノート不在以外のエラー（%s）は null にせず throw", async (msg) => {
+  ])("ノート不在以外のエラー（%s）は null にせず、やり直したうえで throw", async (msg) => {
     fake.readResponses.set("Health/a.md", { text: msg, isError: true });
     const err = await make()
       .readNote("Health/a.md")
       .catch((e) => e);
     expect(err).toBeInstanceOf(VaultWriteError);
     expect(String(err.message)).toContain(msg);
-    expect(fake.toolCalls).toBe(1);
+    // 1 回目 + やり直し 3 回
+    expect(fake.toolCalls).toBe(4);
   });
 
   it("要求したパスと一致しない「Note not found」は不在とみなさない", async () => {
@@ -133,9 +138,38 @@ describe("McpVaultWriter", () => {
     expect(fake.toolCalls).toBe(1);
   });
 
-  it("Error で始まるテキストも失敗として扱いリトライしない", async () => {
+  it("Error で始まるテキストも失敗として扱い、やり直しても失敗すれば throw", async () => {
     await expect(make().writeNote("Health/boom.md", "x")).rejects.toThrow(/disk full/);
-    expect(fake.toolCalls).toBe(1);
+    expect(fake.toolCalls).toBe(4);
+  });
+
+  it("ツールの一時的なエラーはやり直して成功する（書き込み）", async () => {
+    const w = make();
+    fake.toolErrors = ["Tool 'write_note' execution failed: Database write layer error!"];
+    await w.writeNote("Health/a.md", "x");
+    expect(fake.notes.get("Health/a.md")).toBe("x");
+    expect(fake.toolCalls).toBe(2);
+    // ツールのエラーでは接続を張り直さない
+    expect(fake.initializes).toBe(1);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(console.warn).mock.calls[0]?.[0]).toMatch(
+      /write_note をやり直します（1\/3 回目）/,
+    );
+  });
+
+  it("ツールの一時的なエラーはやり直して成功する（読み込み）", async () => {
+    const w = make();
+    await w.writeNote("Health/a.md", "本文");
+    fake.toolErrors = ["Error: chunk not found", "Error: chunk not found"];
+    expect(await w.readNote("Health/a.md")).toBe("本文");
+    expect(console.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("やり直しのログにもトークンを出さない", async () => {
+    const w = make();
+    fake.toolErrors = [`Error: bad ${TOKEN}`];
+    await w.writeNote("Health/a.md", "x");
+    expect(String(vi.mocked(console.warn).mock.calls[0]?.[0])).not.toContain(TOKEN);
   });
 
   it("5xx はリトライして成功する", async () => {

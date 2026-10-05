@@ -18,6 +18,8 @@ export class FakeObsidianMcp {
   toolDelayMs = 0;
   // read_note がパスごとに返す応答（ノート不在以外のエラーなどを再現する）
   readonly readResponses = new Map<string, { text: string; isError: boolean }>();
+  // 次の write_note / read_note がツールのエラーとして返す文言（消費される）
+  toolErrors: string[] = [];
   private server!: Server;
   url = "";
 
@@ -65,6 +67,8 @@ export class FakeObsidianMcp {
           if (this.toolDelayMs) {
             await new Promise((r) => setTimeout(r, this.toolDelayMs));
           }
+          const injected = this.toolErrors.shift();
+          if (injected !== undefined) return text(injected, true);
           const d = denied(path);
           if (d) return d;
           if (path.includes("boom")) return text("Error: disk full");
@@ -77,6 +81,8 @@ export class FakeObsidianMcp {
     );
     mcp.registerTool("read_note", { inputSchema: { path: z.string() } }, async ({ path }) => {
       this.toolCalls++;
+      const injected = this.toolErrors.shift();
+      if (injected !== undefined) return text(injected, true);
       const forced = this.readResponses.get(path);
       if (forced) return text(forced.text, forced.isError);
       const body = this.notes.get(path);

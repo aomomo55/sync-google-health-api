@@ -31,11 +31,23 @@ type ErrorKind = "session" | "transient" | "permanent";
 
 const ERROR_PREFIXES = ["Write access denied", "Error"];
 
-// ツールが返したエラー（リトライしない）
-class ToolFailure extends VaultWriteError {}
+// ツールが返したエラーのうち、やり直しても結果が変わらないと分かっているもの
+const PERMANENT_TOOL_ERRORS = ["Write access denied"];
+
+// ツールが返したエラー。write_note は全体の置き換え、read_note は読むだけで、どちらも冪等なので、
+// 恒久的と分かっているもの以外は一時的とみなしてやり直す（例: "Database write layer error!"）
+class ToolFailure extends VaultWriteError {
+  readonly permanent: boolean;
+  constructor(message: string) {
+    super(message);
+    this.permanent = PERMANENT_TOOL_ERRORS.some((p) => message.startsWith(p));
+  }
+}
+
+type ToolResult = { text: string; isError: boolean };
 
 function classify(e: unknown): ErrorKind {
-  if (e instanceof ToolFailure) return "permanent";
+  if (e instanceof ToolFailure) return e.permanent ? "permanent" : "transient";
   if (e instanceof StreamableHTTPError) {
     const code = e.code;
     if (code === 404) return "session";
@@ -80,19 +92,21 @@ export class McpVaultWriter implements VaultWriter {
 
   async writeNote(path: string, content: string): Promise<void> {
     assertVaultPath(path, this.prefix);
-    const { text, isError } = await this.callTool("write_note", { path, content });
-    if (isError || isErrorText(text)) throw new ToolFailure(this.scrub(text));
+    await this.callTool("write_note", { path, content }, ({ text, isError }) => {
+      if (isError || isErrorText(text)) throw new ToolFailure(this.scrub(text));
+    });
   }
 
   async readNote(path: string): Promise<string | null> {
     assertVaultPath(path, this.prefix);
-    const { text, isError } = await this.callTool("read_note", { path });
-    if (text.startsWith("[Open in Obsidian]")) return stripOpenPrefix(text);
-    // obsidian-sync-mcp はノートが無いとき、isError を付けずに `Note not found: <path>` を返す。
-    // 他のエラー（チャンク欠損など）を不在と取り違えると既存ノートを上書きするため、完全一致に限る
-    if (text === `Note not found: ${path}`) return null;
-    if (isError || isErrorText(text)) throw new ToolFailure(this.scrub(text));
-    return text;
+    return this.callTool("read_note", { path }, ({ text, isError }) => {
+      if (text.startsWith("[Open in Obsidian]")) return stripOpenPrefix(text);
+      // obsidian-sync-mcp はノートが無いとき、isError を付けずに `Note not found: <path>` を返す。
+      // 他のエラー（チャンク欠損など）を不在と取り違えると既存ノートを上書きするため、完全一致に限る
+      if (text === `Note not found: ${path}`) return null;
+      if (isError || isErrorText(text)) throw new ToolFailure(this.scrub(text));
+      return text;
+    });
   }
 
   writeMany(items: WriteManyItem[], opts?: WriteManyOptions): Promise<WriteManyResult> {
@@ -145,10 +159,13 @@ export class McpVaultWriter implements VaultWriter {
     await client.close().catch(() => {});
   }
 
-  private async callTool(
+  // ツールを呼び、応答を interpret で解釈する。interpret が ToolFailure を投げた場合も、
+  // 通信レベルの失敗と同じくやり直しの対象になる
+  private async callTool<T>(
     name: string,
     args: Record<string, unknown>,
-  ): Promise<{ text: string; isError: boolean }> {
+    interpret: (res: ToolResult) => T,
+  ): Promise<T> {
     // リトライの制御（回数と再接続の有無）と、catch でも使う接続は let にする
     let sessionRetried = false;
     let attempt = 0;
@@ -161,7 +178,7 @@ export class McpVaultWriter implements VaultWriter {
         });
         const content = Array.isArray(res.content) ? res.content : [];
         const text = content.map((c) => (c && c.type === "text" ? String(c.text) : "")).join("");
-        return { text, isError: res.isError === true };
+        return interpret({ text, isError: res.isError === true });
       } catch (e) {
         const kind = classify(e);
         if (kind === "session" && !sessionRetried) {
@@ -169,13 +186,19 @@ export class McpVaultWriter implements VaultWriter {
           await this.drop(client);
           continue;
         }
+        const msg = e instanceof Error ? e.message : String(e);
         if (kind !== "permanent" && attempt < this.delays.length) {
-          await this.drop(client);
+          console.warn(
+            `Vault の ${name} をやり直します（${attempt + 1}/${this.delays.length} 回目）: ${this.scrub(msg)}`,
+          );
+          // ツールのエラーは接続に問題が無いので、セッションはそのまま使う
+          if (!(e instanceof ToolFailure)) await this.drop(client);
           await new Promise((r) => setTimeout(r, this.delays[attempt]));
           attempt++;
           continue;
         }
-        const msg = e instanceof Error ? e.message : String(e);
+        // ツールのエラーは、やり直しの有無にかかわらず今までと同じ形で投げる
+        if (e instanceof ToolFailure) throw e;
         throw new VaultWriteError(`Vault の ${name} が失敗: ${this.scrub(msg)}`, {
           cause: e,
         });
