@@ -6,6 +6,7 @@ import { isRealDate } from "../src/domain/dates.js";
 import { buildDays } from "../src/takeout/index.js";
 import { loadTakeout } from "../src/takeout/load.js";
 import { checkApiToken, checkApiUrl, describeError, scrubToken } from "./cli-guard.js";
+import { addNotes, formatNotes, type NotesTotal, parseIngestNotes } from "./ingest-report.js";
 
 const DEFAULT_OUT = "out/takeout-days.json";
 const DEFAULT_BATCH = 300;
@@ -150,6 +151,8 @@ function parseRejected(value: unknown): { date: string; error: string }[] {
   }));
 }
 let rejectedByServer = 0;
+let notesTotal: NotesTotal = { written: 0, unchanged: 0, failed: 0, batchErrors: 0 };
+let notesReported = false;
 if (values.post) {
   const url = `${values["api-url"]!.replace(/\/+$/, "")}/api/ingest`;
   for (let i = 0; i < days.length; i += BATCH) {
@@ -169,18 +172,43 @@ if (values.post) {
       const body = (await res.text()).slice(0, 500);
       fail(`POST 失敗 (${range}): ${res.status} ${scrubToken(body, token)}`);
     }
-    const json = (await res.json().catch(() => null)) as { rejected?: unknown } | null;
+    const json = (await res.json().catch(() => null)) as {
+      rejected?: unknown;
+      notes?: unknown;
+    } | null;
     const rejected = parseRejected(json?.rejected);
-    console.log(`posted ${i + batch.length}/${days.length}`);
+    const notes = parseIngestNotes(json?.notes, token);
+    const period = `${batch[0]!.date}..${batch.at(-1)!.date}`;
+    console.log(`posted ${i + batch.length}/${days.length} (${period})${formatNotes(notes)}`);
     if (rejected.length > 0) {
       printRejected(`サーバーが拒否した日 (${range})`, rejected);
       rejectedByServer += rejected.length;
     }
+    if (notes.kind === "synced") {
+      for (const f of notes.failed) console.error(`  ${f.path}: ${f.error}`);
+    } else if (notes.kind === "error") {
+      console.error(`  ${notes.error}`);
+    }
+    if (notes.kind !== "none") notesReported = true;
+    notesTotal = addNotes(notesTotal, notes);
   }
+}
+
+if (notesReported) {
+  const t = notesTotal;
+  console.log(
+    `ノート合計: 書き込み ${t.written} / 変更なし ${t.unchanged} / 失敗 ${t.failed}` +
+      (t.batchErrors > 0 ? ` / 同期に失敗したバッチ ${t.batchErrors}` : ""),
+  );
 }
 
 if (outOfRange.length > 0 || rejectedByServer > 0) {
   fail(
     `取り込めなかった日があります（範囲外 ${outOfRange.length} 日、サーバーが拒否 ${rejectedByServer} 日）`,
+  );
+}
+if (notesTotal.failed > 0 || notesTotal.batchErrors > 0) {
+  fail(
+    "データは保存済みですが、ノートの更新に失敗したものがあります。sync:notes で同じ期間を同期し直してください",
   );
 }
