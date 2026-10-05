@@ -281,6 +281,74 @@ class SleepAssignerTest {
     }
 
     @Test
+    fun 間隔が2時間以内のセッションは一晩の睡眠に結合する() {
+        val first = SleepSessionInput(
+            "a", at(2026, 3, 4, 22, 50), at(2026, 3, 5, 2, 40),
+            listOf(
+                stage(4, at(2026, 3, 4, 22, 50), at(2026, 3, 5, 1)),     // light 130
+                stage(5, at(2026, 3, 5, 1), at(2026, 3, 5, 2, 30)),      // deep 90
+                stage(1, at(2026, 3, 5, 2, 30), at(2026, 3, 5, 2, 40)),  // awake 10
+            ),
+        )
+        val second = SleepSessionInput(
+            "a", at(2026, 3, 5, 3), at(2026, 3, 5, 6, 40),
+            listOf(
+                stage(4, at(2026, 3, 5, 3), at(2026, 3, 5, 5)),          // light 120
+                stage(6, at(2026, 3, 5, 5), at(2026, 3, 5, 6, 40)),      // rem 100
+            ),
+        )
+        val nap = SleepSessionInput("a", at(2026, 3, 5, 13), at(2026, 3, 5, 13, 30), emptyList())
+        for (list in listOf(listOf(first, second, nap), listOf(nap, second, first))) {
+            val sl = SleepAssigner.assign(list, TOKYO).values.single()
+            assertEquals("2026-03-04T22:50:00+09:00", sl.start)
+            assertEquals("2026-03-05T06:40:00+09:00", sl.end)
+            assertEquals(470L, sl.inBedMinutes)
+            // ステージの awake 10 分 + セッション間の 20 分
+            assertEquals(30L, sl.awakeMinutes)
+            assertEquals(440L, sl.asleepMinutes)
+            assertEquals(90L, sl.deepMinutes)
+            assertEquals(250L, sl.lightMinutes)
+            assertEquals(100L, sl.remMinutes)
+            // しきい値を超えて離れた昼寝は仮眠のまま
+            assertEquals(30L, sl.napMinutes)
+        }
+    }
+
+    @Test
+    fun 間隔がしきい値ちょうどなら結合し超えれば仮眠() {
+        val first = SleepSessionInput("a", at(2026, 3, 5, 0), at(2026, 3, 5, 2), emptyList())
+        val joined = SleepSessionInput("a", at(2026, 3, 5, 4), at(2026, 3, 5, 7), emptyList())
+        val sl = SleepAssigner.assign(listOf(first, joined), TOKYO).values.single()
+        assertEquals(420L, sl.inBedMinutes)
+        assertEquals(300L, sl.asleepMinutes)
+        assertNull(sl.awakeMinutes)
+        assertNull(sl.napMinutes)
+
+        val apart = SleepSessionInput("a", at(2026, 3, 5, 4, 1), at(2026, 3, 5, 7), emptyList())
+        val sl2 = SleepAssigner.assign(listOf(first, apart), TOKYO).values.single()
+        assertEquals(179L, sl2.inBedMinutes)
+        assertEquals(120L, sl2.napMinutes)
+    }
+
+    @Test
+    fun 日付をまたいで結合した睡眠は最後の起床日に割り当てる() {
+        val before = SleepSessionInput("a", at(2026, 3, 4, 21), at(2026, 3, 4, 23, 50), emptyList())
+        val after = SleepSessionInput("a", at(2026, 3, 5, 0, 30), at(2026, 3, 5, 6), emptyList())
+        val map = SleepAssigner.assign(listOf(before, after), TOKYO)
+        assertEquals(setOf(LocalDate.of(2026, 3, 5)), map.keys)
+        assertEquals("2026-03-04T21:00:00+09:00", map.getValue(LocalDate.of(2026, 3, 5)).start)
+    }
+
+    @Test
+    fun 別の起源のセッションは結合しない() {
+        val a = SleepSessionInput("app.a", at(2026, 3, 5, 0), at(2026, 3, 5, 3), emptyList())
+        val b = SleepSessionInput("app.b", at(2026, 3, 5, 3, 30), at(2026, 3, 5, 7), emptyList())
+        val sl = SleepAssigner.assign(listOf(a, b), TOKYO).values.single()
+        assertEquals("2026-03-05T03:30:00+09:00", sl.start)
+        assertNull(sl.napMinutes)
+    }
+
+    @Test
     fun 睡眠JSONは厳密なキーだけ() {
         val s = SleepSessionInput("a", at(2026, 3, 5, 0), at(2026, 3, 5, 7), emptyList())
         val sl = SleepAssigner.assign(listOf(s), TOKYO).values.single()

@@ -3,6 +3,7 @@ import { DailySummarySchema } from "../src/domain/daily.js";
 import { buildDays } from "../src/takeout/index.js";
 import {
   buildSleepByDate,
+  mergeNights,
   parseSleepJson,
   type Segment,
   sessionize,
@@ -186,6 +187,63 @@ describe("buildSleepByDate", () => {
     const r = buildSleepByDate([seg(A, 60, 420, 4), seg(C, 24 * 60 + 60, 24 * 60 + 400, 4)]);
     expect(r.get("2026-03-10")?.source).toBe(A);
     expect(r.get("2026-03-11")?.source).toBe(C);
+  });
+});
+
+describe("一晩の睡眠の結合", () => {
+  it("間隔 120 分ちょうどは同じまとまり、121 分は別のまとまり", () => {
+    const s = sessionize([seg(A, 0, 10, 4), seg(A, 130, 140, 4), seg(A, 261, 270, 4)]);
+    expect(s).toHaveLength(3);
+    expect(mergeNights(s).map((n) => [n.start - T0, n.end - T0])).toEqual([
+      [0, 140 * MIN],
+      [261 * MIN, 270 * MIN],
+    ]);
+  });
+
+  it("間隔が 2 時間以内のセッションは一晩の睡眠に結合し、間隔を中途覚醒に数える（Android と同じ入力・結果）", () => {
+    // 3/9 22:50 を 0 とした分。22:50-02:40 と 03:00-06:40、13:00-13:30 の昼寝
+    const m = (x: number) => x - 70;
+    const segs = [
+      seg(A, m(0), m(130), 4), // light 130
+      seg(A, m(130), m(220), 5), // deep 90
+      seg(A, m(220), m(230), 1), // awake 10
+      seg(A, m(250), m(370), 4), // light 120
+      seg(A, m(370), m(470), 6), // rem 100
+      seg(A, 13 * 60, 13 * 60 + 30, 2), // 昼寝 30
+    ];
+    for (const input of [segs, [...segs].reverse()]) {
+      const c = buildSleepByDate(input).get("2026-03-10")!;
+      expect(c.sleep).toEqual({
+        start: "2026-03-09T22:50:00+09:00",
+        end: "2026-03-10T06:40:00+09:00",
+        in_bed_minutes: 470,
+        awake_minutes: 30,
+        asleep_minutes: 440,
+        deep_minutes: 90,
+        light_minutes: 250,
+        rem_minutes: 100,
+        nap_minutes: 30,
+      });
+    }
+  });
+
+  it("しきい値を超えて離れていれば従来どおり最長を main、他を仮眠にする", () => {
+    const c = buildSleepByDate([seg(A, 0, 120, 2), seg(A, 241, 420, 2)]).get("2026-03-10")!;
+    expect(c.sleep.in_bed_minutes).toBe(179);
+    expect(c.sleep.nap_minutes).toBe(120);
+  });
+
+  it("日付をまたいで結合した睡眠は最後の起床日に割り当てる", () => {
+    // 3/9 21:00-23:50 と 3/10 00:30-06:00
+    const r = buildSleepByDate([seg(A, -180, -10, 2), seg(A, 30, 360, 2)]);
+    expect([...r.keys()]).toEqual(["2026-03-10"]);
+    expect(r.get("2026-03-10")?.sleep.start).toBe("2026-03-09T21:00:00+09:00");
+  });
+
+  it("別のソースのセッションは結合しない", () => {
+    const c = buildSleepByDate([seg(A, 0, 180, 2), seg(B, 210, 420, 2)]).get("2026-03-10")!;
+    expect(c.source).toBe(B);
+    expect(c.sleep).not.toHaveProperty("nap_minutes");
   });
 });
 

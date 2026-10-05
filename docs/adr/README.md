@@ -16,6 +16,7 @@
 | [0010](0010-pin-dependencies-and-dependabot.md) | CI・ビルドの依存を固定し、Dependabot で月に一度更新する | 採用 |
 | [0011](0011-android-release-signing.md) | Android アプリのリリース署名は仕組みだけを用意し、鍵は利用者が管理する | 採用 |
 | [0012](0012-input-validation-and-error-exposure.md) | 受信データの上限と、応答に載せるエラー文の範囲を決める | 採用 |
+| [0013](0013-merge-split-sleep-sessions.md) | 間隔が 2 時間以内の睡眠セッションを一晩の睡眠に結合する | 採用 |
 
 ## 書き方
 
