@@ -1,3 +1,5 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CouchStore } from "../src/store/couch-store.js";
 
@@ -228,6 +230,60 @@ describe("CouchStore (fake fetch)", () => {
     );
     expect(err?.message).toContain("500");
     expect(err?.message).not.toContain(PASSWORD);
+  });
+
+  it("接続できないときも認証情報をエラー文に含めない", async () => {
+    const store = new CouchStore({
+      baseUrl: "http://couch.test:5984",
+      user: "admin",
+      password: PASSWORD,
+      db: "health",
+      fetch: (async () => {
+        throw new TypeError("fetch failed");
+      }) as typeof fetch,
+    });
+    const err = await store.findAdjacentDate("2026-01-01", "prev").then(
+      () => null,
+      (e: Error) => e,
+    );
+    expect(err?.message).toContain("接続できません");
+    expect(err?.message).not.toContain(PASSWORD);
+    expect(err?.message).not.toContain("startkey");
+  });
+});
+
+describe("CouchStore のタイムアウト", () => {
+  // 接続は受け付けるが応答を返さないサーバー
+  const server = createServer(() => {});
+  let baseUrl = "";
+
+  beforeAll(async () => {
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    server.closeAllConnections();
+    await new Promise((resolve) => server.close(resolve));
+  });
+
+  it("応答が無ければ timeoutMs で打ち切り、認証情報を含まないエラーにする", async () => {
+    const store = new CouchStore({
+      baseUrl,
+      user: "admin",
+      password: PASSWORD,
+      db: "health",
+      timeoutMs: 100,
+    });
+    const started = Date.now();
+    const err = await store.getDays("2026-01-01", "2026-01-31").then(
+      () => null,
+      (e: Error) => e,
+    );
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(err?.message).toBe("CouchDB GET /_all_docs がタイムアウトしました（100 ms）");
+    expect(err?.message).not.toContain(PASSWORD);
+    expect(err?.message).not.toContain(AUTH);
   });
 });
 

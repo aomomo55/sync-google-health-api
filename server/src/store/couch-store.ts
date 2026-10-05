@@ -6,6 +6,8 @@ export interface CouchStoreOptions {
   user: string;
   password: string;
   db: string;
+  // 1 リクエストあたりの上限（ms）。応答の無い CouchDB で処理が止まり続けないようにする
+  timeoutMs?: number;
   fetch?: typeof fetch;
 }
 
@@ -20,18 +22,24 @@ type AllDocsRow = { doc?: CouchDoc | null; value?: { deleted?: boolean } };
 type BulkResult = { id?: string; ok?: boolean; error?: string };
 
 const MAX_CONFLICT_RETRIES = 3;
+const DEFAULT_TIMEOUT_MS = 10_000;
+
+const isTimeout = (e: unknown) =>
+  e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
 
 export class CouchStore implements HealthStore {
   private readonly base: string;
   private readonly auth: string;
   private readonly db: string;
   private readonly fetchFn: typeof fetch;
+  private readonly timeoutMs: number;
 
   constructor(opts: CouchStoreOptions) {
     this.base = opts.baseUrl.replace(/\/+$/, "");
     this.auth = `Basic ${Buffer.from(`${opts.user}:${opts.password}`).toString("base64")}`;
     this.db = encodeURIComponent(opts.db);
     this.fetchFn = opts.fetch ?? fetch;
+    this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
 
   private async request(
@@ -40,20 +48,32 @@ export class CouchStore implements HealthStore {
     body?: unknown,
     okStatuses: number[] = [200, 201, 202],
   ): Promise<unknown> {
-    const res = await this.fetchFn(`${this.base}/${this.db}${path}`, {
-      method,
-      headers: {
-        Authorization: this.auth,
-        Accept: "application/json",
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    if (!okStatuses.includes(res.status)) {
-      // 認証情報やレスポンス本文は含めない
-      throw new Error(`CouchDB ${method} ${path.split("?")[0] || "/"} が失敗: HTTP ${res.status}`);
+    // 認証情報やクエリ、レスポンス本文はエラー文に含めない
+    const label = `CouchDB ${method} ${path.split("?")[0] || "/"}`;
+    const timeoutError = () => new Error(`${label} がタイムアウトしました（${this.timeoutMs} ms）`);
+    let res: Response;
+    try {
+      res = await this.fetchFn(`${this.base}/${this.db}${path}`, {
+        method,
+        headers: {
+          Authorization: this.auth,
+          Accept: "application/json",
+          ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(this.timeoutMs),
+      });
+    } catch (e) {
+      if (isTimeout(e)) throw timeoutError();
+      throw new Error(`${label} に接続できません`, { cause: e });
     }
-    return res.json().catch(() => null);
+    if (!okStatuses.includes(res.status)) {
+      throw new Error(`${label} が失敗: HTTP ${res.status}`);
+    }
+    return res.json().catch((e: unknown) => {
+      if (isTimeout(e)) throw timeoutError();
+      return null;
+    });
   }
 
   // DB の作成には CouchDB 管理者の権限が要る。DB 専用ユーザーで動かせるよう、存在すれば作成しない
