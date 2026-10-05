@@ -431,4 +431,65 @@ class StoredTokenTest {
         assertNull(readStoredToken("enc", { "" }, { discarded = true }))
         assertTrue(discarded)
     }
+
+    @Test
+    fun 一時的な失敗では消さずにUnavailable() {
+        val transient = listOf(
+            java.security.KeyStoreException("busy"),
+            java.security.ProviderException("keystore"),
+            java.security.InvalidKeyException("init"),
+            IllegalStateException("x"),
+            RuntimeException("x"),
+        )
+        for (e in transient) {
+            var discarded: String? = null
+            val r = readStoredTokenState("enc", { throw e }, { discarded = it })
+            assertEquals(e.toString(), StoredToken.Unavailable, r)
+            assertNull(e.toString(), discarded)
+            assertNull(readStoredToken("enc", { throw e }, { discarded = it }))
+            assertNull(e.toString(), discarded)
+        }
+    }
+
+    @Test
+    fun 確実に使えないときは読んだ暗号文を渡して消す() {
+        val definitive = listOf(
+            javax.crypto.AEADBadTagException(),
+            java.security.UnrecoverableKeyException(),
+            UnusableStoredTokenException("Base64 として不正です", IllegalArgumentException()),
+            UnusableStoredTokenException("暗号文が短すぎます"),
+        )
+        for (e in definitive) {
+            var discarded: String? = null
+            val r = readStoredTokenState("enc", { throw e }, { discarded = it })
+            assertEquals(e.toString(), StoredToken.None, r)
+            assertEquals(e.toString(), "enc", discarded)
+        }
+    }
+
+    @Test
+    fun 状態の読み出し() {
+        assertEquals(StoredToken.None, readStoredTokenState(null, { it }, {}))
+        assertEquals(StoredToken.Available("tok"), readStoredTokenState("enc", { "tok" }, {}))
+        assertFalse(StoredToken.Available("secret-token").toString().contains("secret-token"))
+    }
+
+    @Test
+    fun 条件付きの削除は新しい値を消さない() {
+        val prefs = mutableMapOf("token" to "old")
+        // 読んでから消すまでの間に新しいトークンが保存された
+        prefs["token"] = "new"
+        val removed = removeIfUnchanged({ prefs["token"] }, "old") { prefs.remove("token") }
+        assertFalse(removed)
+        assertEquals("new", prefs["token"])
+    }
+
+    @Test
+    fun 条件付きの削除は同じ値なら消す() {
+        val prefs = mutableMapOf("token" to "old")
+        assertTrue(removeIfUnchanged({ prefs["token"] }, "old") { prefs.remove("token") })
+        assertNull(prefs["token"])
+        // 既に無ければ何もしない
+        assertFalse(removeIfUnchanged({ prefs["token"] }, "old") { prefs.remove("token") })
+    }
 }
