@@ -51,15 +51,50 @@ describe("POST /api/ingest（ノート同期）", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       written: 1,
+      rejected: [],
       notes: { written: 2, unchanged: 0, failed: [] },
     });
     expect(writer.notes.size).toBe(2);
   });
 
+  it("範囲外の日はノートを書かず、有効な日だけを同期する", async () => {
+    const writer = build();
+    const res = await ingest({
+      days: [
+        { date: "2026-01-01", activity: { steps: 1 } },
+        { date: "2026-03-01", activity: { steps: 10.5 } },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      written: number;
+      rejected: { date: string; error: string }[];
+      notes: { written: number; failed: unknown[] };
+    };
+    expect(json.written).toBe(1);
+    expect(json.rejected.map((r) => r.date)).toEqual(["2026-03-01"]);
+    expect(json.notes).toEqual({ written: 2, unchanged: 0, failed: [] });
+    const paths = [...writer.notes.keys()];
+    expect(paths.some((p) => p.includes("2026-01-01"))).toBe(true);
+    expect(paths.some((p) => p.includes("2026-03"))).toBe(false);
+  });
+
+  it("全日が範囲外ならノートを書かない", async () => {
+    const writer = build();
+    const res = await ingest({ days: [{ date: "2026-01-01", body: { weight_kg: 501 } }] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      written: 0,
+      rejected: [{ date: "2026-01-01" }],
+      notes: { written: 0, unchanged: 0, failed: [] },
+    });
+    expect(writer.notes.size).toBe(0);
+  });
+
   it("noteSync が無ければ notes は null", async () => {
     app = createApp({ config: { API_TOKEN: TOKEN }, store: new MemoryStore() });
     const res = await ingest(oneDay);
-    expect(await res.json()).toEqual({ written: 1, notes: null });
+    expect(await res.json()).toEqual({ written: 1, rejected: [], notes: null });
   });
 
   it("同期が例外を投げても 200 で error を返し、トークンは含まない", async () => {

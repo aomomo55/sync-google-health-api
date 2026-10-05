@@ -47,7 +47,11 @@ pnpm start       # node dist/index.js（環境変数は自前で渡す）
 
 - `GET /healthz` — 認証なし。`{"status":"ok"}`
 - `GET /api/ping` — `Authorization: Bearer <API_TOKEN>` 必須。`{"pong":true}`
-- `POST /api/ingest` — `{"days":[DailySummary]}`（1〜400件、日付重複不可）。セクション単位でマージ保存し（セクションは `activity` / `heart_rate` / `body` / `sleep` / `nutrition`）、Vault 設定があれば影響するノート（該当日・前後の日・月次）を同期する。`{"written":n,"notes":{"written":n,"unchanged":n,"failed":[{"path","error"}]}}`。Vault 未設定なら `notes:null`、同期が例外で失敗しても保存済みなので 200 で `notes:{"error":"..."}`。数値には上限があり（歩数は整数）、睡眠は `start <= end` が必要（[ADR 0012](../docs/adr/0012-input-validation-and-error-exposure.md)）。`failed[].error` と `notes.error` は、メモ欄のマーカー欠落と Vault パスの違反以外は固定の文で、詳細はサーバーのログに出る
+- `POST /api/ingest` — `{"days":[DailySummary]}`（1〜400件、日付重複不可）。セクション単位でマージ保存し（セクションは `activity` / `heart_rate` / `body` / `sleep` / `nutrition`）、Vault 設定があれば影響するノート（該当日・前後の日・月次）を同期する。`{"written":n,"rejected":[{"date","error"}],"notes":{"written":n,"unchanged":n,"failed":[{"path","error"}]}}`。Vault 未設定なら `notes:null`、同期が例外で失敗しても保存済みなので 200 で `notes:{"error":"..."}`。検証は 2 段（[ADR 0012](../docs/adr/0012-input-validation-and-error-exposure.md)）:
+  - 形の誤り（本文の形、`days` が配列でない・空・401件以上、日付の重複、実在しない日付、未知のキー、型の違い、負の数、オフセット無しの日時など）はリクエスト全体を 400 で拒否する
+  - 範囲の誤り（数値の上限超え、小数の歩数、睡眠の `end` が `start` より前）はその日だけを拒否し、他の日は通常どおり保存・同期する。拒否した日は `rejected` に日付と、項目名を挙げた日本語のエラー文で載る（値は載らない）。`rejected` は常にあり、無ければ空配列。全日が拒否されても 200 で `written:0`
+  - 睡眠の `start <= end` は受け取ったデータの中だけで確かめる。片方だけを送ると、保存済みの値とマージした後の前後関係は保証されないので、クライアントは両方を一緒に送る
+  - `failed[].error` と `notes.error` は、メモ欄のマーカー欠落と Vault パスの違反以外は固定の文で、詳細はサーバーのログに出る
 - `POST /api/notes/sync` — `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","includeStatic":bool?}`（最大400日）。範囲内のノートを再生成し、内容が同じものは書き込まない。`{"written":n,"unchanged":n,"failed":[...]}`。Vault 未設定は 503
 - `GET /api/summary?date=YYYY-MM-DD` または `?from=&to=`（最大400日）— `{"days":[...]}`。`types=activity,heart_rate,body,sleep,nutrition` で絞り込み
 - `GET /api/summary/monthly?from=YYYY-MM&to=YYYY-MM`（最大120か月）— 月次集計 `{"months":[...]}`（データのある月のみ）
@@ -75,6 +79,7 @@ pnpm import:takeout --takeout "<Takeout>/Takeout/Fit" --post --api-url http://lo
 pnpm import:takeout --takeout "<Takeout>/Takeout/Fit" --post --batch 30 --api-url https://<アプリ名>.fly.dev
 ```
 
+- 範囲外の値がある日（[ADR 0012](../docs/adr/0012-input-validation-and-error-exposure.md)）は送らずに日付と理由を表示し、サーバーが `rejected` で拒否した日もバッチごとに表示する。残りのバッチは送り続け、そうした日が 1 日でもあれば最後に終了コード 1 になる
 - `--from` / `--to`（YYYY-MM-DD）で期間を絞れる。`--takeout` の代わりに環境変数 `TAKEOUT_DIR` でもよい
 - 睡眠は複数アプリの記録が重なるため、起床日ごとに 1 つのソースだけ採用する。その日にステージ (4/5/6 = 浅い/深い/REM) を含むソースを優先し、その中で合計時間が最長のもの、同点ならソース ID の辞書順で最小のものを選ぶ。区間の間隔が 60 分以内なら同じ睡眠とみなし、その日で最も長いものを本睡眠、残りを仮眠とする
 - 食事は 1 データポイントが 1 食（1 品）で、`fitValue[0]` の `mapVal` から `calories` / `protein` / `fat.total` / `carbs.total` を読み、開始時刻の日付（JST）ごとに合計する（摂取カロリーは整数、P/F/C は小数 1 桁）。値の無い項目は出力しない。複数ソースに同じ日の記録があるときは、その日の記録件数が最も多いソースだけを使い（合算しない）、同数なら合計 kcal が大きいもの、それも同じならソース ID の辞書順で最小のものを選ぶ。dry run の統計に `nutrition: ...` の行（日数と期間）が出る
