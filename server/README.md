@@ -8,7 +8,7 @@ Android アプリから送られる日次ヘルスデータを受け取るサー
 | 名前 | 必須 | 既定値 | 説明 |
 | --- | --- | --- | --- |
 | `PORT` | いいえ | `8080` | 待ち受けポート |
-| `API_TOKEN` | はい | - | `/api/*` 用の Bearer トークン（32文字以上） |
+| `API_TOKEN` | はい | - | `/api/*` 用の Bearer トークン（32文字以上。使える文字は英数字と `. _ ~ + / -`、末尾の `=`） |
 | `COUCHDB_URL` | はい | - | CouchDB のベース URL（`http:` / `https:`。ユーザー名・パスワードは含めず `COUCHDB_USER` / `COUCHDB_PASSWORD` で指定） |
 | `COUCHDB_USER` | はい | - | CouchDB ユーザー |
 | `COUCHDB_PASSWORD` | はい | - | CouchDB パスワード |

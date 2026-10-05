@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
+import { MemoryStore } from "../src/store/memory-store.js";
 
 const BASE = {
   API_TOKEN: "t".repeat(32),
@@ -52,5 +54,44 @@ describe("COUCHDB_URL", () => {
     const msg = errorOf({ ...BASE, COUCHDB_URL: "not a url secret-xyz" });
     expect(msg).toMatch(/COUCHDB_URL/);
     expect(msg).not.toContain("secret-xyz");
+  });
+});
+
+describe("API_TOKEN", () => {
+  it("bearerAuth が受け付けない文字（! # : @ など）を含むと拒否し、値を出さない", () => {
+    for (const ch of ["!", "#", ":", "@", "%", '"']) {
+      const bad = `${"k".repeat(32)}${ch}`;
+      const msg = errorOf({ ...BASE, API_TOKEN: bad });
+      expect(msg).toMatch(/API_TOKEN/);
+      expect(msg).not.toContain(bad);
+    }
+  });
+
+  it("制御文字や空白は引き続き拒否する", () => {
+    expect(() => loadConfig({ ...BASE, API_TOKEN: `\x1b[200~${"s".repeat(32)}` })).toThrow(
+      /API_TOKEN/,
+    );
+    expect(() => loadConfig({ ...BASE, API_TOKEN: `${"s".repeat(16)} ${"s".repeat(16)}` })).toThrow(
+      /API_TOKEN/,
+    );
+  });
+
+  it("英数字と . _ ~ + / - と末尾の = は受け付ける", () => {
+    const ok = `Ab0._~+/-${"x".repeat(24)}==`;
+    expect(loadConfig({ ...BASE, API_TOKEN: ok }).API_TOKEN).toBe(ok);
+    // = は末尾にだけ置ける
+    expect(() => loadConfig({ ...BASE, API_TOKEN: `${"x".repeat(16)}=${"x".repeat(16)}` })).toThrow(
+      /API_TOKEN/,
+    );
+  });
+
+  it("設定で通ったトークンは bearerAuth でも認証できる", async () => {
+    const token = `Ab0._~+/-${"x".repeat(24)}==`;
+    const config = loadConfig({ ...BASE, API_TOKEN: token });
+    const app = createApp({ config, store: new MemoryStore() });
+    const res = await app.request("/api/ping", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(200);
   });
 });
