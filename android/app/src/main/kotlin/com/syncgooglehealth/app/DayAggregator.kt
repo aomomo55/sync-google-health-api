@@ -77,19 +77,15 @@ object DayAggregator {
             .filter { it.first < it.second }
             .sortedBy { it.first }
         if (clipped.isEmpty()) return null
-        var totalMs = 0L
-        var curStart = clipped[0].first
-        var curEnd = clipped[0].second
-        for ((s, e) in clipped.drop(1)) {
-            if (s <= curEnd) {
-                if (e > curEnd) curEnd = e
+        val merged = clipped.fold(emptyList<Pair<Instant, Instant>>()) { acc, (s, e) ->
+            val last = acc.lastOrNull()
+            if (last != null && s <= last.second) {
+                acc.dropLast(1) + (last.first to maxOf(last.second, e))
             } else {
-                totalMs += curEnd.toEpochMilli() - curStart.toEpochMilli()
-                curStart = s
-                curEnd = e
+                acc + (s to e)
             }
         }
-        totalMs += curEnd.toEpochMilli() - curStart.toEpochMilli()
+        val totalMs = merged.sumOf { (s, e) -> e.toEpochMilli() - s.toEpochMilli() }
         return Math.round(totalMs / 60_000.0)
     }
 }

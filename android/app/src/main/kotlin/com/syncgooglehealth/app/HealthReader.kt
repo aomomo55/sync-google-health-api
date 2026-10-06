@@ -130,6 +130,7 @@ class HealthReader(context: Context, private val zone: ZoneId = ZoneId.systemDef
 
     private suspend fun <T : Record> readAll(type: KClass<T>, filter: TimeRangeFilter): List<T> {
         val out = mutableListOf<T>()
+        // ページ送りのトークンを更新しながら繰り返すため var
         var token: String? = null
         do {
             val res = client.readRecords(ReadRecordsRequest(type, filter, pageSize = 1000, pageToken = token))

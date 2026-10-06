@@ -52,6 +52,7 @@ object SleepAssigner {
     // 開始順に並べ、前のまとまりの終了から mergeGap 以内に始まるセッションを同じまとまりにする
     private fun mergeNights(list: List<SleepSessionInput>, mergeGap: Duration): List<Night> {
         val groups = mutableListOf<MutableList<SleepSessionInput>>()
+        // 直前までのまとまりの終了時刻を更新しながら走査するため var
         var end: Instant? = null
         for (s in list.sortedWith(compareBy({ it.start }, { it.end }))) {
             if (end != null && Duration.between(end, s.start) <= mergeGap) {
@@ -105,6 +106,7 @@ object SleepAssigner {
 
     // 開始順のセッション間で、どのセッションにも覆われていない時間の合計
     private fun gapSeconds(sessions: List<SleepSessionInput>): Long {
+        // 覆われた終了時刻を更新しながら走査するため var
         var total = 0L
         var end = sessions.first().end
         for (s in sessions.drop(1)) {
