@@ -24,6 +24,8 @@ export interface McpVaultWriterOptions {
   timeoutMs?: number;
   // 一時的な失敗のリトライ間隔（ms）。要素数がリトライ回数
   retryDelaysMs?: number[];
+  // ツールのエラーがやり直しても直らなかったあと、ツールのエラーをやり直さない期間（ms）
+  toolRetryCooldownMs?: number;
   fetch?: typeof fetch;
 }
 
@@ -32,10 +34,12 @@ type ErrorKind = "session" | "transient" | "permanent";
 const ERROR_PREFIXES = ["Write access denied", "Error"];
 
 // ツールが返したエラーのうち、やり直しても結果が変わらないと分かっているもの
-const PERMANENT_TOOL_ERRORS = ["Write access denied"];
+// （-32602 は引数の検証エラー）
+const PERMANENT_TOOL_ERRORS = ["Write access denied", "MCP error -32602"];
 
 // ツールが返したエラー。write_note は全体の置き換え、read_note は読むだけで、どちらも冪等なので、
-// 恒久的と分かっているもの以外は一時的とみなしてやり直す（例: "Database write layer error!"）
+// 恒久的と分かっているもの以外は一時的とみなしてやり直す（例: "Database write layer error!"）。
+// 直らないエラーで待ち時間が積み上がらないよう、やり直しても失敗したあとはしばらくやり直さない
 class ToolFailure extends VaultWriteError {
   readonly permanent: boolean;
   constructor(message: string) {
@@ -78,8 +82,11 @@ export class McpVaultWriter implements VaultWriter {
   private readonly prefix: string;
   private readonly timeoutMs: number;
   private readonly delays: number[];
+  private readonly toolRetryCooldownMs: number;
   private readonly fetchFn?: typeof fetch;
   private clientPromise: Promise<Client> | null = null;
+  // この時刻（epoch ms）まではツールのエラーをやり直さない。呼び出しが成功したら 0 に戻す
+  private toolRetrySuspendedUntil = 0;
 
   constructor(opts: McpVaultWriterOptions) {
     this.url = new URL(opts.url);
@@ -87,6 +94,7 @@ export class McpVaultWriter implements VaultWriter {
     this.prefix = normalizePrefix(opts.prefix ?? DEFAULT_VAULT_PREFIX);
     this.timeoutMs = opts.timeoutMs ?? 60_000;
     this.delays = opts.retryDelaysMs ?? [1000, 3000, 9000];
+    this.toolRetryCooldownMs = opts.toolRetryCooldownMs ?? 60_000;
     this.fetchFn = opts.fetch;
   }
 
@@ -178,7 +186,9 @@ export class McpVaultWriter implements VaultWriter {
         });
         const content = Array.isArray(res.content) ? res.content : [];
         const text = content.map((c) => (c && c.type === "text" ? String(c.text) : "")).join("");
-        return interpret({ text, isError: res.isError === true });
+        const result = interpret({ text, isError: res.isError === true });
+        this.toolRetrySuspendedUntil = 0;
+        return result;
       } catch (e) {
         const kind = classify(e);
         if (kind === "session" && !sessionRetried) {
@@ -187,7 +197,9 @@ export class McpVaultWriter implements VaultWriter {
           continue;
         }
         const msg = e instanceof Error ? e.message : String(e);
-        if (kind !== "permanent" && attempt < this.delays.length) {
+        const toolRetrySuspended =
+          e instanceof ToolFailure && Date.now() < this.toolRetrySuspendedUntil;
+        if (kind !== "permanent" && !toolRetrySuspended && attempt < this.delays.length) {
           console.warn(
             `Vault の ${name} をやり直します（${attempt + 1}/${this.delays.length} 回目）: ${this.scrub(msg)}`,
           );
@@ -196,6 +208,13 @@ export class McpVaultWriter implements VaultWriter {
           await new Promise((r) => setTimeout(r, this.delays[attempt]));
           attempt++;
           continue;
+        }
+        if (kind === "transient" && e instanceof ToolFailure && !toolRetrySuspended) {
+          // 裏の DB が落ちているなど、全てのノートで同じエラーになるときに 1 件ごとに待たないようにする
+          this.toolRetrySuspendedUntil = Date.now() + this.toolRetryCooldownMs;
+          console.warn(
+            `Vault のツールのエラーがやり直しても直らないため、${this.toolRetryCooldownMs} ms の間はツールのエラーをやり直しません`,
+          );
         }
         // ツールのエラーは、やり直しの有無にかかわらず今までと同じ形で投げる
         if (e instanceof ToolFailure) throw e;

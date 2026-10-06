@@ -16,13 +16,16 @@ const TOKEN = "vault-test-token-0123456789";
 const fake = new FakeObsidianMcp(TOKEN);
 const writers: McpVaultWriter[] = [];
 
-function make(over: { token?: string; prefix?: string; timeoutMs?: number } = {}) {
+function make(
+  over: { token?: string; prefix?: string; timeoutMs?: number; toolRetryCooldownMs?: number } = {},
+) {
   const w = new McpVaultWriter({
     url: fake.url,
     token: over.token ?? TOKEN,
     prefix: over.prefix,
     timeoutMs: over.timeoutMs ?? 5000,
     retryDelaysMs: [5, 5, 5],
+    toolRetryCooldownMs: over.toolRetryCooldownMs,
   });
   writers.push(w);
   return w;
@@ -163,6 +166,38 @@ describe("McpVaultWriter", () => {
     fake.toolErrors = ["Error: chunk not found", "Error: chunk not found"];
     expect(await w.readNote("Health/a.md")).toBe("本文");
     expect(console.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("引数の検証エラー（-32602）はやり直さない", async () => {
+    fake.toolErrors = ["MCP error -32602: Invalid arguments for tool write_note"];
+    await expect(make().writeNote("Health/a.md", "x")).rejects.toThrow(/-32602/);
+    expect(fake.toolCalls).toBe(1);
+  });
+
+  it("ツールのエラーがやり直しても直らなかったあとは、しばらくやり直さずに失敗する", async () => {
+    const w = make();
+    fake.toolErrors = Array(4).fill("Error: database is down");
+    await expect(w.writeNote("Health/a.md", "x")).rejects.toThrow(/database is down/);
+    expect(fake.toolCalls).toBe(4);
+    // 続くノートは待たずに失敗する（全てのノートで 1 件ごとに待ち時間が積み上がらない）
+    fake.toolErrors = ["Error: database is down"];
+    await expect(w.writeNote("Health/b.md", "x")).rejects.toThrow(/database is down/);
+    expect(fake.toolCalls).toBe(5);
+    // 成功したら、またやり直すようになる
+    await w.writeNote("Health/c.md", "x");
+    fake.toolErrors = ["Error: database is down"];
+    await w.writeNote("Health/d.md", "x");
+    expect(fake.notes.get("Health/d.md")).toBe("x");
+    expect(fake.toolCalls).toBe(8);
+  });
+
+  it("やり直さない期間が過ぎれば、ツールのエラーをまたやり直す", async () => {
+    const w = make({ toolRetryCooldownMs: 0 });
+    fake.toolErrors = Array(4).fill("Error: database is down");
+    await expect(w.writeNote("Health/a.md", "x")).rejects.toThrow(/database is down/);
+    fake.toolErrors = ["Error: database is down"];
+    await w.writeNote("Health/b.md", "x");
+    expect(fake.toolCalls).toBe(6);
   });
 
   it("やり直しのログにもトークンを出さない", async () => {
