@@ -82,6 +82,7 @@ export async function writeMany(
 ): Promise<WriteManyResult> {
   const concurrency = Math.max(1, opts.concurrency ?? 3);
   const result: WriteManyResult = { written: 0, failed: [] };
+  // 複数の worker が共有する取り出し位置と完了数なので let にする
   let next = 0;
   let done = 0;
 

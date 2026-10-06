@@ -48,6 +48,7 @@ const describe = (e: unknown) => describeError(e, token);
 
 // 同期は何度やり直しても同じ結果になるので、通信エラーと 5xx は待ってから再試行する
 async function postWithRetry(body: unknown): Promise<Response> {
+  // リトライの回数そのものがループの制御なので let にする
   for (let attempt = 0; ; attempt++) {
     try {
       const res = await fetch(endpoint, {
@@ -64,11 +65,11 @@ async function postWithRetry(body: unknown): Promise<Response> {
     await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
   }
 }
-let written = 0;
-let unchanged = 0;
+const chunkTotals: { written: number; unchanged: number }[] = [];
 const failures: { path: string; error: string }[] = [];
-let chunkError = false;
+const errorChunks: string[] = [];
 
+// 区間の進行（start と first）そのものがループの制御なので let にする
 for (let start = from, first = true; start <= to; first = false) {
   const chunkEnd = addDays(start, CHUNK_DAYS - 1);
   const end = chunkEnd < to ? chunkEnd : to;
@@ -85,20 +86,21 @@ for (let start = from, first = true; start <= to; first = false) {
       unchanged: number;
       failed: { path: string; error: string }[];
     };
-    written += json.written;
-    unchanged += json.unchanged;
+    chunkTotals.push({ written: json.written, unchanged: json.unchanged });
     failures.push(...json.failed);
     console.log(
       `${start}..${end}: 書き込み ${json.written} / 変更なし ${json.unchanged} / 失敗 ${json.failed.length}`,
     );
   } catch (e) {
-    chunkError = true;
+    errorChunks.push(`${start}..${end}`);
     console.error(`${start}..${end}: エラー ${describe(e)}`);
   }
   start = addDays(end, 1);
 }
 
+const written = chunkTotals.reduce((t, c) => t + c.written, 0);
+const unchanged = chunkTotals.reduce((t, c) => t + c.unchanged, 0);
 console.log(`合計: 書き込み ${written} / 変更なし ${unchanged} / 失敗 ${failures.length}`);
 for (const f of failures.slice(0, 20))
   console.error(`  失敗: ${f.path}: ${scrubToken(f.error, token)}`);
-if (failures.length > 0 || chunkError) process.exit(1);
+if (failures.length > 0 || errorChunks.length > 0) process.exit(1);

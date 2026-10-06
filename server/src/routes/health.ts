@@ -67,6 +67,27 @@ function parseTypes(raw: string | undefined): Section[] | undefined {
   return items as Section[];
 }
 
+// /summary の期間指定（date、または from と to）を解釈する
+function parseSummaryRange(
+  date: string | undefined,
+  from: string | undefined,
+  to: string | undefined,
+): { start: string; end: string } {
+  if (date !== undefined && from === undefined && to === undefined) {
+    const day = parseWith(DateSchema, date, "date");
+    return { start: day, end: day };
+  }
+  if (date === undefined && from !== undefined && to !== undefined) {
+    const start = parseWith(DateSchema, from, "from");
+    const end = parseWith(DateSchema, to, "to");
+    const n = inclusiveDays(start, end);
+    if (n < 1) badRequest("from は to 以前である必要があります");
+    if (n > MAX_SPAN_DAYS) badRequest(`期間は最大 ${MAX_SPAN_DAYS} 日です`);
+    return { start, end };
+  }
+  return badRequest("date、または from と to のどちらか一方を指定してください");
+}
+
 export function healthRoutes(store: HealthStore, noteSync: NoteSync | null = null) {
   const r = new Hono();
 
@@ -154,19 +175,7 @@ export function healthRoutes(store: HealthStore, noteSync: NoteSync | null = nul
     const to = c.req.query("to");
     const types = parseTypes(c.req.query("types"));
 
-    let start: string;
-    let end: string;
-    if (date !== undefined && from === undefined && to === undefined) {
-      start = end = parseWith(DateSchema, date, "date");
-    } else if (date === undefined && from !== undefined && to !== undefined) {
-      start = parseWith(DateSchema, from, "from");
-      end = parseWith(DateSchema, to, "to");
-      const n = inclusiveDays(start, end);
-      if (n < 1) badRequest("from は to 以前である必要があります");
-      if (n > MAX_SPAN_DAYS) badRequest(`期間は最大 ${MAX_SPAN_DAYS} 日です`);
-    } else {
-      badRequest("date、または from と to のどちらか一方を指定してください");
-    }
+    const { start, end } = parseSummaryRange(date, from, to);
 
     const days = await store.getDays(start, end);
     return c.json({

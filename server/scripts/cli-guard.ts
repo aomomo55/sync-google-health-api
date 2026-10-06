@@ -18,15 +18,19 @@ export function checkApiToken(token: string | undefined): string | undefined {
   return undefined;
 }
 
+function parseUrl(raw: string): URL | undefined {
+  try {
+    return new URL(raw);
+  } catch {
+    return undefined;
+  }
+}
+
 /** https のみ許可する（localhost / 127.0.0.1 / [::1] だけは http も可）。問題があればエラーメッセージを返す */
 export function checkApiUrl(raw: string | undefined): string | undefined {
   if (!raw) return "--api-url を指定してください";
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return "--api-url が URL として解釈できません";
-  }
+  const url = parseUrl(raw);
+  if (!url) return "--api-url が URL として解釈できません";
   if (url.username || url.password) {
     return "--api-url にユーザー名やパスワードを含めないでください";
   }
