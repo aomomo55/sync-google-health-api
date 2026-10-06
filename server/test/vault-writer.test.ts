@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../src/config.js";
 import { createVaultWriter } from "../src/vault/index.js";
 import { McpVaultWriter } from "../src/vault/mcp-vault-writer.js";
@@ -16,13 +16,16 @@ const TOKEN = "vault-test-token-0123456789";
 const fake = new FakeObsidianMcp(TOKEN);
 const writers: McpVaultWriter[] = [];
 
-function make(over: { token?: string; prefix?: string; timeoutMs?: number } = {}) {
+function make(
+  over: { token?: string; prefix?: string; timeoutMs?: number; toolRetryCooldownMs?: number } = {},
+) {
   const w = new McpVaultWriter({
     url: fake.url,
     token: over.token ?? TOKEN,
     prefix: over.prefix,
     timeoutMs: over.timeoutMs ?? 5000,
     retryDelaysMs: [5, 5, 5],
+    toolRetryCooldownMs: over.toolRetryCooldownMs,
   });
   writers.push(w);
   return w;
@@ -41,9 +44,13 @@ beforeEach(async () => {
   fake.failToolCalls = [];
   fake.toolDelayMs = 0;
   fake.readResponses.clear();
+  fake.toolErrors = [];
+  // やり直しのログはテストの出力に出さない（回数の確認には使う）
+  vi.spyOn(console, "warn").mockImplementation(() => {});
 });
 afterEach(async () => {
   await Promise.all(writers.splice(0).map((w) => w.close()));
+  vi.restoreAllMocks();
 });
 
 describe("McpVaultWriter", () => {
@@ -62,14 +69,15 @@ describe("McpVaultWriter", () => {
     "Error: chunk not found",
     "database does not exist",
     "Error reading note: Note not found in chunk index",
-  ])("ノート不在以外のエラー（%s）は null にせず throw", async (msg) => {
+  ])("ノート不在以外のエラー（%s）は null にせず、やり直したうえで throw", async (msg) => {
     fake.readResponses.set("Health/a.md", { text: msg, isError: true });
     const err = await make()
       .readNote("Health/a.md")
       .catch((e) => e);
     expect(err).toBeInstanceOf(VaultWriteError);
     expect(String(err.message)).toContain(msg);
-    expect(fake.toolCalls).toBe(1);
+    // 1 回目 + やり直し 3 回
+    expect(fake.toolCalls).toBe(4);
   });
 
   it("要求したパスと一致しない「Note not found」は不在とみなさない", async () => {
@@ -133,9 +141,70 @@ describe("McpVaultWriter", () => {
     expect(fake.toolCalls).toBe(1);
   });
 
-  it("Error で始まるテキストも失敗として扱いリトライしない", async () => {
+  it("Error で始まるテキストも失敗として扱い、やり直しても失敗すれば throw", async () => {
     await expect(make().writeNote("Health/boom.md", "x")).rejects.toThrow(/disk full/);
+    expect(fake.toolCalls).toBe(4);
+  });
+
+  it("ツールの一時的なエラーはやり直して成功する（書き込み）", async () => {
+    const w = make();
+    fake.toolErrors = ["Tool 'write_note' execution failed: Database write layer error!"];
+    await w.writeNote("Health/a.md", "x");
+    expect(fake.notes.get("Health/a.md")).toBe("x");
+    expect(fake.toolCalls).toBe(2);
+    // ツールのエラーでは接続を張り直さない
+    expect(fake.initializes).toBe(1);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(console.warn).mock.calls[0]?.[0]).toMatch(
+      /write_note をやり直します（1\/3 回目）/,
+    );
+  });
+
+  it("ツールの一時的なエラーはやり直して成功する（読み込み）", async () => {
+    const w = make();
+    await w.writeNote("Health/a.md", "本文");
+    fake.toolErrors = ["Error: chunk not found", "Error: chunk not found"];
+    expect(await w.readNote("Health/a.md")).toBe("本文");
+    expect(console.warn).toHaveBeenCalledTimes(2);
+  });
+
+  it("引数の検証エラー（-32602）はやり直さない", async () => {
+    fake.toolErrors = ["MCP error -32602: Invalid arguments for tool write_note"];
+    await expect(make().writeNote("Health/a.md", "x")).rejects.toThrow(/-32602/);
     expect(fake.toolCalls).toBe(1);
+  });
+
+  it("ツールのエラーがやり直しても直らなかったあとは、しばらくやり直さずに失敗する", async () => {
+    const w = make();
+    fake.toolErrors = Array(4).fill("Error: database is down");
+    await expect(w.writeNote("Health/a.md", "x")).rejects.toThrow(/database is down/);
+    expect(fake.toolCalls).toBe(4);
+    // 続くノートは待たずに失敗する（全てのノートで 1 件ごとに待ち時間が積み上がらない）
+    fake.toolErrors = ["Error: database is down"];
+    await expect(w.writeNote("Health/b.md", "x")).rejects.toThrow(/database is down/);
+    expect(fake.toolCalls).toBe(5);
+    // 成功したら、またやり直すようになる
+    await w.writeNote("Health/c.md", "x");
+    fake.toolErrors = ["Error: database is down"];
+    await w.writeNote("Health/d.md", "x");
+    expect(fake.notes.get("Health/d.md")).toBe("x");
+    expect(fake.toolCalls).toBe(8);
+  });
+
+  it("やり直さない期間が過ぎれば、ツールのエラーをまたやり直す", async () => {
+    const w = make({ toolRetryCooldownMs: 0 });
+    fake.toolErrors = Array(4).fill("Error: database is down");
+    await expect(w.writeNote("Health/a.md", "x")).rejects.toThrow(/database is down/);
+    fake.toolErrors = ["Error: database is down"];
+    await w.writeNote("Health/b.md", "x");
+    expect(fake.toolCalls).toBe(6);
+  });
+
+  it("やり直しのログにもトークンを出さない", async () => {
+    const w = make();
+    fake.toolErrors = [`Error: bad ${TOKEN}`];
+    await w.writeNote("Health/a.md", "x");
+    expect(String(vi.mocked(console.warn).mock.calls[0]?.[0])).not.toContain(TOKEN);
   });
 
   it("5xx はリトライして成功する", async () => {
