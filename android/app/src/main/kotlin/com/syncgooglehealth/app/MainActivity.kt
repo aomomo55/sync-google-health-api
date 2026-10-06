@@ -271,9 +271,9 @@ fun MainScreen() {
         if (sdkOk && selected != null && needsHistoryPermission(selected, today) && !historyGranted) {
             Text(
                 if (historyAvailable) {
-                    "履歴の権限が無いため、権限を許可した日の 30 日前より前のデータは読めません。『権限を付与』で履歴の権限も許可してください"
+                    "履歴の権限が無いため、${earliestReadableWithoutHistory(today)} より前は読まずに送りません。『権限を付与』で履歴の権限も許可してください"
                 } else {
-                    "この端末では履歴の権限を使えないため、権限を許可した日の 30 日前より前のデータは読めません"
+                    "この端末では履歴の権限を使えないため、${earliestReadableWithoutHistory(today)} より前は読まずに送りません"
                 },
                 color = MaterialTheme.colorScheme.error,
             )

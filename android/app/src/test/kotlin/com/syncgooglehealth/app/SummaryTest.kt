@@ -669,9 +669,20 @@ class SyncRangeTest {
     }
 
     @Test
-    fun historyPermissionIsNeededOnlyBeyond30Days() {
-        assertFalse(needsHistoryPermission(today.minusDays(30), today))
-        assertTrue(needsHistoryPermission(today.minusDays(31), today))
+    fun historyPermissionIsNeededOnlyBeyond30DaysIncludingToday() {
+        // 「過去30日を送る」と同じ範囲までは履歴の権限が要らない
+        assertEquals(today.minusDays(29), earliestReadableWithoutHistory(today))
+        assertFalse(needsHistoryPermission(today.minusDays(29), today))
+        assertTrue(needsHistoryPermission(today.minusDays(30), today))
+    }
+
+    @Test
+    fun readableStartIsClampedWithoutHistoryPermission() {
+        val from = today.minusDays(60)
+        assertEquals(today.minusDays(29), readableStart(from, today, canReadHistory = false))
+        assertEquals(from, readableStart(from, today, canReadHistory = true))
+        // 確実に読める範囲の開始日はそのまま
+        assertEquals(today.minusDays(10), readableStart(today.minusDays(10), today, canReadHistory = false))
     }
 
     @Test
