@@ -16,6 +16,8 @@ Android アプリから送られる日次ヘルスデータを受け取るサー
 | `OBSIDIAN_MCP_URL` | いいえ | - | obsidian-sync-mcp の `/mcp` URL（`https:`。`http:` は `localhost` / `127.0.0.1` / `[::1]` のみ可。ユーザー名・パスワードを含む URL は不可。`OBSIDIAN_MCP_TOKEN` と両方指定するか両方未設定） |
 | `OBSIDIAN_MCP_TOKEN` | いいえ | - | obsidian-sync-mcp 用 Bearer トークン（16文字以上） |
 | `VAULT_HEALTH_PREFIX` | いいえ | `Health/` | Vault 内で書き込みを許可するフォルダ。ノートもこの下に生成する（文字・数字・空白・`_`・`-` からなるフォルダ名を `/` で区切る。先頭の `/`、`.` / `..`、空のフォルダ名、フォルダ名の前後の空白は不可） |
+| `BACKUP_TOKEN` | いいえ | - | `GET /backup/health` 専用の Bearer トークン（`API_TOKEN` と同じ規則で、`API_TOKEN` とは別の値）。`BACKUP_AGE_RECIPIENT` と両方指定するか両方未設定 |
+| `BACKUP_AGE_RECIPIENT` | いいえ | - | バックアップを暗号化する age の公開鍵（`age1...`）。秘密鍵はサーバーに置かない（[docs/backup.md](../docs/backup.md)） |
 | `NODE_ENV` | いいえ | - | 実行環境 |
 
 ローカル開発では `server/dev.vars`（gitignore 済み）に `KEY=value` 形式で書く。
@@ -55,6 +57,7 @@ pnpm start       # node dist/index.js（環境変数は自前で渡す）
 - `POST /api/notes/sync` — `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","includeStatic":bool?}`（最大400日）。範囲内のノートを再生成し、内容が同じものは書き込まない。`{"written":n,"unchanged":n,"failed":[...]}`。Vault 未設定は 503
 - `GET /api/summary?date=YYYY-MM-DD` または `?from=&to=`（最大400日）— `{"days":[...]}`。`types=activity,heart_rate,body,sleep,nutrition` で絞り込み
 - `GET /api/summary/monthly?from=YYYY-MM&to=YYYY-MM`（最大120か月）— 月次集計 `{"months":[...]}`（データのある月のみ）
+- `GET /backup/health` — `Authorization: Bearer <BACKUP_TOKEN>` 必須（`API_TOKEN` では取れない）。全期間の日次データを JSON → gzip → age で暗号化して返す（`application/octet-stream`、`X-Backup-Days` に日数）。`BACKUP_TOKEN` と `BACKUP_AGE_RECIPIENT` が未設定なら 404。復元は `pnpm restore:backup`（[docs/backup.md](../docs/backup.md)）
 
 ### nutrition セクション
 

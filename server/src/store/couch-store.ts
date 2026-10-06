@@ -88,6 +88,15 @@ export class CouchStore implements HealthStore {
     }
   }
 
+  // DB にある文書の数（day: 以外や _design 文書も含む）
+  async countDocs(): Promise<number> {
+    const json = (await this.request("GET", "")) as { doc_count?: unknown } | null;
+    if (typeof json?.doc_count !== "number") {
+      throw new Error("CouchDB GET / の応答に doc_count がありません");
+    }
+    return json.doc_count;
+  }
+
   private static toDay(doc: CouchDoc): DailySummary {
     const { _id, _rev, type, updated_at, ...day } = doc;
     void [_id, _rev, type, updated_at];
@@ -100,10 +109,18 @@ export class CouchStore implements HealthStore {
   }
 
   async getDays(from: string, to: string): Promise<DailySummary[]> {
+    return this.getDaysByKey(`day:${from}`, `day:${to}`);
+  }
+
+  async getAllDays(): Promise<DailySummary[]> {
+    return this.getDaysByKey("day:", "day:￿");
+  }
+
+  private async getDaysByKey(startkey: string, endkey: string): Promise<DailySummary[]> {
     const key = (s: string) => encodeURIComponent(JSON.stringify(s));
     const json = await this.request(
       "GET",
-      `/_all_docs?include_docs=true&startkey=${key(`day:${from}`)}&endkey=${key(`day:${to}`)}`,
+      `/_all_docs?include_docs=true&startkey=${key(startkey)}&endkey=${key(endkey)}`,
     );
     return CouchStore.docsOf(json)
       .map((d) => ({ id: String(d._id), doc: d }))

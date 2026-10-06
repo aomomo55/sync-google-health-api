@@ -116,6 +116,43 @@ describe("CouchStore (fake fetch)", () => {
     expect(days).toEqual([{ date: "2026-01-01" }, { date: "2026-01-02", body: { weight_kg: 1 } }]);
   });
 
+  it("countDocs は DB の情報の doc_count を返す（day: 以外の文書も数える）", async () => {
+    const { store, calls } = make([{ status: 200, json: { db_name: "health", doc_count: 3 } }]);
+    expect(await store.countDocs()).toBe(3);
+    expect(calls[0]).toMatchObject({ method: "GET", url: "http://couch.test:5984/health" });
+  });
+
+  it("countDocs は doc_count が無い応答をエラーにする", async () => {
+    const { store } = make([{ status: 200, json: { db_name: "health" } }]);
+    await expect(store.countDocs()).rejects.toThrow("doc_count");
+  });
+
+  it("getAllDays は day: で始まる全ての文書を日付順に返す", async () => {
+    const { store, calls } = make([
+      {
+        status: 200,
+        json: {
+          rows: [
+            {
+              id: "day:2026-01-02",
+              doc: { _id: "day:2026-01-02", _rev: "1-a", date: "2026-01-02" },
+            },
+            {
+              id: "day:2025-12-31",
+              doc: { _id: "day:2025-12-31", _rev: "1-b", date: "2025-12-31" },
+            },
+          ],
+        },
+      },
+    ]);
+    const days = await store.getAllDays();
+    expect(calls[0]?.url).toBe(
+      "http://couch.test:5984/health/_all_docs?include_docs=true" +
+        `&startkey=${encodeURIComponent('"day:"')}&endkey=${encodeURIComponent('"day:￿"')}`,
+    );
+    expect(days.map((d) => d.date)).toEqual(["2025-12-31", "2026-01-02"]);
+  });
+
   it("upsertDays は既存とマージして _bulk_docs に送る", async () => {
     const { store, calls } = make([
       {

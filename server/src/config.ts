@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isAgeRecipient } from "./backup/backup.js";
 
 // 端末に貼り付けたときに紛れ込む制御文字（ESC など）は HTTP ヘッダーに使えず、
 // 実行時に原因の分かりにくい "fetch failed" になるため起動時に弾く
@@ -7,6 +8,12 @@ const token = (min: number) =>
     .string()
     .min(min, `${min}文字以上が必要です`)
     .regex(/^[\x21-\x7e]+$/, "空白・改行・制御文字・全角文字を含めないでください");
+// Hono の bearerAuth が受け付ける文字（RFC 6750 の b64token）に限る。
+// それ以外の文字を含むと起動はできても全リクエストが 400 になる
+const bearerToken = token(32).regex(
+  /^[A-Za-z0-9._~+/-]+=*$/,
+  "英数字と . _ ~ + / - （末尾の = は可）だけで指定してください",
+);
 const credential = z
   .string()
   .min(1)
@@ -82,12 +89,7 @@ const vaultPrefix = z
 const schema = z
   .object({
     PORT: z.coerce.number().int().min(1).max(65535).default(8080),
-    // Hono の bearerAuth が受け付ける文字（RFC 6750 の b64token）に限る。
-    // それ以外の文字を含むと起動はできても全リクエストが 400 になる
-    API_TOKEN: token(32).regex(
-      /^[A-Za-z0-9._~+/-]+=*$/,
-      "英数字と . _ ~ + / - （末尾の = は可）だけで指定してください",
-    ),
+    API_TOKEN: bearerToken,
     COUCHDB_URL: couchdbUrl,
     COUCHDB_USER: credential,
     COUCHDB_PASSWORD: credential,
@@ -95,11 +97,26 @@ const schema = z
     OBSIDIAN_MCP_URL: obsidianMcpUrl.optional(),
     OBSIDIAN_MCP_TOKEN: token(16).optional(),
     VAULT_HEALTH_PREFIX: vaultPrefix.default("Health/"),
+    // バックアップの取得（GET /backup/health）専用。API_TOKEN とは別にし、漏れても書き込みはできないようにする
+    BACKUP_TOKEN: bearerToken.optional(),
+    // バックアップを暗号化する age の公開鍵（age1...）。秘密鍵はサーバーに置かない
+    BACKUP_AGE_RECIPIENT: z
+      .string()
+      .refine(isAgeRecipient, "age の公開鍵（age1...）を指定してください")
+      .optional(),
     NODE_ENV: z.string().optional(),
   })
   .refine((c) => !!c.OBSIDIAN_MCP_URL === !!c.OBSIDIAN_MCP_TOKEN, {
     message: "OBSIDIAN_MCP_URL と OBSIDIAN_MCP_TOKEN は両方設定するか両方未設定にしてください",
     path: ["OBSIDIAN_MCP_URL"],
+  })
+  .refine((c) => !!c.BACKUP_TOKEN === !!c.BACKUP_AGE_RECIPIENT, {
+    message: "BACKUP_TOKEN と BACKUP_AGE_RECIPIENT は両方設定するか両方未設定にしてください",
+    path: ["BACKUP_TOKEN"],
+  })
+  .refine((c) => c.BACKUP_TOKEN === undefined || c.BACKUP_TOKEN !== c.API_TOKEN, {
+    message: "BACKUP_TOKEN には API_TOKEN と別の値を指定してください",
+    path: ["BACKUP_TOKEN"],
   });
 
 export type Config = z.infer<typeof schema>;

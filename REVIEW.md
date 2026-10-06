@@ -24,7 +24,7 @@ CI が成功していることは前提で、ここに挙げるのは **CI で�
 server の依存の向きは、次のコマンドで一覧にできる（`server/src` で実行）:
 
 ```sh
-for d in shared domain notes store takeout sync vault routes; do
+for d in shared domain notes store takeout backup sync vault routes; do
   [ -d "$d" ] || continue
   echo "== $d ->"; grep -rhoE 'from "\.\./[a-z-]+' "$d" | sort | uniq -c
 done
