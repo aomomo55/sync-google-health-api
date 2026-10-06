@@ -14,7 +14,9 @@ CI が成功していることは前提で、ここに挙げるのは **CI で�
 ## アーキテクチャ
 
 - [ ] 依存が一方向か。AGENTS.md の「構成」にある依存の向きから外れた import が無いか
-- [ ] 同じ層どうしで横断していないか（例: `takeout` が `notes` を使う、`store` が `vault` を使う）。共通で必要なものは `domain` に置く
+- [ ] 同じ層どうしで横断していないか（例: `takeout` が `notes` を使う、`store` が `vault` を使う）。複数の層から使うものは、健康データの知識を含むなら `domain`、汎用の部品なら `shared` に置く
+- [ ] `shared` に置いたものが、健康データを知らない汎用のものか。`shared` から他の層を import していないか
+- [ ] `shared` に置いたものが、実際に複数の層（Android では複数の機能）から使われているか。1 か所でしか使わないものを先回りして置いていないか
 - [ ] 外側の実装（`CouchStore`、`McpVaultWriter` など）に直接依存せず、インターフェース（`HealthStore`、`VaultWriter`）を通しているか。実装の組み立ては外側（`index.ts` など）で行っているか
 - [ ] 純粋な処理（`domain` / `notes`、Android の `DayAggregator` / `SleepAssigner` / `Chunking`）に、I/O、現在時刻、乱数、環境変数、Android の API（`android.*` / `androidx.*`）が入り込んでいないか
 - [ ] 新しいディレクトリや層を作ったら、AGENTS.md の依存の向きに書き足しているか
@@ -22,7 +24,8 @@ CI が成功していることは前提で、ここに挙げるのは **CI で�
 server の依存の向きは、次のコマンドで一覧にできる（`server/src` で実行）:
 
 ```sh
-for d in domain notes store takeout sync vault routes; do
+for d in shared domain notes store takeout backup sync vault routes; do
+  [ -d "$d" ] || continue
   echo "== $d ->"; grep -rhoE 'from "\.\./[a-z-]+' "$d" | sort | uniq -c
 done
 ```

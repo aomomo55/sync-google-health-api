@@ -19,6 +19,7 @@
 | [0013](0013-merge-split-sleep-sessions.md) | 間隔が 2 時間以内の睡眠セッションを一晩の睡眠に結合する | 採用 |
 | [0014](0014-node-24-and-corepack-from-npm.md) | サーバーの Node を 24 にし、corepack は npm で固定版を入れる | 採用 |
 | [0015](0015-backup-health-db-to-google-drive.md) | health DB をサーバーが暗号化して返し、GAS が Google Drive に保存する | 採用 |
+| [0016](0016-shared-for-cross-layer-utilities.md) | 複数の層から使う汎用の部品は shared に置く | 採用 |
 
 ## 書き方
 
