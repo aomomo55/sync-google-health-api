@@ -288,10 +288,16 @@ describe("config / createVaultWriter", () => {
     COUCHDB_PASSWORD: "p",
   };
 
+  const writerOptions = (c: ReturnType<typeof loadConfig>) => ({
+    url: c.OBSIDIAN_MCP_URL,
+    token: c.OBSIDIAN_MCP_TOKEN,
+    prefix: c.VAULT_HEALTH_PREFIX,
+  });
+
   it("未設定なら null、prefix は既定値", () => {
     const c = loadConfig(base);
     expect(c.VAULT_HEALTH_PREFIX).toBe("Health/");
-    expect(createVaultWriter(c)).toBeNull();
+    expect(createVaultWriter(writerOptions(c))).toBeNull();
   });
 
   it("両方設定なら writer を返す", async () => {
@@ -300,9 +306,16 @@ describe("config / createVaultWriter", () => {
       OBSIDIAN_MCP_URL: "https://x.fly.dev/mcp",
       OBSIDIAN_MCP_TOKEN: "t".repeat(16),
     });
-    const w = createVaultWriter(c);
+    const w = createVaultWriter(writerOptions(c));
     expect(w).toBeInstanceOf(McpVaultWriter);
     await w!.close();
+  });
+
+  it("createVaultWriter は URL かトークンが無ければ null", () => {
+    const url = "https://x.fly.dev/mcp";
+    const token = "t".repeat(16);
+    expect(createVaultWriter({ url, token: undefined, prefix: "Health/" })).toBeNull();
+    expect(createVaultWriter({ url: undefined, token, prefix: "Health/" })).toBeNull();
   });
 
   it("片方だけなら throw", () => {
