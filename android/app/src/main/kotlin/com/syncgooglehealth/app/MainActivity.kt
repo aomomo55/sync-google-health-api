@@ -15,6 +15,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -39,23 +45,29 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 // 画面回転でも実行状態を失わないようにプロセス単位で保持する
 object AppState {
     val running = MutableStateFlow(false)
     val lastTime = MutableStateFlow<Long?>(null)
     val lastResult = MutableStateFlow<String?>(null)
+    val progress = MutableStateFlow<String?>(null)
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    fun start(context: Context, days: Int) {
+    fun start(context: Context, days: Int, startDate: LocalDate? = null) {
         if (!running.compareAndSet(false, true)) return
         val app = context.applicationContext
         scope.launch {
             try {
-                val outcome = SyncRunner.run(app, days)
+                progress.value = null
+                val outcome = SyncRunner.run(app, days, startDate = startDate, onProgress = { progress.value = it })
                 lastResult.value = outcome.message
                 lastTime.value = System.currentTimeMillis()
             } finally {
+                progress.value = null
                 running.value = false
             }
         }
@@ -84,6 +96,25 @@ private suspend fun backgroundReadStatus(context: Context): String {
     }
 }
 
+// 履歴の権限（30 日より前の読み取り） を使える端末か。確認できないときは使えないものとして扱う
+private suspend fun historyFeatureAvailable(context: Context): Boolean {
+    return try {
+        HealthConnectClient.getOrCreate(context).features.getFeatureStatus(HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_HISTORY) ==
+            HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+    } catch (e: Exception) {
+        false
+    }
+}
+
+// 開始日として選べるのは、今日から MAX_START_DAYS_BACK 日前まで。DatePicker の日付は UTC の 0 時で渡される
+private class StartDates(private val today: LocalDate) : SelectableDates {
+    override fun isSelectableDate(utcTimeMillis: Long): Boolean =
+        isSelectableStart(Instant.ofEpochMilli(utcTimeMillis).atZone(ZoneOffset.UTC).toLocalDate(), today)
+
+    override fun isSelectableYear(year: Int): Boolean = year in earliestSelectableStart(today).year..today.year
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen() {
     val context = LocalContext.current
@@ -96,11 +127,16 @@ fun MainScreen() {
     var bgMessage by remember { mutableStateOf<String?>(null) }
     var granted by remember { mutableStateOf(false) }
     var nutritionGranted by remember { mutableStateOf(true) }
+    var historyGranted by remember { mutableStateOf(false) }
+    var historyAvailable by remember { mutableStateOf(true) }
+    var startDate by remember { mutableStateOf<LocalDate?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
     var sdkOk by remember { mutableStateOf(false) }
 
     val running by AppState.running.collectAsState()
     val lastTime by AppState.lastTime.collectAsState()
     val lastResult by AppState.lastResult.collectAsState()
+    val progress by AppState.progress.collectAsState()
 
     suspend fun refresh() {
         when (HealthConnectClient.getSdkStatus(context)) {
@@ -110,6 +146,8 @@ fun MainScreen() {
                 val perms = HealthReader(context).grantedPermissions()
                 granted = perms.containsAll(PermissionPolicy.required(HealthPermissions.all, true))
                 nutritionGranted = PermissionPolicy.canReadNutrition(perms)
+                historyGranted = PermissionPolicy.canReadHistory(perms)
+                historyAvailable = historyFeatureAvailable(context)
                 bgMessage = backgroundReadStatus(context)
             }
             HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> {
@@ -198,7 +236,7 @@ fun MainScreen() {
         bgMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
 
         Button(
-            onClick = { launcher.launch(HealthPermissions.all) },
+            onClick = { launcher.launch(if (historyAvailable) HealthPermissions.all else HealthPermissions.all - PermissionPolicy.READ_HISTORY) },
             enabled = sdkOk && !running,
             modifier = Modifier.fillMaxWidth(),
         ) { Text("権限を付与") }
@@ -213,9 +251,56 @@ fun MainScreen() {
             modifier = Modifier.fillMaxWidth(),
         ) { Text("過去30日を送る") }
 
+        val today = LocalDate.now()
+        OutlinedButton(
+            onClick = { showDatePicker = true },
+            enabled = sdkOk && !running,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(startDate?.let { "開始日: $it" } ?: "開始日を選ぶ") }
+        Button(
+            onClick = { startDate?.let { d -> if (save()) AppState.start(context, countDays(d, today), d) } },
+            enabled = sdkOk && !running && startDate != null,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(startDate?.let { "$it から今日まで送る" } ?: "開始日を指定して送る") }
+        Text(
+            "選べるのは今日から ${MAX_START_DAYS_BACK} 日前まで（${earliestSelectableStart(today)} 以降）。" +
+                "それより前は Google Takeout を取り直して import:takeout で取り込んでください",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        val selected = startDate
+        if (sdkOk && selected != null && needsHistoryPermission(selected, today) && !historyGranted) {
+            Text(
+                if (historyAvailable) {
+                    "履歴の権限が無いため、権限を許可した日の 30 日前より前のデータは読めません。『権限を付与』で履歴の権限も許可してください"
+                } else {
+                    "この端末では履歴の権限を使えないため、権限を許可した日の 30 日前より前のデータは読めません"
+                },
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+
+        if (showDatePicker) {
+            val pickerState = rememberDatePickerState(
+                initialSelectedDateMillis = startDate?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli(),
+                selectableDates = StartDates(today),
+            )
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        pickerState.selectedDateMillis?.let {
+                            startDate = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
+                        }
+                        showDatePicker = false
+                    }) { Text("決定") }
+                },
+                dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("キャンセル") } },
+            ) { DatePicker(state = pickerState) }
+        }
+
         // 送信中に前回の結果（古いエラーなど）が見えると紛らわしいので隠す
         if (running) {
-            Text("送信中…")
+            Text(progress ?: "送信中…")
         } else {
             Text("最終送信: ${SyncRunner.formatTime(shownTime ?: 0L)}")
             shownResult?.let { Text("結果: $it") }

@@ -36,6 +36,7 @@ object HealthPermissions {
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(NutritionRecord::class),
         HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
+        HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY,
     )
 
     fun contract() = PermissionController.createRequestPermissionResultContract()
