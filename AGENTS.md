@@ -11,15 +11,17 @@
   - `src/sync/` どのノートを更新するかの計画と実行
   - `src/vault/` obsidian-sync-mcp を MCP クライアントとして呼ぶ書き込み
   - `src/takeout/` Takeout（Google Fit 形式）の解析
-  - `scripts/` `import:takeout` と `sync:notes` の CLI
+  - `src/backup/` バックアップの形式（JSON → gzip → age での暗号化と復号）
+  - `scripts/` `import:takeout`・`sync:notes`・`restore:backup` の CLI
   - 依存の向き（これ以外の import はしない）:
     - `domain` → なし（外部ライブラリは zod のみ）
-    - `notes` / `store` / `takeout` → `domain`
+    - `notes` / `store` / `takeout` / `backup` → `domain`
     - `sync` → `domain` / `notes` と、`store` / `vault` のインターフェース（`HealthStore` / `VaultWriter`）
-    - `routes` → `domain` / `sync` と、`store` のインターフェース
+    - `routes` → `domain` / `sync` / `backup` と、`store` のインターフェース
     - `vault` → なし（設定の `Config` も知らない。必要な値は引数で受け取る）
     - `index.ts` / `app.ts` / `config.ts` / `scripts/` → 何でもよい（設定を読み、実装を組み立てる場所）
 - `android/` — Kotlin / Jetpack Compose のアプリ。Health Connect から日次サマリーを作り `POST /api/ingest` へ送る。集計ロジックは Android に依存しない純粋な Kotlin（`DayAggregator`、`SleepAssigner` など）
+- `gas/` — Google Apps Script。サーバーのバックアップを Google Drive に保存する（GAS のエディタに手でコピーして使う。[docs/backup.md](docs/backup.md)）
 - `docs/adr/` — 設計判断の記録
 
 ## コマンド

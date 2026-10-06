@@ -20,6 +20,12 @@ export class MemoryStore implements HealthStore {
       .map((d) => structuredClone(d));
   }
 
+  async getAllDays(): Promise<DailySummary[]> {
+    return [...this.days.values()]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((d) => structuredClone(d));
+  }
+
   async findAdjacentDate(date: string, direction: "prev" | "next"): Promise<string | null> {
     const dates = [...this.days.keys()].sort();
     const found =

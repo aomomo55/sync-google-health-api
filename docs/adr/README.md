@@ -18,6 +18,7 @@
 | [0012](0012-input-validation-and-error-exposure.md) | 受信データの上限と、応答に載せるエラー文の範囲を決める | 採用 |
 | [0013](0013-merge-split-sleep-sessions.md) | 間隔が 2 時間以内の睡眠セッションを一晩の睡眠に結合する | 採用 |
 | [0014](0014-node-24-and-corepack-from-npm.md) | サーバーの Node を 24 にし、corepack は npm で固定版を入れる | 採用 |
+| [0015](0015-backup-health-db-to-google-drive.md) | health DB をサーバーが暗号化して返し、GAS が Google Drive に保存する | 採用 |
 
 ## 書き方
 

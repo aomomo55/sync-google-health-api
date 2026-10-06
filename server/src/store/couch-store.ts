@@ -100,10 +100,18 @@ export class CouchStore implements HealthStore {
   }
 
   async getDays(from: string, to: string): Promise<DailySummary[]> {
+    return this.getDaysByKey(`day:${from}`, `day:${to}`);
+  }
+
+  async getAllDays(): Promise<DailySummary[]> {
+    return this.getDaysByKey("day:", "day:￿");
+  }
+
+  private async getDaysByKey(startkey: string, endkey: string): Promise<DailySummary[]> {
     const key = (s: string) => encodeURIComponent(JSON.stringify(s));
     const json = await this.request(
       "GET",
-      `/_all_docs?include_docs=true&startkey=${key(`day:${from}`)}&endkey=${key(`day:${to}`)}`,
+      `/_all_docs?include_docs=true&startkey=${key(startkey)}&endkey=${key(endkey)}`,
     );
     return CouchStore.docsOf(json)
       .map((d) => ({ id: String(d._id), doc: d }))

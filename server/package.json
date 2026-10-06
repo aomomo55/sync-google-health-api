@@ -17,11 +17,13 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "import:takeout": "tsx scripts/import-takeout.ts",
-    "sync:notes": "tsx scripts/sync-notes.ts"
+    "sync:notes": "tsx scripts/sync-notes.ts",
+    "restore:backup": "tsx scripts/restore-backup.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",
     "@modelcontextprotocol/sdk": "^1.32.0",
+    "age-encryption": "0.3.1",
     "hono": "^4.13.12",
     "zod": "^4.6.5"
   },
