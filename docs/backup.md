@@ -90,7 +90,7 @@ pnpm restore:backup -- --file health-2026-10-06.json.gz.age --identity health-ba
 
 ### 2. 空の DB に書き戻す
 
-CouchDB の接続情報を環境変数に入れて実行する。`--db` には、まだ存在しないか空の DB の名前を指定する（データがあれば書き込まずに止まる）。
+CouchDB の接続情報を環境変数に入れて実行する。`--db` には、まだ存在しないか空の DB の名前を指定する（文書が 1 件でもあれば、別用途の DB を指定した場合も含めて、書き込まずに止まる）。
 
 ```sh
 COUCHDB_URL=https://... COUCHDB_USER=... COUCHDB_PASSWORD=... \

@@ -88,6 +88,15 @@ export class CouchStore implements HealthStore {
     }
   }
 
+  // DB にある文書の数（day: 以外や _design 文書も含む）
+  async countDocs(): Promise<number> {
+    const json = (await this.request("GET", "")) as { doc_count?: unknown } | null;
+    if (typeof json?.doc_count !== "number") {
+      throw new Error("CouchDB GET / の応答に doc_count がありません");
+    }
+    return json.doc_count;
+  }
+
   private static toDay(doc: CouchDoc): DailySummary {
     const { _id, _rev, type, updated_at, ...day } = doc;
     void [_id, _rev, type, updated_at];

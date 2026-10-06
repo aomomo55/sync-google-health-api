@@ -67,11 +67,14 @@ function backup() {
   console.log(`保存しました: ${days} 日分${isSunday ? "（週次も保存）" : ""}`);
 }
 
-// 同じ名前のファイルがあれば（同じ日に手動で実行したときなど）置き換える
+// 同じ名前のファイルがあれば（同じ日に手動で実行したときなど）置き換える。
+// 作成に失敗してもその日のバックアップが無くならないよう、新しいファイルを作ってから古いものをゴミ箱に移す
 function saveReplacing(folder, blob, name) {
+  const old = [];
   const existing = folder.getFilesByName(name);
-  while (existing.hasNext()) existing.next().setTrashed(true);
+  while (existing.hasNext()) old.push(existing.next());
   folder.createFile(blob.copyBlob().setName(name).setContentType("application/octet-stream"));
+  old.forEach((f) => f.setTrashed(true));
 }
 
 // 名前（日付入り）の新しい順に keep 個を残し、残りをゴミ箱に移す

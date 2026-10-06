@@ -82,9 +82,10 @@ const store = new CouchStore({
   db,
 });
 await store.ensureReady();
-// 既存のデータとマージしてしまわないよう、空の DB にだけ書く
-if ((await store.findAdjacentDate("0000-01-01", "next")) !== null) {
-  fail(`DB "${db}" には既にデータがあります。空の DB を指定してください`);
+// 既存のデータとマージしたり、別用途の DB に書き込んだりしないよう、文書が 1 件も無い DB にだけ書く
+const existingDocs = await store.countDocs();
+if (existingDocs > 0) {
+  fail(`DB "${db}" には既に ${existingDocs} 件の文書があります。空の DB を指定してください`);
 }
 
 const batches = Array.from({ length: Math.ceil(backup.days.length / BATCH) }, (_, n) =>
