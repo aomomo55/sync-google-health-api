@@ -6,7 +6,14 @@ import { isRealDate } from "../src/domain/dates.js";
 import { MAX_INGEST_DAYS } from "../src/routes/health.js";
 import { buildDays } from "../src/takeout/index.js";
 import { loadTakeout } from "../src/takeout/load.js";
-import { checkApiToken, checkApiUrl, describeError, scrubToken } from "./cli-guard.js";
+import {
+  checkApiToken,
+  checkApiUrl,
+  describeError,
+  isTimeoutError,
+  REQUEST_TIMEOUT_MS,
+  scrubToken,
+} from "./cli-guard.js";
 import { addNotes, formatNotes, type IngestNotes, parseIngestNotes } from "./ingest-report.js";
 
 const DEFAULT_OUT = "out/takeout-days.json";
@@ -167,9 +174,20 @@ if (values.post) {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify({ days: batch }),
-    }).catch((e: unknown) => fail(`POST 失敗 (${range}): ${describeError(e, token)}`));
+      // 応答本文の読み込みも含めて待つ上限
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    }).catch((e: unknown) => {
+      const hint = isTimeoutError(e)
+        ? "（--batch を小さくし、--from で続きから送り直してください）"
+        : "";
+      return fail(`POST 失敗 (${range}): ${describeError(e, token)}${hint}`);
+    });
     if (!res.ok) {
-      const body = (await res.text()).slice(0, MAX_ERROR_BODY_CHARS);
+      const body = (
+        await res
+          .text()
+          .catch((e: unknown) => fail(`POST 失敗 (${range}): ${describeError(e, token)}`))
+      ).slice(0, MAX_ERROR_BODY_CHARS);
       fail(`POST 失敗 (${range}): ${res.status} ${scrubToken(body, token)}`);
     }
     const json = (await res.json().catch(() => null)) as {

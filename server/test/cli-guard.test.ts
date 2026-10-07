@@ -1,5 +1,14 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
-import { checkApiToken, checkApiUrl, describeError, scrubToken } from "../scripts/cli-guard.js";
+import {
+  checkApiToken,
+  checkApiUrl,
+  describeError,
+  isTimeoutError,
+  REQUEST_TIMEOUT_MS,
+  scrubToken,
+} from "../scripts/cli-guard.js";
 
 const VALID = "abcdefghijklmnopqrstuvwxyz012345";
 
@@ -86,5 +95,40 @@ describe("describeError", () => {
 
   it("Error 以外も文字列にしてトークンを伏せる", () => {
     expect(describeError(`x ${VALID}`, VALID)).toBe("x ***");
+  });
+});
+
+describe("isTimeoutError", () => {
+  // 応答を返さないサーバーへ、短いタイムアウトで fetch したときの実際の例外で確かめる
+  const SHORT_TIMEOUT_MS = 50;
+
+  async function fetchHangingServer(): Promise<unknown> {
+    const server = createServer(() => {});
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const { port } = server.address() as AddressInfo;
+    try {
+      await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(SHORT_TIMEOUT_MS) });
+      return undefined;
+    } catch (e) {
+      return e;
+    } finally {
+      server.closeAllConnections();
+      server.close();
+    }
+  }
+
+  it("fetch のタイムアウトを判定し、秒数の分かるメッセージにする", async () => {
+    const e = await fetchHangingServer();
+    expect(isTimeoutError(e)).toBe(true);
+    expect(describeError(e, VALID)).toBe(
+      `サーバーが ${REQUEST_TIMEOUT_MS / 1000} 秒以内に応答しませんでした`,
+    );
+  });
+
+  it("タイムアウト以外は false", () => {
+    expect(isTimeoutError(new Error("fetch failed"))).toBe(false);
+    expect(isTimeoutError(new DOMException("aborted", "AbortError"))).toBe(false);
+    expect(isTimeoutError(null)).toBe(false);
+    expect(isTimeoutError("TimeoutError")).toBe(false);
   });
 });
