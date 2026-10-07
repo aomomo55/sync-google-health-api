@@ -651,3 +651,75 @@ class SyncMessageTest {
         assertFalse(msg, msg.contains("あ".repeat(41)))
     }
 }
+
+class SyncRangeTest {
+    private val today = LocalDate.of(2026, 10, 6)
+
+    @Test
+    fun earliestSelectableStartIs90DaysBack() {
+        assertEquals(LocalDate.of(2026, 7, 8), earliestSelectableStart(today))
+    }
+
+    @Test
+    fun selectableStartIsBetweenEarliestAndToday() {
+        assertTrue(isSelectableStart(LocalDate.of(2026, 7, 8), today))
+        assertTrue(isSelectableStart(today, today))
+        assertFalse(isSelectableStart(LocalDate.of(2026, 7, 7), today))
+        assertFalse(isSelectableStart(today.plusDays(1), today))
+    }
+
+    @Test
+    fun historyPermissionIsNeededOnlyBeyond30DaysIncludingToday() {
+        // 「過去30日を送る」と同じ範囲までは履歴の権限が要らない
+        assertEquals(today.minusDays(29), earliestReadableWithoutHistory(today))
+        assertFalse(needsHistoryPermission(today.minusDays(29), today))
+        assertTrue(needsHistoryPermission(today.minusDays(30), today))
+    }
+
+    @Test
+    fun readableStartIsClampedWithoutHistoryPermission() {
+        val from = today.minusDays(60)
+        assertEquals(today.minusDays(29), readableStart(from, today, canReadHistory = false))
+        assertEquals(from, readableStart(from, today, canReadHistory = true))
+        // 確実に読める範囲の開始日はそのまま
+        assertEquals(today.minusDays(10), readableStart(today.minusDays(10), today, canReadHistory = false))
+    }
+
+    @Test
+    fun countsDaysInclusively() {
+        assertEquals(1, countDays(today, today))
+        assertEquals(61, countDays(today.minusDays(60), today))
+    }
+
+    @Test
+    fun formatsProgressPerChunk() {
+        val from = LocalDate.of(2026, 8, 1)
+        val to = from.plusDays(59)
+        val (s, e) = chunkRanges(from, to).first()
+        assertEquals("2026-08-01〜2026-08-30 を送信済み（30/60 日）", formatProgress(from, to, s, e))
+        val (s2, e2) = chunkRanges(from, to).last()
+        assertEquals("2026-08-31〜2026-09-29 を送信済み（60/60 日）", formatProgress(from, to, s2, e2))
+    }
+
+    @Test
+    fun chunksOf90DaysMakeThreeRequests() {
+        assertEquals(3, chunkRanges(today.minusDays(89), today).size)
+    }
+
+    @Test
+    fun historyPermissionIsOptional() {
+        val all = setOf("android.permission.health.READ_STEPS", PermissionPolicy.READ_HISTORY)
+        assertEquals(setOf("android.permission.health.READ_STEPS"), PermissionPolicy.required(all, false))
+        assertTrue(PermissionPolicy.canReadHistory(all))
+        assertFalse(PermissionPolicy.canReadHistory(all - PermissionPolicy.READ_HISTORY))
+    }
+
+    @Test
+    fun unreadableItemsAreOmittedNotNull() {
+        // 読めなかった項目は RawDay の既定値 (null) のままで、送信 JSON にはキーごと出ない
+        val day = DayAggregator.build(LocalDate.of(2026, 8, 1), TOKYO, RawDay(steps = 100), null)
+        val json = encode(day)
+        assertEquals(setOf("date", "activity", "source"), json.keys)
+        assertEquals(setOf("steps"), json["activity"]!!.jsonObject.keys)
+    }
+}

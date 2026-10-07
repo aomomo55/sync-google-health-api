@@ -17,10 +17,16 @@ data class SyncOutcome(
 
 object SyncRunner {
     // ボタンとワーカーの共通の送信処理。結果は SettingsStore にも保存する。
-    suspend fun run(context: Context, days: Int, requireBackground: Boolean = false): SyncOutcome {
+    suspend fun run(
+        context: Context,
+        days: Int,
+        requireBackground: Boolean = false,
+        startDate: LocalDate? = null,
+        onProgress: (String) -> Unit = {},
+    ): SyncOutcome {
         val store = SettingsStore(context)
         val outcome = try {
-            execute(context, store, days, requireBackground)
+            execute(context, store, days, requireBackground, startDate, onProgress)
         } catch (e: SecurityException) {
             SyncOutcome(SyncStatus.FAILED, "ヘルスコネクトの権限が不足しています。「権限を付与」を押してください")
         } catch (e: Exception) {
@@ -31,7 +37,14 @@ object SyncRunner {
         return outcome
     }
 
-    private suspend fun execute(context: Context, store: SettingsStore, days: Int, requireBackground: Boolean): SyncOutcome {
+    private suspend fun execute(
+        context: Context,
+        store: SettingsStore,
+        days: Int,
+        requireBackground: Boolean,
+        startDate: LocalDate?,
+        onProgress: (String) -> Unit,
+    ): SyncOutcome {
         val token = when (val t = store.readToken()) {
             is StoredToken.Available -> t.token
             StoredToken.None -> return SyncOutcome(SyncStatus.FAILED, "API トークンが設定されていません。設定画面で入力し直してください")
@@ -54,13 +67,15 @@ object SyncRunner {
         val includeNutrition = PermissionPolicy.canReadNutrition(granted)
         val zone = ZoneId.systemDefault()
         val to = LocalDate.now(zone)
-        val from = to.minusDays(days - 1L)
+        // 開始日の指定があればそれを使い、無ければ直近 days 日
+        val from = startDate ?: to.minusDays(days - 1L)
+        val readFrom = readableStart(from, to, PermissionPolicy.canReadHistory(granted))
+        val skippedDays = countDays(from, readFrom) - 1
 
         // チャンクごとの結果を積み上げ、途中で return するループなので var
         var tally = SyncTally()
-        for ((s, e) in chunkRanges(from, to)) {
-            val summaries = reader.readDays(s, e, includeNutrition)
-            for (chunk in chunkDays(summaries)) {
+        for ((s, e) in chunkRanges(readFrom, to)) {
+            for (chunk in chunkDays(reader.readDays(s, e, includeNutrition))) {
                 when (val r = IngestClient.post(store.serverUrl, token, chunk)) {
                     // 範囲外で拒否された日があっても他の日は保存されているので、続きのチャンクも送る
                     is IngestResult.Success -> tally = tally.add(chunk.size, r.ok)
@@ -69,9 +84,12 @@ object SyncRunner {
                     is IngestResult.Retryable -> return SyncOutcome(SyncStatus.RETRYABLE, r.message)
                 }
             }
+            onProgress(formatProgress(readFrom, to, s, e))
         }
 
-        return SyncOutcome(SyncStatus.OK, buildSyncMessage(tally, includeNutrition))
+        val message = buildSyncMessage(tally, includeNutrition)
+        val note = if (skippedDays > 0) "（履歴の権限が無いため、$readFrom より前の $skippedDays 日分は読まずに送っていません）" else ""
+        return SyncOutcome(SyncStatus.OK, message + note)
     }
 
     fun formatTime(millis: Long): String =
