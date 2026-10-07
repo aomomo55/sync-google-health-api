@@ -130,6 +130,7 @@ done
 
 - [ ] CI が成功していても、CI の外で壊れないか（本番の実行環境、Node のメジャー更新と corepack の同梱の有無など）
 - [ ] lockfile で、本体以外の依存がどれだけ変わっているか
+- [ ] server の依存を変える PR なら、Audit のワークフロー（`.github/workflows/audit.yml`、`pnpm audit --prod --audit-level=high`）が成功しているか
 - [ ] リリースノートの破壊的変更や挙動の変更が、このプロジェクトで使っている API に当たらないか
 - [ ] CI でスキップされる結合テスト（obsidian-sync-mcp）に関わる変更なら、デプロイ後に手で確かめる方法が決まっているか
 - [ ] アクションはコミット SHA、Docker イメージは digest で固定されているか。corepack の版が `server/Dockerfile` と `.github/workflows/ci.yml` でそろっているか
