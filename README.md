@@ -55,13 +55,14 @@ flowchart LR
 server/          サーバー、Takeout 取り込み・ノート同期・バックアップ復元のスクリプト（→ server/README.md）
 android/         Health Connect のデータを送る Android アプリ（→ android/README.md）
 gas/             バックアップを Google Drive に保存する Google Apps Script（GAS のエディタにコピーして使う）
+docs/deploy.md   サーバーのデプロイと秘密情報の登録の手順
 docs/backup.md   バックアップの設定と復元の手順
 docs/adr/        設計判断の記録（Architecture Decision Records）
-AGENTS.md        コードの構成（層と依存の向き）と、変更するときの約束
+AGENTS.md        エージェント向けの指示（全体の約束。ディレクトリごとの指示は server/ などの AGENTS.md）
 REVIEW.md        PR をレビューするときの観点
 ```
 
-サーバーのコード（`server/src/`）は層に分けていて、層の一覧と依存の向き、複数の層から使う汎用の部品の置き場所は [AGENTS.md](AGENTS.md#構成) にあります。
+サーバーのコード（`server/src/`）は層に分けていて、層の一覧と依存の向きは [server/AGENTS.md](server/AGENTS.md#構成)、複数の層から使う汎用の部品の置き場所は [AGENTS.md](AGENTS.md#変更するときの約束) にあります。
 
 ## 設計で考えたこと
 
@@ -78,9 +79,7 @@ REVIEW.md        PR をレビューするときの観点
 ## 使い方の流れ
 
 1. CouchDB と obsidian-sync-mcp を用意する（Self-hosted LiveSync を使っている前提）
-2. `server/` を fly.io にデプロイし、秘密情報を登録する（[server/README.md](server/README.md)）
-   - `fly secrets import -a <アプリ名>` を実行し、`KEY=` と打ってから値だけを貼る形で 1 行ずつ入力して、最後に Enter で空の行に移ってから Ctrl-D で終える（終わらなければもう一度 Ctrl-D）。`<アプリ名>` は `<` `>` も含めて自分の値に置き換える。値がシェルの履歴に残らない。リポジトリの外に置いた一時ファイル（例: `~/tmp/secrets.env`）から `fly secrets import -a <アプリ名> < ~/tmp/secrets.env` で読み込み、登録後にファイルを消してもよい（ファイル名の前の `<` は入力の切り替えなので、そのまま打つ）
-   - `fly secrets set KEY=value -a <アプリ名>` でも登録できるが、値がシェルの履歴に残る
+2. `server/` を fly.io にデプロイし、秘密情報を登録する（[docs/deploy.md](docs/deploy.md)）。値はシェルの履歴に残らないよう、`fly secrets import` に標準入力から渡す
 3. 過去データがあれば Google Takeout から取り込み、`sync:notes` でノートとダッシュボードを書き込む
 4. `android/` のアプリをビルドして端末に入れ、サーバーの URL と API トークンを設定する（[android/README.md](android/README.md)）
 5. 必要ならバックアップを設定する。age の鍵の組を作り、`BACKUP_TOKEN` と `BACKUP_AGE_RECIPIENT` をサーバーに登録して、`gas/` のスクリプトを GAS に置く（[docs/backup.md](docs/backup.md)）

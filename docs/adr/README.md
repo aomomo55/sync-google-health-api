@@ -21,6 +21,7 @@
 | [0015](0015-backup-health-db-to-google-drive.md) | health DB をサーバーが暗号化して返し、GAS が Google Drive に保存する | 採用 |
 | [0016](0016-shared-for-cross-layer-utilities.md) | 複数の層から使う汎用の部品は shared に置く | 採用 |
 | [0017](0017-design-principles.md) | 設計の原則（DRY・KISS・YAGNI など）の線の引き方を決める | 採用 |
+| [0018](0018-per-directory-agents-md.md) | エージェント向けの指示をディレクトリごとの AGENTS.md に分ける | 採用 |
 
 ## 書き方
 
