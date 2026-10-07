@@ -22,6 +22,7 @@
 | [0016](0016-shared-for-cross-layer-utilities.md) | 複数の層から使う汎用の部品は shared に置く | 採用 |
 | [0017](0017-design-principles.md) | 設計の原則（DRY・KISS・YAGNI など）の線の引き方を決める | 採用 |
 | [0018](0018-per-directory-agents-md.md) | エージェント向けの指示をディレクトリごとの AGENTS.md に分ける | 採用 |
+| [0019](0019-restrict-couchdb-url-to-https.md) | COUCHDB_URL を https に限り、http は localhost と fly.io のプライベートネットワークだけ許す | 採用 |
 | [0020](0020-no-rate-limit-on-auth.md) | 認証の試行回数を制限しない | 採用 |
 
 ## 書き方

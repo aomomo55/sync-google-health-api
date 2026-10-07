@@ -48,7 +48,7 @@ age-keygen -o health-backup-key.txt
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-fly.io の secrets に登録する。シェルの履歴に残らないよう、標準入力から渡す。
+fly.io の secrets に登録する。シェルの履歴に残らないよう、標準入力から渡す（秘密情報の登録の仕方全般は [deploy.md](deploy.md#秘密情報を登録する) にある）。
 
 ```sh
 fly secrets import -a <アプリ名>
@@ -141,7 +141,7 @@ pnpm restore:backup --file "$HOME\Downloads\health-2026-10-06.json.gz.age" --ide
 
 ### 2. 空の DB に書き戻す
 
-CouchDB の接続情報を環境変数に入れて実行する。`--db` には、まだ存在しないか空の DB の名前を指定する（文書が 1 件でもあれば、別用途の DB を指定した場合も含めて、書き込まずに止まる）。パスワードはシェルの履歴に残らないよう、画面に出さずに読み込む。
+CouchDB の接続情報を環境変数に入れて実行する。`COUCHDB_URL` はサーバーと同じ規則で検査し、`https:` 以外（`localhost` と fly.io のプライベートネットワークの `.internal` / `.flycast` を除く）や、ユーザー名・パスワードを含む URL では止まる。`--db` には、まだ存在しないか空の DB の名前を指定する（文書が 1 件でもあれば、別用途の DB を指定した場合も含めて、書き込まずに止まる）。パスワードはシェルの履歴に残らないよう、画面に出さずに読み込む。
 
 ```sh
 cd <リポジトリ>/server

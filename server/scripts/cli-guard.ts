@@ -1,7 +1,12 @@
 // CLI（import:takeout / sync:notes）で共通の入力検査と、エラー表示からのトークン除去
 
 // トークンの規則とローカルのホストは、サーバーの設定の検査と同じものを使う
-import { BEARER_TOKEN_PATTERN, LOCAL_HOSTS, MIN_API_TOKEN_LENGTH } from "../src/config.js";
+import {
+  BEARER_TOKEN_PATTERN,
+  LOCAL_HOSTS,
+  LOCAL_HOSTS_LABEL,
+  MIN_API_TOKEN_LENGTH,
+} from "../src/config.js";
 
 /** 問題があればエラーメッセージを返す。メッセージにトークンの値は含めない */
 export function checkApiToken(token: string | undefined): string | undefined {
@@ -33,7 +38,7 @@ export function checkApiUrl(raw: string | undefined): string | undefined {
   }
   if (url.protocol === "https:") return undefined;
   if (url.protocol === "http:" && LOCAL_HOSTS.has(url.hostname)) return undefined;
-  return "--api-url は https:// で指定してください（http:// は localhost / 127.0.0.1 / [::1] のみ可）";
+  return `--api-url は https:// で指定してください（http:// は ${LOCAL_HOSTS_LABEL} のみ可）`;
 }
 
 /** 表示する文字列に含まれるトークンを *** に置き換える */
