@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { decryptBackup } from "../src/backup/backup.js";
+import { type CouchdbConnection, loadCouchdbConnection } from "../src/config.js";
 import { CouchStore } from "../src/store/couch-store.js";
 
 // バックアップ（health-YYYY-MM-DD.json.gz.age）を復号し、空の CouchDB の DB に書き戻す。
@@ -71,10 +72,18 @@ const db = values.db;
 if (!db || !/^[a-z][a-z0-9_$()+/-]*$/.test(db)) {
   fail("--db に書き戻し先の DB 名（英小文字で始まる。例: health_restore）を指定してください");
 }
-const { COUCHDB_URL, COUCHDB_USER, COUCHDB_PASSWORD } = process.env;
-if (!COUCHDB_URL || !COUCHDB_USER || !COUCHDB_PASSWORD) {
-  fail("環境変数 COUCHDB_URL / COUCHDB_USER / COUCHDB_PASSWORD を設定してください");
+// サーバーと同じ規則で検査する（http: で資格情報を外へ流さない、URL に資格情報を含めない）。
+// メッセージには値を含めない
+function loadConnectionOrFail(): CouchdbConnection {
+  try {
+    return loadCouchdbConnection();
+  } catch (e) {
+    return fail(
+      `${e instanceof Error ? e.message : String(e)}\n環境変数 COUCHDB_URL / COUCHDB_USER / COUCHDB_PASSWORD を確認してください`,
+    );
+  }
 }
+const { COUCHDB_URL, COUCHDB_USER, COUCHDB_PASSWORD } = loadConnectionOrFail();
 
 const store = new CouchStore({
   baseUrl: COUCHDB_URL,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
-import { loadConfig } from "../src/config.js";
+import { loadConfig, loadCouchdbConnection } from "../src/config.js";
 import { MemoryStore } from "../src/store/memory-store.js";
 
 const BASE = {
@@ -21,11 +21,36 @@ function errorOf(env: Record<string, string>): string {
 }
 
 describe("COUCHDB_URL", () => {
-  it("http / https のベース URL は受け付ける", () => {
-    expect(loadConfig(BASE).COUCHDB_URL).toBe("http://localhost:5984");
+  it("https のベース URL は受け付ける", () => {
     expect(loadConfig({ ...BASE, COUCHDB_URL: "https://couch.example.com" }).COUCHDB_URL).toBe(
       "https://couch.example.com",
     );
+  });
+
+  it("http は localhost / 127.0.0.1 / [::1] だけ受け付ける", () => {
+    for (const url of ["http://localhost:5984", "http://127.0.0.1:5984", "http://[::1]:5984"]) {
+      expect(loadConfig({ ...BASE, COUCHDB_URL: url }).COUCHDB_URL).toBe(url);
+    }
+  });
+
+  it("http は fly.io のプライベートネットワーク（.internal / .flycast）のホストも受け付ける", () => {
+    for (const url of ["http://couchdb.internal:5984", "http://app.flycast"]) {
+      expect(loadConfig({ ...BASE, COUCHDB_URL: url }).COUCHDB_URL).toBe(url);
+    }
+  });
+
+  it("その他のホストへの http は拒否し、値をメッセージに出さない", () => {
+    for (const url of [
+      "http://couch.example.com:5984",
+      "http://192.168.0.10:5984",
+      "http://localhost.example.com:5984",
+      "http://couch.internal.example.com",
+      "http://internal",
+    ]) {
+      const msg = errorOf({ ...BASE, COUCHDB_URL: url });
+      expect(msg).toMatch(/COUCHDB_URL: https:/);
+      expect(msg).not.toContain(url);
+    }
   });
 
   it("ユーザー名・パスワード入りの URL は拒否し、値をメッセージに出さない", () => {
@@ -45,7 +70,7 @@ describe("COUCHDB_URL", () => {
   it("http / https 以外のスキームは拒否する", () => {
     for (const url of ["file:///etc/passwd", "ftp://couch.example.com", "javascript:alert(1)"]) {
       const msg = errorOf({ ...BASE, COUCHDB_URL: url });
-      expect(msg).toMatch(/COUCHDB_URL: http: または https:/);
+      expect(msg).toMatch(/COUCHDB_URL: https:/);
       expect(msg).not.toContain(url);
     }
   });
@@ -54,6 +79,47 @@ describe("COUCHDB_URL", () => {
     const msg = errorOf({ ...BASE, COUCHDB_URL: "not a url secret-xyz" });
     expect(msg).toMatch(/COUCHDB_URL/);
     expect(msg).not.toContain("secret-xyz");
+  });
+});
+
+describe("loadCouchdbConnection", () => {
+  it("CouchDB の接続情報だけを取り出し、他の環境変数は求めない", () => {
+    const env = {
+      COUCHDB_URL: "https://couch.example.com",
+      COUCHDB_USER: "u",
+      COUCHDB_PASSWORD: "p",
+    };
+    expect(loadCouchdbConnection(env)).toEqual(env);
+  });
+
+  it("サーバーの設定と同じ規則で拒否し、値をメッセージに出さない", () => {
+    for (const url of [
+      "http://couch.example.com:5984",
+      "https://admin:secret-pass-123@couch.example.com",
+    ]) {
+      let msg = "";
+      try {
+        loadCouchdbConnection({ COUCHDB_URL: url, COUCHDB_USER: "u", COUCHDB_PASSWORD: "p" });
+      } catch (e) {
+        msg = (e as Error).message;
+      }
+      expect(msg).toMatch(/COUCHDB_URL/);
+      expect(msg).not.toContain("secret-pass-123");
+      expect(msg).not.toContain("couch.example.com");
+    }
+  });
+
+  it("未設定や制御文字を含む資格情報は拒否する", () => {
+    expect(() => loadCouchdbConnection({ COUCHDB_URL: "https://couch.example.com" })).toThrow(
+      /COUCHDB_USER[\s\S]*COUCHDB_PASSWORD/,
+    );
+    expect(() =>
+      loadCouchdbConnection({
+        COUCHDB_URL: "https://couch.example.com",
+        COUCHDB_USER: "u",
+        COUCHDB_PASSWORD: "p\x1b[200~",
+      }),
+    ).toThrow(/COUCHDB_PASSWORD/);
   });
 });
 
