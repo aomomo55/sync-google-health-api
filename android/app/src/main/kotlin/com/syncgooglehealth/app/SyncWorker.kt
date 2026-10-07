@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit
 
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
-        val outcome = SyncRunner.run(applicationContext, days = 7, requireBackground = true)
+        val outcome = SyncRunner.run(applicationContext, days = RECENT_SYNC_DAYS, requireBackground = true)
         return when (outcome.status) {
             SyncStatus.OK -> Result.success()
             SyncStatus.RETRYABLE -> Result.retry()
@@ -24,11 +24,13 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
     companion object {
         private const val UNIQUE_NAME = "periodic_sync"
+        private const val INTERVAL_HOURS = 6L
+        private const val BACKOFF_MINUTES = 15L
 
         fun schedule(context: Context) {
-            val request = PeriodicWorkRequestBuilder<SyncWorker>(6, TimeUnit.HOURS)
+            val request = PeriodicWorkRequestBuilder<SyncWorker>(INTERVAL_HOURS, TimeUnit.HOURS)
                 .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_MINUTES, TimeUnit.MINUTES)
                 .build()
             WorkManager.getInstance(context)
                 .enqueueUniquePeriodicWork(UNIQUE_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)

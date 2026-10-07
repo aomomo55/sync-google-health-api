@@ -29,6 +29,8 @@ data class RawDay(
 fun round(v: Double, decimals: Int): Double =
     BigDecimal(v).setScale(decimals, RoundingMode.HALF_UP).toDouble()
 
+private const val MILLIS_PER_MINUTE = 60_000.0
+
 object DayAggregator {
     fun build(date: LocalDate, zone: ZoneId, raw: RawDay, sleep: SleepSummary?): DailySummary {
         val dayStart = date.atStartOfDay(zone).toInstant()
@@ -86,6 +88,6 @@ object DayAggregator {
             }
         }
         val totalMs = merged.sumOf { (s, e) -> e.toEpochMilli() - s.toEpochMilli() }
-        return Math.round(totalMs / 60_000.0)
+        return Math.round(totalMs / MILLIS_PER_MINUTE)
     }
 }

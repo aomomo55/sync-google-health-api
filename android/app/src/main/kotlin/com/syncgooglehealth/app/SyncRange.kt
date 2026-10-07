@@ -3,6 +3,12 @@ package com.syncgooglehealth.app
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
+// 定期送信と「今すぐ送信」で送る、今日を含む直近の日数
+const val RECENT_SYNC_DAYS = 7
+
+// 「過去N日を送る」で送る、今日を含む日数
+const val BACKFILL_SYNC_DAYS = 30
+
 // 開始日として選べる、今日からさかのぼる最大の日数
 const val MAX_START_DAYS_BACK = 90
 

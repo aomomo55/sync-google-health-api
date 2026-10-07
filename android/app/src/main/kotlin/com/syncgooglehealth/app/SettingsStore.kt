@@ -52,9 +52,6 @@ fun readStoredTokenState(stored: String?, decrypt: (String) -> String, discard: 
     return StoredToken.Available(token)
 }
 
-fun readStoredToken(stored: String?, decrypt: (String) -> String, discard: (String) -> Unit): String? =
-    (readStoredTokenState(stored, decrypt, discard) as? StoredToken.Available)?.token
-
 // 現在の値が expected のままのときだけ消す。消したら true
 fun removeIfUnchanged(current: () -> String?, expected: String, remove: () -> Unit): Boolean {
     if (current() != expected) return false
@@ -73,8 +70,6 @@ class SettingsStore(context: Context) {
     // 保存済みとして扱えるときに true。確実に使えないデータは読み出し時に消えるので false になる。
     // 一時的に復号できないだけのときは、再入力を促さないよう「保存済み」とみなす
     fun hasToken(): Boolean = readToken() != StoredToken.None
-
-    fun loadToken(): String? = (readToken() as? StoredToken.Available)?.token
 
     fun readToken(): StoredToken = readStoredTokenState(
         stored = prefs.getString(KEY_TOKEN, null),

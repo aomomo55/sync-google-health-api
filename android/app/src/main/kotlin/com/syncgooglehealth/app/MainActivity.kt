@@ -241,15 +241,15 @@ fun MainScreen() {
             modifier = Modifier.fillMaxWidth(),
         ) { Text("権限を付与") }
         Button(
-            onClick = { if (save()) AppState.start(context, 7) },
+            onClick = { if (save()) AppState.start(context, RECENT_SYNC_DAYS) },
             enabled = sdkOk && !running,
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("今すぐ送信（直近7日）") }
+        ) { Text("今すぐ送信（直近${RECENT_SYNC_DAYS}日）") }
         Button(
-            onClick = { if (save()) AppState.start(context, 30) },
+            onClick = { if (save()) AppState.start(context, BACKFILL_SYNC_DAYS) },
             enabled = sdkOk && !running,
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("過去30日を送る") }
+        ) { Text("過去${BACKFILL_SYNC_DAYS}日を送る") }
 
         val today = LocalDate.now()
         OutlinedButton(

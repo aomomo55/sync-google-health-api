@@ -91,12 +91,17 @@ fun classifyIngestResponse(code: Int, body: String): IngestResult = when {
 }
 
 object IngestClient {
+    private const val CONNECT_TIMEOUT_SECONDS = 30L
+    // サーバーは受信のあとノートも書き込むので、応答を待つ時間は長めにする
+    private const val READ_TIMEOUT_SECONDS = 120L
+    private const val WRITE_TIMEOUT_SECONDS = 60L
+
     private val client = OkHttpClient.Builder()
         .followRedirects(false)
         .followSslRedirects(false)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(120, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()
 
     private val JSON_TYPE = "application/json; charset=utf-8".toMediaType()
