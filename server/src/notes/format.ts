@@ -1,14 +1,10 @@
-const JST_OFFSET_MS = 9 * 3600_000;
+import { JST_OFFSET_MS } from "../domain/dates.js";
+
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 // ノートを直接編集する人や AI 向けの注意書き。Obsidian のコメントなので閲覧画面には出ない
 export const GENERATED_NOTICE =
   "%% このノートは sync-google-health-api のサーバーが自動で作ります。直接編集しても次の同期で元に戻ります。変えたいときは、リポジトリの server/src/notes/ を変更してください %%\n";
-
-export function round(x: number, digits: number): number {
-  const f = 10 ** digits;
-  return Math.round(x * f) / f;
-}
 
 export function numOrNull(x: number | null | undefined): number | null {
   return typeof x === "number" && Number.isFinite(x) ? x : null;

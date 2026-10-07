@@ -1,4 +1,5 @@
 import type { DailySummary } from "../domain/daily.js";
+import { JST_OFFSET_MS, MS_PER_MINUTE } from "../domain/dates.js";
 
 export type Segment = {
   source: string;
@@ -30,9 +31,16 @@ export type ChosenSleep = {
   hasStages: boolean;
 };
 
-export const SESSION_GAP_MS = 60 * 60_000;
-// 間隔がこれ以内のセッションは一晩の睡眠として結合する（Android の SleepAssigner.MERGE_GAP と同じ）
-export const NIGHT_MERGE_GAP_MS = 2 * 60 * 60_000;
+// Google Fit の睡眠ステージ（segment の intVal）。2 は段階の区別の無い睡眠。
+// Health Connect の SleepSessionRecord.STAGE_TYPE_* と同じ値で、Android の SleepAssigner も同じ値を使う
+export const SLEEP_STAGE = { awake: 1, outOfBed: 3, light: 4, deep: 5, rem: 6 } as const;
+
+// Takeout の segment を 1 つのセッションにまとめる間隔。Takeout だけの規則
+// （Android は Health Connect からセッションの形で受け取るので、この処理が無い）
+export const SESSION_GAP_MS = 60 * MS_PER_MINUTE;
+// 間隔がこれ以内のセッションは一晩の睡眠として結合する（Android の SleepAssigner.MERGE_GAP と同じ規則。
+// 同じ入力のテストを両方に置いている）
+export const NIGHT_MERGE_GAP_MS = 2 * 60 * MS_PER_MINUTE;
 // Takeout の時刻として受け付ける範囲。範囲外は壊れた記録として捨てる（toISOString の RangeError も防ぐ）
 export const MIN_TIME_MS = Date.UTC(2000, 0, 1);
 export const MAX_TIME_MS = Date.UTC(2100, 0, 1);
@@ -43,8 +51,6 @@ export function isSaneTime(ms: number): boolean {
 
 // 解析中に捨てた記録の件数（取り込み結果に表示する）
 export type ParseStats = { invalidTime: number };
-const JST_OFFSET_MS = 9 * 3_600_000;
-const MIN = 60_000;
 
 // raw_com.google.sleep.segment_<source>.json → <source>
 export function sourceFromFilename(name: string): string | undefined {
@@ -80,13 +86,13 @@ export function parseSleepJson(json: unknown, source: string, stats?: ParseStats
   return out;
 }
 
-// 1 ソース分の segment を、gap <= 60 分で連続するものを 1 セッションにまとめる
-export function sessionize(segments: Segment[], gapMs = SESSION_GAP_MS): Session[] {
+// 1 ソース分の segment を、間隔が SESSION_GAP_MS 以内で連続するものを 1 セッションにまとめる
+export function sessionize(segments: Segment[]): Session[] {
   const sorted = [...segments].sort((a, b) => a.start - b.start || a.end - b.end);
   const sessions: Session[] = [];
   for (const seg of sorted) {
     const cur = sessions.at(-1);
-    if (cur && seg.start - cur.end <= gapMs) {
+    if (cur && seg.start - cur.end <= SESSION_GAP_MS) {
       cur.segments.push(seg);
       cur.end = Math.max(cur.end, seg.end);
     } else {
@@ -101,13 +107,13 @@ export function sessionize(segments: Segment[], gapMs = SESSION_GAP_MS): Session
   return sessions;
 }
 
-// 開始順のセッションを、前のまとまりの終了から gapMs 以内に始まるものを同じまとまりにする
-export function mergeNights(sessions: Session[], gapMs = NIGHT_MERGE_GAP_MS): Night[] {
+// 開始順のセッションを、前のまとまりの終了から NIGHT_MERGE_GAP_MS 以内に始まるものを同じまとまりにする
+export function mergeNights(sessions: Session[]): Night[] {
   const sorted = [...sessions].sort((a, b) => a.start - b.start || a.end - b.end);
   const nights: Night[] = [];
   for (const s of sorted) {
     const cur = nights.at(-1);
-    if (cur && s.start - cur.end <= gapMs) {
+    if (cur && s.start - cur.end <= NIGHT_MERGE_GAP_MS) {
       cur.sessions.push(s);
       cur.end = Math.max(cur.end, s.end);
     } else {
@@ -117,7 +123,14 @@ export function mergeNights(sessions: Session[], gapMs = NIGHT_MERGE_GAP_MS): Ni
   return nights;
 }
 
-const isAwake = (stage: number) => stage === 1 || stage === 3;
+const isAwake = (stage: number) => stage === SLEEP_STAGE.awake || stage === SLEEP_STAGE.outOfBed;
+
+// 浅い・深い・REM のどれか（ステージの区別がある記録）
+const isStagedSleep = (stage: number) =>
+  stage === SLEEP_STAGE.light || stage === SLEEP_STAGE.deep || stage === SLEEP_STAGE.rem;
+
+const nightHasStages = (n: Night) =>
+  n.sessions.some((s) => s.segments.some((g) => isStagedSleep(g.stage)));
 
 function stageMs(s: Session, pred: (stage: number) => boolean): number {
   return s.segments.filter((g) => pred(g.stage)).reduce((t, g) => t + g.end - g.start, 0);
@@ -148,24 +161,25 @@ export function summarizeNight(n: Night): {
 } {
   const inBed = n.end - n.start;
   const awake = nightStageMs(n, isAwake) + gapMs(n);
-  const hasStages = n.sessions.some((s) => s.segments.some((g) => g.stage >= 4 && g.stage <= 6));
+  const hasStages = nightHasStages(n);
   const sleep: SleepFields = {
     start: jstIso(n.start),
     end: jstIso(n.end),
-    in_bed_minutes: Math.round(inBed / MIN),
-    awake_minutes: Math.round(awake / MIN),
-    asleep_minutes: Math.round(Math.max(0, inBed - awake) / MIN),
+    in_bed_minutes: Math.round(inBed / MS_PER_MINUTE),
+    awake_minutes: Math.round(awake / MS_PER_MINUTE),
+    asleep_minutes: Math.round(Math.max(0, inBed - awake) / MS_PER_MINUTE),
   };
   if (hasStages) {
-    sleep.deep_minutes = Math.round(nightStageMs(n, (x) => x === 5) / MIN);
-    sleep.light_minutes = Math.round(nightStageMs(n, (x) => x === 4) / MIN);
-    sleep.rem_minutes = Math.round(nightStageMs(n, (x) => x === 6) / MIN);
+    const minutesOf = (stage: number) =>
+      Math.round(nightStageMs(n, (x) => x === stage) / MS_PER_MINUTE);
+    sleep.deep_minutes = minutesOf(SLEEP_STAGE.deep);
+    sleep.light_minutes = minutesOf(SLEEP_STAGE.light);
+    sleep.rem_minutes = minutesOf(SLEEP_STAGE.rem);
   }
   return { sleep, hasStages };
 }
 
-const hasStagedSleep = (nights: Night[]) =>
-  nights.some((n) => n.sessions.some((s) => s.segments.some((g) => g.stage >= 4 && g.stage <= 6)));
+const hasStagedSleep = (nights: Night[]) => nights.some(nightHasStages);
 
 const totalMs = (nights: Night[]) =>
   nights.reduce((t, n) => t + n.sessions.reduce((u, s) => u + (s.end - s.start), 0), 0);
@@ -210,7 +224,7 @@ export function buildSleepByDate(segments: Segment[]): Map<string, ChosenSleep> 
     const { sleep, hasStages } = summarizeNight(main);
     const naps = nights.filter((n) => n !== main).flatMap((n) => n.sessions);
     if (naps.length > 0) {
-      sleep.nap_minutes = Math.round(naps.reduce((t, s) => t + asleepMs(s), 0) / MIN);
+      sleep.nap_minutes = Math.round(naps.reduce((t, s) => t + asleepMs(s), 0) / MS_PER_MINUTE);
     }
     result.set(date, { source, sleep, hasStages });
   }

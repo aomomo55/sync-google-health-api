@@ -11,14 +11,21 @@ import {
   SECTIONS,
   type Section,
 } from "../domain/daily.js";
-import { inclusiveDays, inclusiveMonths, isRealMonth } from "../domain/dates.js";
+import { inclusiveDays, inclusiveMonths, isRealMonth, monthKeyRange } from "../domain/dates.js";
 import { summarizeMonths } from "../domain/monthly.js";
+import { issuePath } from "../shared/issue-path.js";
 import type { HealthStore } from "../store/health-store.js";
 import { describeForLog, type NoteSync } from "../sync/note-sync.js";
 
-const MAX_INGEST_DAYS = 400;
-const MAX_SPAN_DAYS = 400;
+// 1 回の POST /ingest で受け付ける日数。CLI（import:takeout）のバッチの上限にも使う
+export const MAX_INGEST_DAYS = 400;
+// /summary と /notes/sync で指定できる期間の日数。CLI（sync:notes）の区切りの上限にも使う
+export const MAX_SPAN_DAYS = 400;
 const MAX_SPAN_MONTHS = 120;
+const MAX_INGEST_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_SYNC_BODY_BYTES = 16 * 1024;
+// エラー文に載せる検証エラーの件数
+const MAX_REPORTED_ISSUES = 10;
 const SYNC_FAILURE_MESSAGE =
   "ノートの同期に失敗しました。データは保存済みです。詳細はサーバーのログを確認してください";
 
@@ -42,8 +49,8 @@ const IngestSchema = z.strictObject({
 
 function summarizeIssues(error: z.ZodError): string {
   return error.issues
-    .slice(0, 10)
-    .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+    .slice(0, MAX_REPORTED_ISSUES)
+    .map((i) => `${issuePath(i)}: ${i.message}`)
     .join("; ");
 }
 
@@ -55,6 +62,13 @@ function parseWith<T>(schema: z.ZodType<T>, value: unknown, label: string): T {
   const r = schema.safeParse(value);
   if (!r.success) badRequest(`${label}: ${summarizeIssues(r.error)}`);
   return r.data;
+}
+
+// 両端を含む日数が 1 以上 MAX_SPAN_DAYS 以下か（start と end は妥当な日付であること）
+function assertDaySpan(start: string, end: string): void {
+  const n = inclusiveDays(start, end);
+  if (n < 1) badRequest("from は to 以前である必要があります");
+  if (n > MAX_SPAN_DAYS) badRequest(`期間は最大 ${MAX_SPAN_DAYS} 日です`);
 }
 
 function parseTypes(raw: string | undefined): Section[] | undefined {
@@ -80,9 +94,7 @@ function parseSummaryRange(
   if (date === undefined && from !== undefined && to !== undefined) {
     const start = parseWith(DateSchema, from, "from");
     const end = parseWith(DateSchema, to, "to");
-    const n = inclusiveDays(start, end);
-    if (n < 1) badRequest("from は to 以前である必要があります");
-    if (n > MAX_SPAN_DAYS) badRequest(`期間は最大 ${MAX_SPAN_DAYS} 日です`);
+    assertDaySpan(start, end);
     return { start, end };
   }
   return badRequest("date、または from と to のどちらか一方を指定してください");
@@ -94,7 +106,7 @@ export function healthRoutes(store: HealthStore, noteSync: NoteSync | null = nul
   r.post(
     "/ingest",
     bodyLimit({
-      maxSize: 2 * 1024 * 1024,
+      maxSize: MAX_INGEST_BODY_BYTES,
       onError: (c) => c.json({ error: "Payload Too Large" }, 413),
     }),
     async (c) => {
@@ -136,16 +148,14 @@ export function healthRoutes(store: HealthStore, noteSync: NoteSync | null = nul
   r.post(
     "/notes/sync",
     bodyLimit({
-      maxSize: 16 * 1024,
+      maxSize: MAX_SYNC_BODY_BYTES,
       onError: (c) => c.json({ error: "Payload Too Large" }, 413),
     }),
     async (c) => {
       if (!noteSync) return c.json({ error: "Vault が設定されていません" }, 503);
       const raw: unknown = await c.req.json().catch(() => badRequest("JSON が不正です"));
       const { from, to, includeStatic } = parseWith(SyncNotesSchema, raw, "リクエストが不正です");
-      const n = inclusiveDays(from, to);
-      if (n < 1) badRequest("from は to 以前である必要があります");
-      if (n > MAX_SPAN_DAYS) badRequest(`期間は最大 ${MAX_SPAN_DAYS} 日です`);
+      assertDaySpan(from, to);
       const report = await noteSync.syncRange(from, to, { includeStatic });
       return c.json({
         written: report.written.length,
@@ -164,8 +174,7 @@ export function healthRoutes(store: HealthStore, noteSync: NoteSync | null = nul
     const n = inclusiveMonths(from, to);
     if (n < 1) badRequest("from は to 以前である必要があります");
     if (n > MAX_SPAN_MONTHS) badRequest(`期間は最大 ${MAX_SPAN_MONTHS} か月です`);
-    // 文字列キー比較なので月末は -31 で足りる
-    const days = await store.getDays(`${from}-01`, `${to}-31`);
+    const days = await store.getDays(monthKeyRange(from).start, monthKeyRange(to).end);
     return c.json({ months: summarizeMonths(days) });
   });
 

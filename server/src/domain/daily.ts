@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { isRealDate } from "./dates.js";
+import { issuePath } from "../shared/issue-path.js";
+import { isRealDate, MINUTES_PER_DAY } from "./dates.js";
 
 // 上限は実在のデータを弾かないよう、人が取りうる値より十分大きくしてある（誤送信や桁違いを止めるため）
 export const LIMITS = {
@@ -7,14 +8,14 @@ export const LIMITS = {
   distanceM: 500_000,
   kcal: 50_000,
   // 1 日の中の分数（Android は日の範囲に切り詰め、Takeout は日別の CSV）
-  dayMinutes: 1440,
+  dayMinutes: MINUTES_PER_DAY,
   heartPoints: 5_000,
   bpm: 300,
   weightKg: 500,
   pct: 100,
   grams: 5_000,
   // 睡眠は前日から続くため 1 日を超えうる
-  sleepMinutes: 2880,
+  sleepMinutes: 2 * MINUTES_PER_DAY,
 } as const;
 
 // 検証は 2 段に分ける（ADR 0012）。
@@ -115,7 +116,7 @@ export function checkDayRanges(day: unknown): string | null {
   if (r.success) return null;
   const fields = new Map<string, string>();
   for (const i of r.error.issues) {
-    const path = i.path.join(".") || "(root)";
+    const path = issuePath(i);
     if (!fields.has(path)) fields.set(path, i.message);
   }
   return `範囲外の値があります: ${[...fields].map(([p, m]) => `${p}（${m}）`).join("、")}`;

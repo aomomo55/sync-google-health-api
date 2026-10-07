@@ -1,9 +1,13 @@
 import { parseArgs } from "node:util";
 import { addDays, inclusiveDays, isRealDate } from "../src/domain/dates.js";
+import { MAX_SPAN_DAYS } from "../src/routes/health.js";
 import { checkApiToken, checkApiUrl, describeError, scrubToken } from "./cli-guard.js";
 
 const DEFAULT_CHUNK_DAYS = 120;
 const RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
+// エラーの応答本文と、最後に一覧で表示する失敗の上限
+const MAX_ERROR_BODY_CHARS = 200;
+const MAX_LISTED_FAILURES = 20;
 
 // pnpm 12 は `pnpm run x -- --opt` の `--` もそのまま渡すので取り除く
 const argv = process.argv.slice(2);
@@ -32,8 +36,8 @@ if (!from || !to || !isRealDate(from) || !isRealDate(to)) {
   fail("--from と --to を YYYY-MM-DD 形式で指定してください");
 }
 if (inclusiveDays(from, to) < 1) fail("--from は --to 以前である必要があります");
-if (!Number.isInteger(CHUNK_DAYS) || CHUNK_DAYS < 1 || CHUNK_DAYS > 400) {
-  fail("--days は 1〜400 の整数で指定してください");
+if (!Number.isInteger(CHUNK_DAYS) || CHUNK_DAYS < 1 || CHUNK_DAYS > MAX_SPAN_DAYS) {
+  fail(`--days は 1〜${MAX_SPAN_DAYS} の整数で指定してください`);
 }
 const apiUrl = values["api-url"];
 const urlError = checkApiUrl(apiUrl);
@@ -80,7 +84,8 @@ for (let start = from, first = true; start <= to; first = false) {
   };
   try {
     const res = await postWithRetry(body);
-    if (!res.ok) throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+    if (!res.ok)
+      throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, MAX_ERROR_BODY_CHARS)}`);
     const json = (await res.json()) as {
       written: number;
       unchanged: number;
@@ -101,6 +106,6 @@ for (let start = from, first = true; start <= to; first = false) {
 const written = chunkTotals.reduce((t, c) => t + c.written, 0);
 const unchanged = chunkTotals.reduce((t, c) => t + c.unchanged, 0);
 console.log(`合計: 書き込み ${written} / 変更なし ${unchanged} / 失敗 ${failures.length}`);
-for (const f of failures.slice(0, 20))
+for (const f of failures.slice(0, MAX_LISTED_FAILURES))
   console.error(`  失敗: ${f.path}: ${scrubToken(f.error, token)}`);
 if (failures.length > 0 || errorChunks.length > 0) process.exit(1);

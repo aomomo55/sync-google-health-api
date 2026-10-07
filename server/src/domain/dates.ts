@@ -1,3 +1,9 @@
+export const MS_PER_MINUTE = 60_000;
+export const MINUTES_PER_DAY = 1440;
+export const MS_PER_DAY = MINUTES_PER_DAY * MS_PER_MINUTE;
+// 日付はすべて Asia/Tokyo の暦日。日本は夏時間が無いので、オフセットは常に +09:00
+export const JST_OFFSET_MS = 9 * 60 * MS_PER_MINUTE;
+
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MONTH_RE = /^(\d{4})-(\d{2})$/;
 
@@ -18,7 +24,7 @@ export function isRealMonth(s: string): boolean {
 
 // from..to を両端含む日数で返す（両方とも妥当な日付であること）
 export function inclusiveDays(from: string, to: string): number {
-  return Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000) + 1;
+  return Math.round((Date.parse(to) - Date.parse(from)) / MS_PER_DAY) + 1;
 }
 
 export function inclusiveMonths(from: string, to: string): number {
@@ -30,5 +36,11 @@ export function inclusiveMonths(from: string, to: string): number {
 
 // YYYY-MM-DD に日数を足す（負も可）
 export function addDays(date: string, n: number): string {
-  return new Date(Date.parse(date) + n * 86_400_000).toISOString().slice(0, 10);
+  return new Date(Date.parse(date) + n * MS_PER_DAY).toISOString().slice(0, 10);
+}
+
+// YYYY-MM の月の全日を、文書のキーや日付の文字列比較で取り出すための範囲。
+// 文字列で比べるので、月末は実在するかに関係なく -31 で足りる
+export function monthKeyRange(month: string): { start: string; end: string } {
+  return { start: `${month}-01`, end: `${month}-31` };
 }

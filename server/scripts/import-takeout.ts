@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 import { checkDayRanges, type DailySummary, DailySummaryShapeSchema } from "../src/domain/daily.js";
 import { isRealDate } from "../src/domain/dates.js";
+import { MAX_INGEST_DAYS } from "../src/routes/health.js";
 import { buildDays } from "../src/takeout/index.js";
 import { loadTakeout } from "../src/takeout/load.js";
 import { checkApiToken, checkApiUrl, describeError, scrubToken } from "./cli-guard.js";
@@ -10,6 +11,9 @@ import { addNotes, formatNotes, type IngestNotes, parseIngestNotes } from "./ing
 
 const DEFAULT_OUT = "out/takeout-days.json";
 const DEFAULT_BATCH = 300;
+// 形の検証エラーと、エラーの応答本文を表示する上限
+const MAX_LISTED_INVALID = 10;
+const MAX_ERROR_BODY_CHARS = 500;
 
 // pnpm 12 は `pnpm run x -- --opt` の `--` もそのまま渡すので取り除く
 const argv = process.argv.slice(2);
@@ -42,8 +46,8 @@ for (const k of ["from", "to"] as const) {
   const v = values[k];
   if (v !== undefined && !isRealDate(v)) fail(`--${k} は YYYY-MM-DD 形式で指定してください`);
 }
-if (!Number.isInteger(BATCH) || BATCH < 1 || BATCH > 400)
-  fail("--batch は 1〜400 の整数で指定してください");
+if (!Number.isInteger(BATCH) || BATCH < 1 || BATCH > MAX_INGEST_DAYS)
+  fail(`--batch は 1〜${MAX_INGEST_DAYS} の整数で指定してください`);
 if (!values.takeout)
   fail("--takeout か環境変数 TAKEOUT_DIR で Takeout の Fit フォルダを指定してください");
 if (values.post && !values["api-url"]) fail("--post には --api-url が必要です");
@@ -78,7 +82,8 @@ for (const d of built) {
   if (error === null) days.push(d);
   else outOfRange.push({ date: d.date, error });
 }
-if (invalid.length > 0) fail(`検証エラー ${invalid.length} 件\n${invalid.slice(0, 10).join("\n")}`);
+if (invalid.length > 0)
+  fail(`検証エラー ${invalid.length} 件\n${invalid.slice(0, MAX_LISTED_INVALID).join("\n")}`);
 const printRejected = (label: string, items: { date: string; error: string }[]) => {
   console.error(`${label} ${items.length} 日:`);
   for (const r of items) console.error(`  ${r.date}: ${r.error}`);
@@ -164,7 +169,7 @@ if (values.post) {
       body: JSON.stringify({ days: batch }),
     }).catch((e: unknown) => fail(`POST 失敗 (${range}): ${describeError(e, token)}`));
     if (!res.ok) {
-      const body = (await res.text()).slice(0, 500);
+      const body = (await res.text()).slice(0, MAX_ERROR_BODY_CHARS);
       fail(`POST 失敗 (${range}): ${res.status} ${scrubToken(body, token)}`);
     }
     const json = (await res.json().catch(() => null)) as {

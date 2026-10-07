@@ -5,6 +5,7 @@ import { CouchStore } from "../src/store/couch-store.js";
 
 // バックアップ（health-YYYY-MM-DD.json.gz.age）を復号し、空の CouchDB の DB に書き戻す。
 // 本番の DB には直接書かない。書き戻した DB を確かめてから、COUCHDB_HEALTH_DB を切り替える（docs/backup.md）
+// 1 回の書き込みで送る日数
 const BATCH = 200;
 
 // pnpm 12 は `pnpm run x -- --opt` の `--` もそのまま渡すので取り除く

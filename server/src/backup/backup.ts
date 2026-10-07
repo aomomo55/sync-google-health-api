@@ -3,6 +3,7 @@ import { gunzip, gzip } from "node:zlib";
 import { Decrypter, Encrypter } from "age-encryption";
 import { z } from "zod";
 import { type DailySummary, DailySummaryShapeSchema } from "../domain/daily.js";
+import { issuePath } from "../shared/issue-path.js";
 
 // バックアップの形式: JSON → gzip → age（公開鍵で暗号化）。
 // 復号には手元の秘密鍵が要るので、サーバー・GAS・Google Drive のどこから漏れても中身は読めない
@@ -85,9 +86,7 @@ export async function decryptBackup(data: Uint8Array, identity: string): Promise
                 typeof (raw as { date?: unknown })?.date === "string"
                   ? (raw as { date: string }).date
                   : null,
-              reason: r.error.issues
-                .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
-                .join("、"),
+              reason: r.error.issues.map((i) => `${issuePath(i)}: ${i.message}`).join("、"),
             },
           ],
     ),

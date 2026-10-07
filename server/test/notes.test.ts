@@ -636,3 +636,53 @@ describe("静的ノート", () => {
     expect(renderHealthDashboard("Vault")).toContain("![[Vault/_bases/日次ログ.base#直近90日]]");
   });
 });
+
+describe("ノート・Bases・ダッシュボードの整合", () => {
+  const full: DailySummary = {
+    date: "2026-03-10",
+    activity: { steps: 9000, distance_m: 1000, calories_kcal: 2000, move_minutes: 30 },
+    heart_rate: { avg_bpm: 60 },
+    body: { weight_kg: 60 },
+    nutrition: { energy_kcal: 1800 },
+    sleep: {
+      start: "2026-03-09T23:00:00+09:00",
+      end: "2026-03-10T07:00:00+09:00",
+      asleep_minutes: 450,
+      in_bed_minutes: 480,
+      awake_minutes: 30,
+      deep_minutes: 60,
+      light_minutes: 300,
+      rem_minutes: 90,
+      nap_minutes: 10,
+    },
+  };
+  const dailyKeys = new Set(
+    [...renderDailyNote(full).matchAll(/^([^\s:#-][^:]*):/gm)].map((m) => m[1]),
+  );
+
+  it.each([
+    ["日次ログ", renderDailyLogBase()],
+    ["睡眠ログ", renderSleepLogBase()],
+  ])("%s の列は日次ノートのプロパティにある", (_name, base) => {
+    const columns = [...base.matchAll(/note\.([^\s'":]+)/g)].map((m) => m[1]!);
+    expect(columns.length).toBeGreaterThan(0);
+    expect(columns.filter((c) => !dailyKeys.has(c))).toEqual([]);
+  });
+
+  it("ダッシュボードが埋め込む Bases のビューが存在する", () => {
+    const p = notePaths();
+    const bases = new Map([
+      [p.dailyBase, renderDailyLogBase()],
+      [p.sleepBase, renderSleepLogBase()],
+    ]);
+    const embeds = [
+      ...(renderHealthDashboard() + renderSleepDashboard()).matchAll(
+        /!\[\[([^\]#]+)#([^\]]+)\]\]/g,
+      ),
+    ];
+    expect(embeds.length).toBeGreaterThan(0);
+    for (const [, file, view] of embeds) {
+      expect(bases.get(file!)).toContain(`name: ${view}\n`);
+    }
+  });
+});

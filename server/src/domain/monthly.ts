@@ -1,4 +1,6 @@
+import { round } from "../shared/rounding.js";
 import type { DailySummary } from "./daily.js";
+import { JST_OFFSET_MS, MINUTES_PER_DAY } from "./dates.js";
 
 export interface MonthlySummary {
   month: string;
@@ -32,12 +34,8 @@ export interface MonthlySummary {
   };
 }
 
-const JST_OFFSET_MS = 9 * 3600_000;
-
-function round(x: number, digits: number): number {
-  const f = 10 ** digits;
-  return Math.round(x * f) / f;
-}
+// 平均就寝時刻の境目。これより前の就寝は翌日（日付が変わってから寝た）とみなす
+const BEDTIME_DAY_BOUNDARY_MINUTES = 12 * 60;
 
 function vals(xs: (number | null | undefined)[]): number[] {
   return xs.filter((x): x is number => typeof x === "number");
@@ -65,13 +63,13 @@ function jstMinutes(iso: string | null | undefined): number | null {
 }
 
 function formatHm(minutes: number): string {
-  const m = ((Math.round(minutes) % 1440) + 1440) % 1440;
+  const m = ((Math.round(minutes) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
   return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }
 
 function avgBedtime(xs: number[]): string | null {
   // 12:00 より前は翌日扱いにして平均し、24h で巻き戻す
-  const a = avg(xs.map((m) => (m < 720 ? m + 1440 : m)));
+  const a = avg(xs.map((m) => (m < BEDTIME_DAY_BOUNDARY_MINUTES ? m + MINUTES_PER_DAY : m)));
   return a === null ? null : formatHm(a);
 }
 

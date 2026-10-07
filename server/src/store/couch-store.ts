@@ -22,6 +22,11 @@ type AllDocsRow = { doc?: CouchDoc | null; value?: { deleted?: boolean } };
 type BulkResult = { id?: string; ok?: boolean; error?: string };
 
 const MAX_CONFLICT_RETRIES = 3;
+// 日次の文書の _id は "day:YYYY-MM-DD"。DAY_ID_END は全ての日の _id より後ろに並ぶキー
+const DAY_ID_PREFIX = "day:";
+const DAY_ID_END = `${DAY_ID_PREFIX}\uffff`;
+const dayId = (date: string) => `${DAY_ID_PREFIX}${date}`;
+const queryKey = (s: string) => encodeURIComponent(JSON.stringify(s));
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 const isTimeout = (e: unknown) =>
@@ -109,18 +114,17 @@ export class CouchStore implements HealthStore {
   }
 
   async getDays(from: string, to: string): Promise<DailySummary[]> {
-    return this.getDaysByKey(`day:${from}`, `day:${to}`);
+    return this.getDaysByKey(dayId(from), dayId(to));
   }
 
   async getAllDays(): Promise<DailySummary[]> {
-    return this.getDaysByKey("day:", "day:￿");
+    return this.getDaysByKey(DAY_ID_PREFIX, DAY_ID_END);
   }
 
   private async getDaysByKey(startkey: string, endkey: string): Promise<DailySummary[]> {
-    const key = (s: string) => encodeURIComponent(JSON.stringify(s));
     const json = await this.request(
       "GET",
-      `/_all_docs?include_docs=true&startkey=${key(startkey)}&endkey=${key(endkey)}`,
+      `/_all_docs?include_docs=true&startkey=${queryKey(startkey)}&endkey=${queryKey(endkey)}`,
     );
     return CouchStore.docsOf(json)
       .map((d) => ({ id: String(d._id), doc: d }))
@@ -134,21 +138,20 @@ export class CouchStore implements HealthStore {
   private static dayFromDoc(id: string, doc: CouchDoc): DailySummary {
     const day = CouchStore.toDay(doc);
     const date: unknown = doc.date;
-    if (typeof date === "string" && `day:${date}` === id) return day;
+    if (typeof date === "string" && dayId(date) === id) return day;
     return { ...day, date: id };
   }
 
   async findAdjacentDate(date: string, direction: "prev" | "next"): Promise<string | null> {
     // キー順で前後を 2 件取り、date 自身を除いた最初の日を返す（日付の正は _id。getDays と同じ）
-    const key = (s: string) => encodeURIComponent(JSON.stringify(s));
     const query =
       direction === "prev"
-        ? `descending=true&startkey=${key(`day:${date}`)}&endkey=${key("day:")}`
-        : `startkey=${key(`day:${date}`)}&endkey=${key("day:￰")}`;
+        ? `descending=true&startkey=${queryKey(dayId(date))}&endkey=${queryKey(DAY_ID_PREFIX)}`
+        : `startkey=${queryKey(dayId(date))}&endkey=${queryKey(DAY_ID_END)}`;
     const json = await this.request("GET", `/_all_docs?${query}&limit=2`);
     const rows = (json as { rows?: { id: string }[] } | null)?.rows ?? [];
-    const hit = rows.find((r) => r.id !== `day:${date}`);
-    return hit ? hit.id.slice("day:".length) : null;
+    const hit = rows.find((r) => r.id !== dayId(date));
+    return hit ? hit.id.slice(DAY_ID_PREFIX.length) : null;
   }
 
   async upsertDays(days: DailySummary[]): Promise<{ written: number }> {
@@ -164,12 +167,12 @@ export class CouchStore implements HealthStore {
         throw new Error("CouchDB への書き込みが競合し続けました");
       }
       const existingJson = await this.request("POST", "/_all_docs?include_docs=true", {
-        keys: pending.map((d) => `day:${d.date}`),
+        keys: pending.map((d) => dayId(d.date)),
       });
       const existing = new Map(CouchStore.docsOf(existingJson).map((d) => [d._id, d]));
       const now = new Date().toISOString();
       const docs = pending.map((incoming) => {
-        const id = `day:${incoming.date}`;
+        const id = dayId(incoming.date);
         const old = existing.get(id);
         const m = mergeDay(old ? CouchStore.toDay(old) : undefined, incoming);
         const doc: CouchDoc = { ...m, _id: id, type: "daily", updated_at: now };
@@ -186,7 +189,7 @@ export class CouchStore implements HealthStore {
         else
           throw new Error(`CouchDB bulk 書き込みエラー: ${r.error ?? "unknown"} (${r.id ?? "?"})`);
       }
-      pending = pending.filter((d) => conflicts.has(`day:${d.date}`));
+      pending = pending.filter((d) => conflicts.has(dayId(d.date)));
     }
     return { written };
   }

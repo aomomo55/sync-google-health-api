@@ -1,4 +1,4 @@
-import { isRealDate } from "../domain/dates.js";
+import { isRealDate, monthKeyRange } from "../domain/dates.js";
 import { MemoMarkerMissingError } from "../notes/index.js";
 import type { HealthStore } from "../store/health-store.js";
 import type { VaultWriter } from "../vault/vault-writer.js";
@@ -8,6 +8,8 @@ import { type PlanItem, planNotes, splitValidDays } from "./plan.js";
 const INVALID_DATE_MESSAGE =
   "保存されている日付が不正なため、ノートを生成しませんでした。CouchDB の該当する文書を確認してください";
 const MAX_INVALID_SKIP = 20;
+// Vault への読み書きを同時に行う数
+const DEFAULT_CONCURRENCY = 3;
 
 export const NOTE_FAILURE_MESSAGE =
   "Vault への書き込みに失敗しました。詳細はサーバーのログを確認してください";
@@ -50,7 +52,7 @@ export class NoteSync {
     this.store = deps.store;
     this.writer = deps.writer;
     this.root = deps.root;
-    this.concurrency = Math.max(1, deps.concurrency ?? 3);
+    this.concurrency = Math.max(1, deps.concurrency ?? DEFAULT_CONCURRENCY);
   }
 
   async syncDates(dates: string[]): Promise<SyncReport> {
@@ -83,8 +85,8 @@ export class NoteSync {
 
     // 影響を受ける日は [prev, next] に収まる。月次集計のため、その月は全日読む
     const inner = { start: prev ?? from, end: next ?? to };
-    const start = minDate(prevPrev ?? inner.start, `${inner.start.slice(0, 7)}-01`);
-    const end = maxDate(nextNext ?? inner.end, `${inner.end.slice(0, 7)}-31`);
+    const start = minDate(prevPrev ?? inner.start, monthKeyRange(inner.start.slice(0, 7)).start);
+    const end = maxDate(nextNext ?? inner.end, monthKeyRange(inner.end.slice(0, 7)).end);
     // DB の日付は書き込み時に検証済みのはずだが、手で直された文書などに備えて再検証する。
     // 不正な日付はパスや YAML にそのまま入るので、ノートを作らず失敗として報告する
     const { valid: days, invalid } = splitValidDays(await this.store.getDays(start, end));

@@ -5,6 +5,9 @@ import { CouchStore } from "./store/couch-store.js";
 import { createNoteSync } from "./sync/note-sync.js";
 import { createVaultWriter } from "./vault/index.js";
 
+// 終了の合図から、閉じきれない接続を待たずに終了するまでの時間
+const SHUTDOWN_TIMEOUT_MS = 10_000;
+
 const config = loadConfig();
 const store = new CouchStore({
   baseUrl: config.COUCHDB_URL,
@@ -33,7 +36,7 @@ function shutdown(signal: string) {
     void (writer?.close() ?? Promise.resolve()).finally(() => process.exit(err ? 1 : 0));
   });
   // keep-alive 接続で閉じきれない場合の保険
-  setTimeout(() => process.exit(1), 10_000).unref();
+  setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS).unref();
 }
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));

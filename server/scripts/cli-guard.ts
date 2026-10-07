@@ -1,19 +1,16 @@
 // CLI（import:takeout / sync:notes）で共通の入力検査と、エラー表示からのトークン除去
 
-// サーバーの API_TOKEN と同じ規則（Hono の bearerAuth が受け付ける形式）
-const TOKEN_PATTERN = /^[A-Za-z0-9._~+/-]+=*$/;
-export const MIN_TOKEN_LENGTH = 32;
-
-const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+// トークンの規則とローカルのホストは、サーバーの設定の検査と同じものを使う
+import { BEARER_TOKEN_PATTERN, LOCAL_HOSTS, MIN_API_TOKEN_LENGTH } from "../src/config.js";
 
 /** 問題があればエラーメッセージを返す。メッセージにトークンの値は含めない */
 export function checkApiToken(token: string | undefined): string | undefined {
   if (!token) return "環境変数 API_TOKEN が未設定です";
-  if (!TOKEN_PATTERN.test(token)) {
+  if (!BEARER_TOKEN_PATTERN.test(token)) {
     return "環境変数 API_TOKEN に使えない文字が含まれています（英数字と . _ ~ + / - のみ、末尾に = 可）。貼り付け時に改行・空白・制御文字が混入していないか確認してください";
   }
-  if (token.length < MIN_TOKEN_LENGTH) {
-    return `環境変数 API_TOKEN は ${MIN_TOKEN_LENGTH} 文字以上にしてください`;
+  if (token.length < MIN_API_TOKEN_LENGTH) {
+    return `環境変数 API_TOKEN は ${MIN_API_TOKEN_LENGTH} 文字以上にしてください`;
   }
   return undefined;
 }
@@ -35,7 +32,7 @@ export function checkApiUrl(raw: string | undefined): string | undefined {
     return "--api-url にユーザー名やパスワードを含めないでください";
   }
   if (url.protocol === "https:") return undefined;
-  if (url.protocol === "http:" && LOOPBACK_HOSTS.has(url.hostname)) return undefined;
+  if (url.protocol === "http:" && LOCAL_HOSTS.has(url.hostname)) return undefined;
   return "--api-url は https:// で指定してください（http:// は localhost / 127.0.0.1 / [::1] のみ可）";
 }
 

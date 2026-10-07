@@ -1,5 +1,13 @@
 import { z } from "zod";
 import { isAgeRecipient } from "./backup/backup.js";
+import { DEFAULT_VAULT_PREFIX } from "./vault/vault-writer.js";
+
+// API_TOKEN の規則。CLI（scripts/cli-guard.ts）の検査でも使う
+export const MIN_API_TOKEN_LENGTH = 32;
+// Hono の bearerAuth が受け付ける文字（RFC 6750 の b64token）
+export const BEARER_TOKEN_PATTERN = /^[A-Za-z0-9._~+/-]+=*$/;
+// トークンを平文で送ってよい、ローカルでの試験用のホスト
+export const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 // 端末に貼り付けたときに紛れ込む制御文字（ESC など）は HTTP ヘッダーに使えず、
 // 実行時に原因の分かりにくい "fetch failed" になるため起動時に弾く
@@ -8,10 +16,9 @@ const token = (min: number) =>
     .string()
     .min(min, `${min}文字以上が必要です`)
     .regex(/^[\x21-\x7e]+$/, "空白・改行・制御文字・全角文字を含めないでください");
-// Hono の bearerAuth が受け付ける文字（RFC 6750 の b64token）に限る。
-// それ以外の文字を含むと起動はできても全リクエストが 400 になる
-const bearerToken = token(32).regex(
-  /^[A-Za-z0-9._~+/-]+=*$/,
+// bearerAuth が受け付ける文字に限る。それ以外の文字を含むと起動はできても全リクエストが 400 になる
+const bearerToken = token(MIN_API_TOKEN_LENGTH).regex(
+  BEARER_TOKEN_PATTERN,
   "英数字と . _ ~ + / - （末尾の = は可）だけで指定してください",
 );
 const credential = z
@@ -51,7 +58,6 @@ const couchdbUrl = z
   );
 
 // トークンを平文で流さないため https: に限る。ローカルでの試験用に localhost だけ http: を許す
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const obsidianMcpUrl = z
   .url()
   .refine(
@@ -96,7 +102,7 @@ const schema = z
     COUCHDB_HEALTH_DB: z.string().min(1).default("health"),
     OBSIDIAN_MCP_URL: obsidianMcpUrl.optional(),
     OBSIDIAN_MCP_TOKEN: token(16).optional(),
-    VAULT_HEALTH_PREFIX: vaultPrefix.default("Health/"),
+    VAULT_HEALTH_PREFIX: vaultPrefix.default(DEFAULT_VAULT_PREFIX),
     // バックアップの取得（GET /backup/health）専用。API_TOKEN とは別にし、漏れても書き込みはできないようにする
     BACKUP_TOKEN: bearerToken.optional(),
     // バックアップを暗号化する age の公開鍵（age1...）。秘密鍵はサーバーに置かない

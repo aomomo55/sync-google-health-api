@@ -1,5 +1,6 @@
 import type { DailySummary } from "../domain/daily.js";
-import { fmtDuration, fmtNum, jstHm, monthLabelJa, numOrNull, round, weekdayJa } from "./format.js";
+import { round } from "../shared/rounding.js";
+import { fmtDuration, fmtNum, jstHm, monthLabelJa, numOrNull, weekdayJa } from "./format.js";
 import { linkTarget, notePaths } from "./paths.js";
 import { frontmatter, type YamlEntry } from "./yaml.js";
 
@@ -8,6 +9,11 @@ const MEMO_MARKER_RE = /^%% health:memo/m;
 
 export const STEP_GOAL = 8000;
 export const SLEEP_GOAL_MINUTES = 420;
+export const SLEEP_GOAL_HOURS = SLEEP_GOAL_MINUTES / 60;
+// 目標を達成したかのプロパティ名。Bases の列やダッシュボードの目標線と同じ目標から作る。
+// 目標を変えるとプロパティ名も変わり、同期し直していない既存のノートには古い名前が残る
+export const STEP_GOAL_KEY = `${STEP_GOAL}歩達成`;
+export const SLEEP_GOAL_KEY = `${SLEEP_GOAL_HOURS}時間以上`;
 
 export interface DailyNav {
   prev?: string;
@@ -67,8 +73,8 @@ export function dailyEntries(day: DailySummary): YamlEntry[] {
     { key: "浅い睡眠分", value: numOrNull(s?.light_minutes) },
     { key: "REM睡眠分", value: numOrNull(s?.rem_minutes) },
     { key: "仮眠分", value: numOrNull(s?.nap_minutes) },
-    { key: "8000歩達成", value: steps === null ? null : steps >= STEP_GOAL },
-    { key: "7時間以上", value: asleep === null ? null : asleep >= SLEEP_GOAL_MINUTES },
+    { key: STEP_GOAL_KEY, value: steps === null ? null : steps >= STEP_GOAL },
+    { key: SLEEP_GOAL_KEY, value: asleep === null ? null : asleep >= SLEEP_GOAL_MINUTES },
   ];
 }
 
