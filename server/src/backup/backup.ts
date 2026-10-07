@@ -19,14 +19,20 @@ const BYTES_PER_MIB = 1024 * 1024;
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
 
+// 解凍後のサイズが上限を超えた。鍵の誤りやファイルの破損とは対処が違うので、別の型で投げる
+export class BackupTooLargeError extends Error {
+  constructor() {
+    super(`解凍後のサイズが上限（${MAX_BACKUP_JSON_BYTES / BYTES_PER_MIB} MiB）を超えています`);
+    this.name = "BackupTooLargeError";
+  }
+}
+
 async function gunzipWithLimit(compressed: Uint8Array): Promise<Buffer> {
   try {
     return await gunzipAsync(compressed, { maxOutputLength: MAX_BACKUP_JSON_BYTES });
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ERR_BUFFER_TOO_LARGE") {
-      throw new Error(
-        `解凍後のサイズが上限（${MAX_BACKUP_JSON_BYTES / BYTES_PER_MIB} MiB）を超えています`,
-      );
+      throw new BackupTooLargeError();
     }
     throw e;
   }

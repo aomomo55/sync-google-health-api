@@ -190,7 +190,12 @@ if (values.post) {
       ).slice(0, MAX_ERROR_BODY_CHARS);
       fail(`POST 失敗 (${range}): ${res.status} ${scrubToken(body, token)}`);
     }
-    const json = (await res.json().catch(() => null)) as {
+    // 本文が JSON でなければ結果の表示を省くだけにするが、タイムアウトは送れたか分からないので止める
+    const json = (await res
+      .json()
+      .catch((e: unknown) =>
+        isTimeoutError(e) ? fail(`POST 失敗 (${range}): ${describeError(e, token)}`) : null,
+      )) as {
       rejected?: unknown;
       notes?: unknown;
     } | null;

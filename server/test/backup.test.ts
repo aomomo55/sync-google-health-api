@@ -5,6 +5,7 @@ import { createApp } from "../src/app.js";
 import {
   BACKUP_FORMAT,
   BACKUP_VERSION,
+  BackupTooLargeError,
   backupFileName,
   decryptBackup,
   encryptBackup,
@@ -73,7 +74,7 @@ describe("encryptBackup / decryptBackup", () => {
     const e = new Encrypter();
     e.addRecipient(recipient);
     const data = await e.encrypt(new Uint8Array(compressed));
-    await expect(decryptBackup(data, identity)).rejects.toThrow(/解凍後のサイズが上限/);
+    await expect(decryptBackup(data, identity)).rejects.toThrow(BackupTooLargeError);
   });
 
   it("形式が違うファイルは throw", async () => {

@@ -58,8 +58,8 @@ const endpoint = `${apiUrl.replace(/\/+$/, "")}/api/notes/sync`;
 const describe = (e: unknown) => describeError(e, token);
 
 // 同期は何度やり直しても同じ結果になるので、通信エラーと 5xx は待ってから再試行する。
-// タイムアウトはやり直さない。区間が大きすぎて間に合わないことが多く、同じ区間では再び時間切れになるうえ、
-// サーバーでは前の同期がまだ動いているかもしれないため（--days を小さくするよう案内する）
+// タイムアウトはやり直さない。区間が大きすぎて間に合わないことが多く、同じ区間でやり直しても再び時間切れになり、
+// 1 区間で最大 4 回分（40 分）待つことになるため。その区間は失敗として、--days を小さくするよう案内する
 async function postWithRetry(body: unknown): Promise<Response> {
   // リトライの回数そのものがループの制御なので let にする
   for (let attempt = 0; ; attempt++) {

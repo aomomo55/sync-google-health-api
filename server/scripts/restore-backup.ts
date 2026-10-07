@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { decryptBackup } from "../src/backup/backup.js";
+import { BackupTooLargeError, decryptBackup } from "../src/backup/backup.js";
 import { CouchStore } from "../src/store/couch-store.js";
 
 // バックアップ（health-YYYY-MM-DD.json.gz.age）を復号し、空の CouchDB の DB に書き戻す。
@@ -53,7 +53,9 @@ const backup = await decryptBackup(
   identity,
 ).catch((e: unknown) =>
   fail(
-    `バックアップを復号できません（鍵が違うか、ファイルが壊れています）: ${e instanceof Error ? e.message : String(e)}`,
+    e instanceof BackupTooLargeError
+      ? `バックアップを読み込めません: ${e.message}`
+      : `バックアップを復号できません（鍵が違うか、ファイルが壊れています）: ${e instanceof Error ? e.message : String(e)}`,
   ),
 );
 
