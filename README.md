@@ -57,6 +57,7 @@ android/         Health Connect のデータを送る Android アプリ（→ an
 gas/             バックアップを Google Drive に保存する Google Apps Script（GAS のエディタにコピーして使う）
 docs/deploy.md   サーバーのデプロイと秘密情報の登録の手順
 docs/backup.md   バックアップの設定と復元の手順
+docs/rotate-secrets.md  秘密情報が漏れたときの入れ替えの手順
 docs/adr/        設計判断の記録（Architecture Decision Records）
 AGENTS.md        エージェント向けの指示（全体の約束。ディレクトリごとの指示は server/ などの AGENTS.md）
 REVIEW.md        PR をレビューするときの観点

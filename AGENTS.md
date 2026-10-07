@@ -9,7 +9,7 @@
 | `server/` | TypeScript / Hono のサーバー。日次データの受信・保存（CouchDB）、Google Takeout の取り込み、Obsidian ノートの生成と obsidian-sync-mcp 経由の書き込み、暗号化したバックアップの提供と復元 | [server/AGENTS.md](server/AGENTS.md) |
 | `android/` | Kotlin / Jetpack Compose のアプリ。Health Connect から日次サマリーを作り `POST /api/ingest` へ送る | [android/AGENTS.md](android/AGENTS.md) |
 | `gas/` | Google Apps Script。サーバーのバックアップを Google Drive に保存する | [gas/AGENTS.md](gas/AGENTS.md) |
-| `docs/` | 手順書（[デプロイ](docs/deploy.md)、[バックアップ](docs/backup.md)）と、設計判断の記録（`docs/adr/`） | - |
+| `docs/` | 手順書（[デプロイ](docs/deploy.md)、[バックアップ](docs/backup.md)、[秘密情報が漏れたとき](docs/rotate-secrets.md)）と、設計判断の記録（`docs/adr/`） | - |
 
 ## 変更するときの約束
 

@@ -41,6 +41,8 @@ fly secrets import -a <アプリ名> < ~/tmp/secrets.env
 
 登録した secrets を変えると、サーバーは自動で再起動する。入力しなかったほかの secrets はそのまま残る。
 
+秘密情報が漏れた（漏れたかもしれない）ときの入れ替えの手順は [rotate-secrets.md](rotate-secrets.md) にある。
+
 ## 動作を確かめる
 
 ```sh
