@@ -3,13 +3,7 @@ import { loadConfig } from "../src/config.js";
 import { createVaultWriter } from "../src/vault/index.js";
 import { McpVaultWriter } from "../src/vault/mcp-vault-writer.js";
 import { MemoryVaultWriter } from "../src/vault/memory-vault-writer.js";
-import {
-  assertVaultPath,
-  VaultPathError,
-  VaultWriteError,
-  type VaultWriter,
-  writeMany,
-} from "../src/vault/vault-writer.js";
+import { assertVaultPath, VaultPathError, VaultWriteError } from "../src/vault/vault-writer.js";
 import { FakeObsidianMcp } from "./vault-fake-server.js";
 
 const TOKEN = "vault-test-token-0123456789";
@@ -40,7 +34,6 @@ beforeEach(async () => {
   fake.dropSessions();
   fake.toolCalls = 0;
   fake.initializes = 0;
-  fake.maxInflight = 0;
   fake.failToolCalls = [];
   fake.toolDelayMs = 0;
   fake.readResponses.clear();
@@ -258,30 +251,6 @@ describe("McpVaultWriter", () => {
     await make().writeNote("Health/views/x.base", "views: []");
     expect(fake.notes.has("Health/views/x.base")).toBe(true);
   });
-
-  it("writeMany は失敗しても続行し、並列数を守る", async () => {
-    const w = make();
-    fake.toolDelayMs = 30;
-    const items = Array.from({ length: 8 }, (_, i) => ({
-      path: `Health/n${i}.md`,
-      content: String(i),
-    }));
-    items.splice(3, 0, { path: "outside.md", content: "x" });
-    items.splice(5, 0, { path: "Health/boom.md", content: "x" });
-    const progress: number[] = [];
-    const res = await w.writeMany(items, {
-      concurrency: 2,
-      onProgress: (done, total) => {
-        progress.push(done);
-        expect(total).toBe(10);
-      },
-    });
-    expect(res.written).toBe(8);
-    expect(res.failed.map((f) => f.path).sort()).toEqual(["Health/boom.md", "outside.md"]);
-    expect(progress).toHaveLength(10);
-    expect(fake.maxInflight).toBeLessThanOrEqual(2);
-    expect(fake.maxInflight).toBeGreaterThan(1);
-  });
 });
 
 describe("assertVaultPath", () => {
@@ -329,23 +298,13 @@ describe("assertVaultPath", () => {
   });
 });
 
-describe("MemoryVaultWriter / writeMany", () => {
+describe("MemoryVaultWriter", () => {
   it("同じパスガードで読み書きできる", async () => {
     const m = new MemoryVaultWriter();
     await m.writeNote("Health/a.md", "x");
     expect(await m.readNote("Health/a.md")).toBe("x");
     expect(await m.readNote("Health/b.md")).toBeNull();
     await expect(m.writeNote("a.md", "x")).rejects.toThrow(VaultWriteError);
-  });
-
-  it("writeMany は任意の VaultWriter で使える", async () => {
-    const m: VaultWriter = new MemoryVaultWriter();
-    const res = await writeMany(m, [
-      { path: "Health/a.md", content: "1" },
-      { path: "bad.md", content: "2" },
-    ]);
-    expect(res.written).toBe(1);
-    expect(res.failed).toHaveLength(1);
   });
 });
 

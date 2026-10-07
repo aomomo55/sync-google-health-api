@@ -11,10 +11,6 @@ import {
   stripOpenPrefix,
   VaultWriteError,
   type VaultWriter,
-  type WriteManyItem,
-  type WriteManyOptions,
-  type WriteManyResult,
-  writeMany,
 } from "./vault-writer.js";
 
 export interface McpVaultWriterOptions {
@@ -30,6 +26,10 @@ export interface McpVaultWriterOptions {
 }
 
 type ErrorKind = "session" | "transient" | "permanent";
+
+const DEFAULT_TIMEOUT_MS = 60_000;
+const DEFAULT_RETRY_DELAYS_MS = [1000, 3000, 9000];
+const DEFAULT_TOOL_RETRY_COOLDOWN_MS = 60_000;
 
 const ERROR_PREFIXES = ["Write access denied", "Error"];
 
@@ -92,9 +92,9 @@ export class McpVaultWriter implements VaultWriter {
     this.url = new URL(opts.url);
     this.token = opts.token;
     this.prefix = normalizePrefix(opts.prefix ?? DEFAULT_VAULT_PREFIX);
-    this.timeoutMs = opts.timeoutMs ?? 60_000;
-    this.delays = opts.retryDelaysMs ?? [1000, 3000, 9000];
-    this.toolRetryCooldownMs = opts.toolRetryCooldownMs ?? 60_000;
+    this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.delays = opts.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+    this.toolRetryCooldownMs = opts.toolRetryCooldownMs ?? DEFAULT_TOOL_RETRY_COOLDOWN_MS;
     this.fetchFn = opts.fetch;
   }
 
@@ -115,10 +115,6 @@ export class McpVaultWriter implements VaultWriter {
       if (isError || isErrorText(text)) throw new ToolFailure(this.scrub(text));
       return text;
     });
-  }
-
-  writeMany(items: WriteManyItem[], opts?: WriteManyOptions): Promise<WriteManyResult> {
-    return writeMany(this, items, opts);
   }
 
   async close(): Promise<void> {

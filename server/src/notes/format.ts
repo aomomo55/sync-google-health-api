@@ -1,14 +1,10 @@
-const JST_OFFSET_MS = 9 * 3600_000;
+import { formatHm, jstMinutesOfDay } from "../domain/dates.js";
+
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 // ノートを直接編集する人や AI 向けの注意書き。Obsidian のコメントなので閲覧画面には出ない
 export const GENERATED_NOTICE =
   "%% このノートは sync-google-health-api のサーバーが自動で作ります。直接編集しても次の同期で元に戻ります。変えたいときは、リポジトリの server/src/notes/ を変更してください %%\n";
-
-export function round(x: number, digits: number): number {
-  const f = 10 ** digits;
-  return Math.round(x * f) / f;
-}
 
 export function numOrNull(x: number | null | undefined): number | null {
   return typeof x === "number" && Number.isFinite(x) ? x : null;
@@ -16,11 +12,8 @@ export function numOrNull(x: number | null | undefined): number | null {
 
 // 任意のオフセット付き ISO 文字列を Asia/Tokyo の "HH:MM" に変換
 export function jstHm(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return null;
-  const d = new Date(t + JST_OFFSET_MS);
-  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+  const minutes = jstMinutesOfDay(iso);
+  return minutes === null ? null : formatHm(minutes);
 }
 
 // "YYYY-MM-DD" の曜日（暦上の曜日なのでタイムゾーン非依存）

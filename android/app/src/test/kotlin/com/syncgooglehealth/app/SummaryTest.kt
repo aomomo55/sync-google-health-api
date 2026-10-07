@@ -473,30 +473,33 @@ class IngestClassifyTest {
 
 class StoredTokenTest {
     @Test
-    fun returnsNullAndDiscardsNothingWhenNotStored() {
+    fun returnsNoneAndDiscardsNothingWhenNotStored() {
         val discarded = mutableListOf<String>()
-        assertNull(readStoredToken(null, { it }, { discarded += it }))
+        assertEquals(StoredToken.None, readStoredTokenState(null, { it }, { discarded += it }))
         assertTrue(discarded.isEmpty())
     }
 
     @Test
     fun returnsTokenWhenDecryptable() {
         val discarded = mutableListOf<String>()
-        assertEquals("tok", readStoredToken("enc", { "tok" }, { discarded += it }))
+        assertEquals(StoredToken.Available("tok"), readStoredTokenState("enc", { "tok" }, { discarded += it }))
         assertTrue(discarded.isEmpty())
     }
 
     @Test
-    fun discardsAndReturnsNullWhenNotDecryptable() {
+    fun discardsAndReturnsNoneWhenNotDecryptable() {
         val discarded = mutableListOf<String>()
-        assertNull(readStoredToken("enc", { throw javax.crypto.AEADBadTagException() }, { discarded += it }))
+        assertEquals(
+            StoredToken.None,
+            readStoredTokenState("enc", { throw javax.crypto.AEADBadTagException() }, { discarded += it }),
+        )
         assertTrue(discarded.isNotEmpty())
     }
 
     @Test
-    fun discardsAndReturnsNullForEmptyToken() {
+    fun discardsAndReturnsNoneForEmptyToken() {
         val discarded = mutableListOf<String>()
-        assertNull(readStoredToken("enc", { "" }, { discarded += it }))
+        assertEquals(StoredToken.None, readStoredTokenState("enc", { "" }, { discarded += it }))
         assertTrue(discarded.isNotEmpty())
     }
 
@@ -513,8 +516,6 @@ class StoredTokenTest {
             val discarded = mutableListOf<String>()
             val r = readStoredTokenState("enc", { throw e }, { discarded += it })
             assertEquals(e.toString(), StoredToken.Unavailable, r)
-            assertTrue(e.toString(), discarded.isEmpty())
-            assertNull(readStoredToken("enc", { throw e }, { discarded += it }))
             assertTrue(e.toString(), discarded.isEmpty())
         }
     }

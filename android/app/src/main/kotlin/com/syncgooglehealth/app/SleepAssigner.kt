@@ -16,7 +16,8 @@ data class SleepSessionInput(
 )
 
 object SleepAssigner {
-    // SleepSessionRecord.STAGE_TYPE_* の値
+    // SleepSessionRecord.STAGE_TYPE_* の値 (AWAKE / OUT_OF_BED / AWAKE_IN_BED)。
+    // サーバーの Takeout 取り込み (takeout/sleep.ts の SLEEP_STAGE) と同じ値で、7 は Health Connect だけにある
     private val AWAKE_TYPES = setOf(1, 3, 7)
     private const val DEEP = 5
     private const val LIGHT = 4
@@ -24,7 +25,8 @@ object SleepAssigner {
 
     private val FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssxxx")
 
-    // 間隔がこれ以内の同じ起源のセッションは、一晩の睡眠として結合する
+    // 間隔がこれ以内の同じ起源のセッションは、一晩の睡眠として結合する。
+    // サーバーの Takeout 取り込み (takeout/sleep.ts の NIGHT_MERGE_GAP_MS) と同じ規則で、同じ入力のテストを両方に置いている
     val MERGE_GAP: Duration = Duration.ofHours(2)
 
     // 結合したセッションのまとまり。start / end は最初の開始と最後の終了
@@ -35,27 +37,23 @@ object SleepAssigner {
     }
 
     // 起床日 (結合後の終了時刻のローカル日付) ごとに 1 つの SleepSummary を作る
-    fun assign(
-        sessions: List<SleepSessionInput>,
-        zone: ZoneId,
-        mergeGap: Duration = MERGE_GAP,
-    ): Map<LocalDate, SleepSummary> {
+    fun assign(sessions: List<SleepSessionInput>, zone: ZoneId): Map<LocalDate, SleepSummary> {
         val byDate = sessions
             .filter { it.end > it.start }
             .groupBy { it.origin }
             .values
-            .flatMap { mergeNights(it, mergeGap) }
+            .flatMap { mergeNights(it) }
             .groupBy { it.end.atZone(zone).toLocalDate() }
         return byDate.mapValues { (_, list) -> summarize(pickOrigin(list), zone) }
     }
 
-    // 開始順に並べ、前のまとまりの終了から mergeGap 以内に始まるセッションを同じまとまりにする
-    private fun mergeNights(list: List<SleepSessionInput>, mergeGap: Duration): List<Night> {
+    // 開始順に並べ、前のまとまりの終了から MERGE_GAP 以内に始まるセッションを同じまとまりにする
+    private fun mergeNights(list: List<SleepSessionInput>): List<Night> {
         val groups = mutableListOf<MutableList<SleepSessionInput>>()
         // 直前までのまとまりの終了時刻を更新しながら走査するため var
         var end: Instant? = null
         for (s in list.sortedWith(compareBy({ it.start }, { it.end }))) {
-            if (end != null && Duration.between(end, s.start) <= mergeGap) {
+            if (end != null && Duration.between(end, s.start) <= MERGE_GAP) {
                 groups.last().add(s)
                 if (s.end > end) end = s.end
             } else {

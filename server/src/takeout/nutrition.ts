@@ -1,4 +1,5 @@
 import type { DailySummary } from "../domain/daily.js";
+import { round } from "../shared/rounding.js";
 import { isSaneTime, jstDate, type ParseStats } from "./sleep.js";
 
 type NutritionFields = NonNullable<DailySummary["nutrition"]>;
@@ -64,11 +65,6 @@ export function parseNutritionJson(
   }
   return out;
 }
-
-const round = (x: number, digits: number) => {
-  const f = 10 ** digits;
-  return Math.round(x * f) / f;
-};
 
 type Acc = { entries: number; energy?: number; protein?: number; fat?: number; carbs?: number };
 

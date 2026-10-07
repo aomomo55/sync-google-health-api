@@ -1,7 +1,14 @@
+import { SLEEP_GOAL_KEY, STEP_GOAL_KEY } from "./daily.js";
 import { notePaths } from "./paths.js";
 
 // Obsidian Bases (.base) は YAML。式は YAML 上で文字列として書く
 // 参考: https://obsidian.md/help/bases/syntax
+
+// 「直近」の表の日数。ダッシュボードのグラフと、表を埋め込むときのビュー名でも使う
+export const RECENT_DAYS = 90;
+export const RECENT_DAYS_VIEW = `直近${RECENT_DAYS}日`;
+export const RECENT_NIGHTS_VIEW = `直近${RECENT_DAYS}夜`;
+const RECENT_FILTER = `'note.日付 >= today() - "${RECENT_DAYS}d"'`;
 
 const DAILY_FILTERS = (dir: string) => `filters:
   and:
@@ -16,10 +23,10 @@ export function renderDailyLogBase(root?: string): string {
     displayName: 日付
 views:
   - type: table
-    name: 直近90日
+    name: ${RECENT_DAYS_VIEW}
     filters:
       and:
-        - 'note.日付 >= today() - "90d"'
+        - ${RECENT_FILTER}
     order:
       - note.日付
       - note.曜日
@@ -29,7 +36,7 @@ views:
       - note.摂取カロリー
       - note.平均心拍
       - note.体重kg
-      - note.8000歩達成
+      - note.${STEP_GOAL_KEY}
     sort:
       - property: note.日付
         direction: DESC
@@ -44,7 +51,7 @@ views:
       - note.摂取カロリー
       - note.平均心拍
       - note.体重kg
-      - note.8000歩達成
+      - note.${STEP_GOAL_KEY}
     sort:
       - property: note.日付
         direction: DESC
@@ -55,11 +62,11 @@ export function renderSleepLogBase(root?: string): string {
   const p = notePaths(root);
   return `${DAILY_FILTERS(p.dailyDir)}views:
   - type: table
-    name: 直近90夜
+    name: ${RECENT_NIGHTS_VIEW}
     filters:
       and:
         - 'note.睡眠時間h'
-        - 'note.日付 >= today() - "90d"'
+        - ${RECENT_FILTER}
     order:
       - note.日付
       - note.就寝時刻
@@ -71,7 +78,7 @@ export function renderSleepLogBase(root?: string): string {
       - note.REM睡眠分
       - note.中途覚醒分
       - note.仮眠分
-      - note.7時間以上
+      - note.${SLEEP_GOAL_KEY}
     sort:
       - property: note.日付
         direction: DESC

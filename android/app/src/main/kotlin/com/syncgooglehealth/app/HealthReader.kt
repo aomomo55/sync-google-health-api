@@ -19,6 +19,7 @@ import androidx.health.connect.client.request.AggregateGroupByPeriodRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.Period
 import java.time.ZoneId
 import kotlin.reflect.KClass
@@ -41,6 +42,12 @@ object HealthPermissions {
 
     fun contract() = PermissionController.createRequestPermissionResultContract()
 }
+
+// 1 回の readRecords で受け取る件数
+private const val PAGE_SIZE = 1000
+
+// 睡眠を読む範囲の区切りの時刻。前日の正午から翌日の正午までを読み、起床した日に振り分ける
+private val SLEEP_WINDOW_BOUNDARY: LocalTime = LocalTime.NOON
 
 class HealthReader(context: Context, private val zone: ZoneId = ZoneId.systemDefault()) {
     private val client = HealthConnectClient.getOrCreate(context)
@@ -69,8 +76,8 @@ class HealthReader(context: Context, private val zone: ZoneId = ZoneId.systemDef
         val bodyFat = readAll(BodyFatRecord::class, instantFilter)
 
         val sleepFilter = TimeRangeFilter.between(
-            from.minusDays(1).atTime(12, 0).atZone(zone).toInstant(),
-            to.plusDays(1).atTime(12, 0).atZone(zone).toInstant(),
+            from.minusDays(1).atTime(SLEEP_WINDOW_BOUNDARY).atZone(zone).toInstant(),
+            to.plusDays(1).atTime(SLEEP_WINDOW_BOUNDARY).atZone(zone).toInstant(),
         )
         val sleepInputs = readAll(SleepSessionRecord::class, sleepFilter).map { r ->
             SleepSessionInput(
@@ -134,7 +141,7 @@ class HealthReader(context: Context, private val zone: ZoneId = ZoneId.systemDef
         // ページ送りのトークンを更新しながら繰り返すため var
         var token: String? = null
         do {
-            val res = client.readRecords(ReadRecordsRequest(type, filter, pageSize = 1000, pageToken = token))
+            val res = client.readRecords(ReadRecordsRequest(type, filter, pageSize = PAGE_SIZE, pageToken = token))
             out += res.records
             token = res.pageToken
         } while (token != null)

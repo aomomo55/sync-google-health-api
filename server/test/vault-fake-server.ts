@@ -12,7 +12,6 @@ export class FakeObsidianMcp {
   toolCalls = 0;
   initializes = 0;
   inflight = 0;
-  maxInflight = 0;
   // 次の tools/call に対して返す HTTP ステータス（消費される）
   failToolCalls: number[] = [];
   toolDelayMs = 0;
@@ -62,7 +61,6 @@ export class FakeObsidianMcp {
       async ({ path, content }) => {
         this.toolCalls++;
         this.inflight++;
-        this.maxInflight = Math.max(this.maxInflight, this.inflight);
         try {
           if (this.toolDelayMs) {
             await new Promise((r) => setTimeout(r, this.toolDelayMs));

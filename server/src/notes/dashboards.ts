@@ -1,3 +1,5 @@
+import { RECENT_DAYS, RECENT_DAYS_VIEW, RECENT_NIGHTS_VIEW } from "./bases.js";
+import { SLEEP_GOAL_HOURS, STEP_GOAL } from "./daily.js";
 import { GENERATED_NOTICE } from "./format.js";
 import { linkTarget, notePaths } from "./paths.js";
 
@@ -14,6 +16,10 @@ const COLORS = {
   gray: "#999999",
 };
 
+// 睡眠ダッシュボードの「直近1週間」の日数と、ステージなどのグラフに並べる夜の数
+const SLEEP_WEEK_DAYS = 7;
+const SLEEP_CHART_NIGHTS = 30;
+
 // 各ブロック共通の前置き。テンプレート内で ${ やバッククォートは使わない
 function prelude(): string {
   return `const el = this.container;
@@ -27,22 +33,22 @@ const draw = (config) => {
 const line = (label, data, color, extra) => Object.assign({ label, data, borderColor: color, backgroundColor: color, tension: 0.2, pointRadius: 2, spanGaps: true }, extra || {});`;
 }
 
-// root は dataviewjs の文字列リテラルに埋め込む。使える文字は設定の検証で制限している
-function dailyPages(root: string, count: number, unit: "days" | "nights"): string {
+// dir は dataviewjs の文字列リテラルに埋め込む。使える文字は設定の検証で制限している
+function dailyPages(dir: string, count: number, unit: "days" | "nights"): string {
   const filter =
     unit === "days"
       ? `const cutoff = dv.date("today").minus({ days: ${count - 1} });
-const pages = dv.pages('"${root}/Daily"')
+const pages = dv.pages('"${dir}"')
   .where((p) => p.type === "health-daily" && p.日付 && p.日付 >= cutoff)
   .sort((p) => p.日付, "asc").array();`
-      : `const pages = dv.pages('"${root}/Daily"')
+      : `const pages = dv.pages('"${dir}"')
   .where((p) => p.type === "health-daily" && p.日付 && num(p.睡眠時間h) !== null)
   .sort((p) => p.日付, "asc").array().slice(-${count});`;
   return filter;
 }
 
-function monthlyPages(root: string): string {
-  return `const pages = dv.pages('"${root}/Monthly"')
+function monthlyPages(dir: string): string {
+  return `const pages = dv.pages('"${dir}"')
   .where((p) => p.type === "health-monthly" && p.月初日)
   .sort((p) => p.月初日, "asc").array();`;
 }
@@ -51,24 +57,28 @@ function block(body: string): string {
   return `\`\`\`dataviewjs\n${body}\n\`\`\`\n`;
 }
 
+// 目標値の水平な破線。rows は出力する JavaScript 側の配列の変数名
+function goalLine(label: string, rows: string, value: number): string {
+  return `{ type: "line", label: "${label}", data: ${rows}.map(() => ${value}), borderColor: "${COLORS.red}", borderDash: [6, 4], pointRadius: 0, borderWidth: 1 }`;
+}
+
 function emptyGuard(msg: string): string {
   return `if (pages.length === 0) { dv.paragraph("${msg}"); } else {`;
 }
 
 export function renderHealthDashboard(root?: string): string {
   const p = notePaths(root);
-  const r = p.root;
 
   const steps = block(`${prelude()}
-${dailyPages(r, 90, "days")}
-${emptyGuard("直近90日のデータがありません")}
+${dailyPages(p.dailyDir, RECENT_DAYS, "days")}
+${emptyGuard(`直近${RECENT_DAYS}日のデータがありません`)}
   draw({
     type: "bar",
     data: {
       labels: pages.map(day),
       datasets: [
         { label: "歩数", data: pages.map((p) => num(p.歩数)), backgroundColor: "${COLORS.blue}" },
-        { type: "line", label: "目標 8000", data: pages.map(() => 8000), borderColor: "${COLORS.red}", borderDash: [6, 4], pointRadius: 0, borderWidth: 1 },
+        ${goalLine(`目標 ${STEP_GOAL}`, "pages", STEP_GOAL)},
       ],
     },
     options: { scales: { y: { beginAtZero: true } } },
@@ -76,8 +86,8 @@ ${emptyGuard("直近90日のデータがありません")}
 }`);
 
   const hr = block(`${prelude()}
-${dailyPages(r, 90, "days")}
-${emptyGuard("直近90日のデータがありません")}
+${dailyPages(p.dailyDir, RECENT_DAYS, "days")}
+${emptyGuard(`直近${RECENT_DAYS}日のデータがありません`)}
   draw({
     type: "line",
     data: { labels: pages.map(day), datasets: [line("平均心拍", pages.map((p) => num(p.平均心拍)), "${COLORS.red}")] },
@@ -85,9 +95,9 @@ ${emptyGuard("直近90日のデータがありません")}
 }`);
 
   const weight = block(`${prelude()}
-${dailyPages(r, 90, "days")}
+${dailyPages(p.dailyDir, RECENT_DAYS, "days")}
 const withWeight = pages.filter((p) => num(p.体重kg) !== null);
-if (withWeight.length === 0) { dv.paragraph("直近90日の体重データがありません"); } else {
+if (withWeight.length === 0) { dv.paragraph("直近${RECENT_DAYS}日の体重データがありません"); } else {
   draw({
     type: "line",
     data: { labels: withWeight.map(day), datasets: [line("体重kg", withWeight.map((p) => num(p.体重kg)), "${COLORS.green}")] },
@@ -95,8 +105,8 @@ if (withWeight.length === 0) { dv.paragraph("直近90日の体重データがあ
 }`);
 
   const calories = block(`${prelude()}
-${dailyPages(r, 90, "days")}
-${emptyGuard("直近90日のデータがありません")}
+${dailyPages(p.dailyDir, RECENT_DAYS, "days")}
+${emptyGuard(`直近${RECENT_DAYS}日のデータがありません`)}
   draw({
     type: "bar",
     data: {
@@ -111,7 +121,7 @@ ${emptyGuard("直近90日のデータがありません")}
 }`);
 
   const monthlyCalories = block(`${prelude()}
-${monthlyPages(r)}
+${monthlyPages(p.monthlyDir)}
 const rows = pages.filter((p) => num(p.平均消費カロリー) !== null || num(p.平均摂取カロリー) !== null);
 if (rows.length === 0) { dv.paragraph("月次データがありません"); } else {
   draw({
@@ -129,7 +139,7 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
 
   const monthly = (label: string, key: string, color: string, type: "bar" | "line") =>
     block(`${prelude()}
-${monthlyPages(r)}
+${monthlyPages(p.monthlyDir)}
 const rows = pages.filter((p) => num(p.${key}) !== null);
 if (rows.length === 0) { dv.paragraph("月次データがありません"); } else {
   draw({
@@ -145,8 +155,8 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
     "# ヘルスケアダッシュボード\n",
     GENERATED_NOTICE,
     "> [!info] データについて\n> Google Fit の Takeout と、Android アプリ経由の Health Connect のデータから自動生成・自動更新されます。\n> このノートは静的で、グラフと表は Dataview / Charts / Bases が Daily・Monthly ノートから描画します。\n",
-    "## 直近90日\n",
-    `![[${p.dailyBase}#直近90日]]\n`,
+    `## ${RECENT_DAYS_VIEW}\n`,
+    `![[${p.dailyBase}#${RECENT_DAYS_VIEW}]]\n`,
     "### 歩数\n",
     steps,
     "### 平均心拍\n",
@@ -173,7 +183,6 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
 
 export function renderSleepDashboard(root?: string): string {
   const p = notePaths(root);
-  const r = p.root;
   const hours = `const hm = (s) => {
   const m = /^(\\d{1,2}):(\\d{2})$/.exec(String(s || ""));
   return m ? Number(m[1]) + Number(m[2]) / 60 : null;
@@ -185,22 +194,22 @@ const timeAxis = { min: 20, max: 34, title: { display: true, text: "時刻" }, t
   // 起床は翌日扱い（+24）にして、就寝（下）→起床（上）と時間が一方向に進む軸にする。
   // 軸は 20:00〜翌10:00 に固定。外れる日が出てきたら範囲を広げる
 
-  // 直近 7 日（暦日）の睡眠時間。記録の無い日も空けて並べ、7 時間の目安線を引く
+  // 直近 SLEEP_WEEK_DAYS 日（暦日）の睡眠時間。記録の無い日も空けて並べ、目標の睡眠時間の目安線を引く
   // 以下のテンプレート内は、ダッシュボードに出力する JavaScript の文字列（この TS のコードではない）
   const week = block(`${prelude()}
-${dailyPages(r, 7, "days")}
+${dailyPages(p.dailyDir, SLEEP_WEEK_DAYS, "days")}
 const labels = [];
-for (let i = 6; i >= 0; i--) labels.push(dv.date("today").minus({ days: i }).toFormat("yyyy-MM-dd"));
+for (let i = ${SLEEP_WEEK_DAYS - 1}; i >= 0; i--) labels.push(dv.date("today").minus({ days: i }).toFormat("yyyy-MM-dd"));
 const byDay = new Map(pages.map((p) => [day(p), num(p.睡眠時間h)]));
 const values = labels.map((d) => (byDay.has(d) ? byDay.get(d) : null));
-if (values.every((v) => v === null)) { dv.paragraph("直近7日の睡眠データがありません"); } else {
+if (values.every((v) => v === null)) { dv.paragraph("直近${SLEEP_WEEK_DAYS}日の睡眠データがありません"); } else {
   draw({
     type: "bar",
     data: {
       labels: labels.map((d) => d.slice(5)),
       datasets: [
         { label: "睡眠時間h", data: values, backgroundColor: "${COLORS.purple}" },
-        { type: "line", label: "目標 7時間", data: labels.map(() => 7), borderColor: "${COLORS.red}", borderDash: [6, 4], pointRadius: 0, borderWidth: 1 },
+        ${goalLine(`目標 ${SLEEP_GOAL_HOURS}時間`, "labels", SLEEP_GOAL_HOURS)},
       ],
     },
     options: { scales: { y: { beginAtZero: true, suggestedMax: 9, title: { display: true, text: "時間" } } } },
@@ -208,7 +217,7 @@ if (values.every((v) => v === null)) { dv.paragraph("直近7日の睡眠デー�
 }`);
 
   const stages = block(`${prelude()}
-${dailyPages(r, 30, "nights")}
+${dailyPages(p.dailyDir, SLEEP_CHART_NIGHTS, "nights")}
 ${emptyGuard("睡眠データがありません")}
   const stack = (label, key, color) => ({ label, data: pages.map((p) => num(p[key])), backgroundColor: color });
   draw({
@@ -227,7 +236,7 @@ ${emptyGuard("睡眠データがありません")}
 
   const times = block(`${prelude()}
 ${hours}
-${dailyPages(r, 30, "nights")}
+${dailyPages(p.dailyDir, SLEEP_CHART_NIGHTS, "nights")}
 ${emptyGuard("睡眠データがありません")}
   draw({
     type: "line",
@@ -243,7 +252,7 @@ ${emptyGuard("睡眠データがありません")}
 }`);
 
   const awake = block(`${prelude()}
-${dailyPages(r, 30, "nights")}
+${dailyPages(p.dailyDir, SLEEP_CHART_NIGHTS, "nights")}
 ${emptyGuard("睡眠データがありません")}
   draw({
     type: "bar",
@@ -253,7 +262,7 @@ ${emptyGuard("睡眠データがありません")}
 }`);
 
   const monthlySleep = block(`${prelude()}
-${monthlyPages(r)}
+${monthlyPages(p.monthlyDir)}
 const rows = pages.filter((p) => num(p.平均睡眠時間h) !== null);
 const values = rows.map((p) => num(p.平均睡眠時間h));
 if (rows.length === 0) { dv.paragraph("月次データがありません"); } else {
@@ -263,17 +272,17 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
       labels: rows.map(month),
       datasets: [
         line("平均睡眠時間h", values, "${COLORS.blue}"),
-        { type: "line", label: "目標 7時間", data: rows.map(() => 7), borderColor: "${COLORS.red}", borderDash: [6, 4], pointRadius: 0, borderWidth: 1 },
+        ${goalLine(`目標 ${SLEEP_GOAL_HOURS}時間`, "rows", SLEEP_GOAL_HOURS)},
       ],
     },
     // 0 起点だと月ごとの差が見えないので、データの範囲に合わせる
-    options: { scales: { y: { min: Math.floor(Math.min(...values, 7) - 0.5), max: Math.ceil(Math.max(...values, 7) + 0.5), title: { display: true, text: "時間" } } } },
+    options: { scales: { y: { min: Math.floor(Math.min(...values, ${SLEEP_GOAL_HOURS}) - 0.5), max: Math.ceil(Math.max(...values, ${SLEEP_GOAL_HOURS}) + 0.5), title: { display: true, text: "時間" } } } },
   });
 }`);
 
   const monthlyTimes = block(`${prelude()}
 ${hours}
-${monthlyPages(r)}
+${monthlyPages(p.monthlyDir)}
 const rows = pages.filter((p) => hm(p.平均就寝時刻) !== null || hm(p.平均起床時刻) !== null);
 if (rows.length === 0) { dv.paragraph("月次データがありません"); } else {
   draw({
@@ -295,13 +304,13 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
     `[[${linkTarget(p.dashboard)}|ヘルスケアダッシュボード]] に戻る\n`,
     "## 直近1週間の睡眠時間\n",
     week,
-    "## 直近90夜\n",
-    `![[${p.sleepBase}#直近90夜]]\n`,
-    "### 睡眠ステージ（直近30夜）\n",
+    `## ${RECENT_NIGHTS_VIEW}\n`,
+    `![[${p.sleepBase}#${RECENT_NIGHTS_VIEW}]]\n`,
+    `### 睡眠ステージ（直近${SLEEP_CHART_NIGHTS}夜）\n`,
     stages,
-    "### 就寝・起床時刻（直近30夜）\n",
+    `### 就寝・起床時刻（直近${SLEEP_CHART_NIGHTS}夜）\n`,
     times,
-    "### 中途覚醒（直近30夜）\n",
+    `### 中途覚醒（直近${SLEEP_CHART_NIGHTS}夜）\n`,
     awake,
     "## 月次の推移\n",
     "### 平均睡眠時間\n",

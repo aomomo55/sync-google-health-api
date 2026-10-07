@@ -1,13 +1,9 @@
 import type { DailySummary } from "../domain/daily.js";
-import { isRealDate } from "../domain/dates.js";
+import { isRealDate, MS_PER_MINUTE } from "../domain/dates.js";
+import { round } from "../shared/rounding.js";
 import { parseCsv } from "./csv.js";
 
 export const TAKEOUT_SOURCE = "takeout";
-
-const round = (v: number, digits: number): number => {
-  const f = 10 ** digits;
-  return Math.round(v * f) / f;
-};
 
 function cell(row: string[], idx: number | undefined): number | undefined {
   if (idx === undefined) return undefined;
@@ -59,7 +55,7 @@ export function parseDailyCsv(text: string): DailySummary[] {
       heart_points: cell(row, c("ハートポイント（強めの運動）")),
       vigorous_minutes: cell(row, c("強めの運動（分）")),
       walking_minutes: opt(cell(row, c("「ウォーキング」の時間（ミリ秒）")), (n) =>
-        round(n / 60000, 1),
+        round(n / MS_PER_MINUTE, 1),
       ),
     });
     const heart_rate = compact({
