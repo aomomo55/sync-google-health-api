@@ -87,5 +87,5 @@ Android（`android/` で実行。JDK 21 が必要。`JAVA_HOME` を JDK 21 に�
 ## デプロイ
 
 - サーバーは fly.io。`server/fly.toml` のアプリ名はプレースホルダーなので、`fly deploy -a <アプリ名> --ha=false` で指定する
-- 秘密情報（`API_TOKEN`、`COUCHDB_*`、`OBSIDIAN_MCP_*`）は fly.io の secrets に登録し、リポジトリやログに出さない。案内するときは、シェルの履歴に残らない `fly secrets import -a <アプリ名>` に標準入力から `KEY=value` を渡す方法（入力後に Ctrl-D）を基本とする。`fly secrets set` は値が履歴に残るので、使う場合はその点を添える。エージェントが値を扱う必要がある手順は、利用者自身に実行してもらう
+- 秘密情報（`API_TOKEN`、`COUCHDB_*`、`OBSIDIAN_MCP_*`）は fly.io の secrets に登録し、リポジトリやログに出さない。案内するときは、シェルの履歴に残らない `fly secrets import -a <アプリ名>` に標準入力から `KEY=value` を渡す方法を基本とする。案内では、`KEY=` と打ってから値だけを貼る形で 1 行ずつ入力し、最後に Enter で空の行に移ってから Ctrl-D（終わらなければもう一度）と書く。置き換える値は `<…>` で書き、`<` `>` も含めて置き換えると添える。`fly secrets set` は値が履歴に残るので、使う場合はその点を添える。エージェントが値を扱う必要がある手順は、利用者自身に実行してもらう
 - Android アプリはデバッグ署名の APK を手動でインストールする（`android/README.md`）
