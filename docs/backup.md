@@ -99,7 +99,7 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<アプリ名>.fly.dev/backup/h
    | `BACKUP_TOKEN` | 2 で登録したトークン（64 文字の英数字） |
    | `FOLDER_ID` | 3 のフォルダ ID |
 
-5. エディタで `runBackup` を一度実行し、権限を許可する。「このアプリは Google で確認されていません」と出たら、「詳細」→「（プロジェクト名）に移動」で進む。フォルダに `health-YYYY-MM-DD.json.gz.age` ができることを確かめる
+5. エディタで `runBackup` を一度実行し、権限を許可する（求められる権限と理由は [GAS が要求する権限](#gas-が要求する権限)）。「このアプリは Google で確認されていません」と出たら、「詳細」→「（プロジェクト名）に移動」で進む。フォルダに `health-YYYY-MM-DD.json.gz.age` ができることを確かめる
 6. `install` を一度実行する（毎日 4 時台に `runBackup` を実行するトリガーができる）
 
 ### 5. 復元を一度試す
@@ -107,6 +107,20 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<アプリ名>.fly.dev/backup/h
 下の「復元」の「1. 中身を確かめる」までを、パスワードマネージャーから取り出した鍵で行う。PC を失ったときと同じ状況で戻せることを、困る前に確かめておく。紙の控えも、一度は紙から打ち込んだ鍵で試しておくと、書き間違いに気づける。
 
 空の DB への書き戻し（「2. 空の DB に書き戻す」）まで試すと、より確実。
+
+## GAS が要求する権限
+
+[`gas/appsscript.json`](../gas/appsscript.json) の `oauthScopes` で、使う機能の分だけを要求している（JSON にはコメントを書けないので、理由はここに書く）。表のスコープは `https://www.googleapis.com/` より後ろの部分。
+
+| スコープ | 使う箇所 | 理由 |
+|---|---|---|
+| `auth/drive` | `DriveApp.getFolderById`、`getFiles` / `getFilesByName`、`createFile`、`setTrashed` | 保存先は利用者が Drive の画面で作ったフォルダ。狭い `drive.file` は、このスクリプトが作ったファイルか、利用者がこのアプリで開いたファイルにしか触れないため、そのフォルダを開けず、一覧にも出ない。Drive 全体への読み書きになるが、中身は age で暗号化済みで、スクリプトは `FOLDER_ID` のフォルダの中だけを扱う |
+| `auth/script.external_request` | `UrlFetchApp.fetch` | サーバーの `/backup/health` からバックアップを取得する |
+| `auth/script.send_mail` | `MailApp.sendEmail` | 失敗や日数の減少を自分宛てにメールで知らせる。`MailApp` は送信だけで、受信トレイは読めない |
+| `auth/script.scriptapp` | `install` の `ScriptApp.getProjectTriggers` / `newTrigger` / `deleteTrigger` | 毎日のトリガーをコードで作り直す |
+| `auth/userinfo.email` | `Session.getEffectiveUser().getEmail()` | 通知の宛先（GAS を動かしている自分のアドレス）を得る |
+
+`drive` を狭めるには、スクリプト自身が保存先のフォルダを作る（`drive.file` でも触れるようにする）などの作り直しが要る。その場合は、コピーし直したあとに `runBackup` を一度実行して確かめる。
 
 ## 手動でバックアップを取る
 
@@ -196,6 +210,10 @@ fly logs -a <アプリ名> --no-tail
   fly secrets unset BACKUP_TOKEN BACKUP_AGE_RECIPIENT -a <アプリ名>
   ```
 
+### GAS の実行が `BACKUP_URL は https:// で始めてください` で失敗する
+
+スクリプト プロパティの `BACKUP_URL` が `https://` で始まっていない（`http://` になっている、前に空白が入っている、など）。`http://` のままだと、サーバーが `https://` へ転送する前の最初のリクエストでトークンが暗号化されずに流れるため、GAS はサーバーに送る前に止める。`https://<アプリ名>.fly.dev/backup/health` に直す。
+
 ### GAS の実行が `サーバーが HTTP <番号> を返しました` で失敗する
 
 | 番号 | 原因と対処 |
@@ -203,7 +221,7 @@ fly logs -a <アプリ名> --no-tail
 | 401 | トークンの形は正しいが、値がサーバーと一致していない。`API_TOKEN` を入れた、トークンを 2 回作って別々の値を登録した、など。下の方法でどちらが違うかを確かめ、両方に同じ値を登録し直す |
 | 400 | プロパティの `BACKUP_TOKEN` に、トークンに使えない文字（途中の空白・`<` `>`・全角など）が入っている |
 | 404 | サーバーに `BACKUP_TOKEN` と `BACKUP_AGE_RECIPIENT` が登録されていない、または `BACKUP_URL` のパスが違う |
-| 301 / 302 | `BACKUP_URL` が `http://` になっている（GAS はリダイレクトを追わない）。`https://` にする |
+| 301 / 302 | `BACKUP_URL` が、別の URL へ転送される URL になっている（GAS はリダイレクトを追わない）。転送先を確かめ、`https://<アプリ名>.fly.dev/backup/health` を直接指定する（`http://` の場合は、送る前に上の節のエラーで止まる） |
 | 502 / 503 | サーバーが起動していない（上の節） |
 
 手元のトークンがサーバーと一致しているかは、次のように確かめられる（`read -rs` で読むので、トークンは画面にも履歴にも残らない）。200 ならサーバーの値と一致していて、GAS のプロパティのほうが違う。401 なら手元の値もサーバーと違う。
