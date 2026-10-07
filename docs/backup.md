@@ -48,7 +48,7 @@ age-keygen -o health-backup-key.txt
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-fly.io の secrets に登録する。シェルの履歴に残らないよう、標準入力から渡す。
+fly.io の secrets に登録する。シェルの履歴に残らないよう、標準入力から渡す（秘密情報の登録の仕方全般は [deploy.md](deploy.md#秘密情報を登録する) にある）。
 
 ```sh
 fly secrets import -a <アプリ名>
