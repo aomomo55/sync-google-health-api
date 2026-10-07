@@ -6,7 +6,7 @@ Android アプリ（Kotlin / Jetpack Compose）で作業するときの指示。
 
 Health Connect から日次サマリーを作り、サーバーの `POST /api/ingest` へ送る。
 
-- 集計ロジックは Android に依存しない純粋な Kotlin にする（`DayAggregator`、`SleepAssigner`、`Chunking` など）。`android.*` / `androidx.*`、I/O、現在時刻を入れない
+- 集計ロジックは Android に依存しない純粋な Kotlin にする（`DayAggregator`、`SleepAssigner`、`Chunking` など）。`android.*` / `androidx.*`、I/O、現在時刻、乱数、環境変数を入れない
 - 今は 1 つのパッケージ。機能ごとにパッケージを分けたら、複数の機能から使う汎用の部品は `shared` パッケージに置く（ルートの AGENTS.md の `shared` の約束に従う）
 
 ## コマンド
