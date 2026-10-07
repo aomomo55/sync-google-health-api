@@ -1,5 +1,5 @@
 import type { DailySummary } from "../domain/daily.js";
-import { JST_OFFSET_MS, MS_PER_MINUTE } from "../domain/dates.js";
+import { JST_OFFSET, JST_OFFSET_MS, MS_PER_MINUTE } from "../domain/dates.js";
 
 export type Segment = {
   source: string;
@@ -64,7 +64,7 @@ export function jstDate(ms: number): string {
 
 export function jstIso(ms: number): string {
   const sec = Math.round(ms / 1000) * 1000; // .999 秒の端数を丸める
-  return `${new Date(sec + JST_OFFSET_MS).toISOString().slice(0, 19)}+09:00`;
+  return `${new Date(sec + JST_OFFSET_MS).toISOString().slice(0, 19)}${JST_OFFSET}`;
 }
 
 // Takeout の raw sleep segment JSON を Segment[] にする。時刻が不正な記録は捨てて stats に数える

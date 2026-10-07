@@ -35,7 +35,7 @@ class RationaleActivity : ComponentActivity() {
                                 "へ HTTPS で送信します。" +
                                 "それ以外の第三者には送信せず、広告や解析にも使いません。\n\n" +
                                 "「バックグラウンドでのデータ読み取り」は、アプリを開いていなくても " +
-                                "6 時間ごとに直近 7 日分を自動送信するために使います。\n\n" +
+                                "${SyncWorker.INTERVAL_HOURS} 時間ごとに直近 ${RECENT_SYNC_DAYS} 日分を自動送信するために使います。\n\n" +
                                 "API トークンは端末の Keystore で暗号化して保存します。" +
                                 "権限はヘルスコネクトの設定からいつでも取り消せます。",
                         )

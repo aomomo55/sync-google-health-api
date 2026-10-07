@@ -1,6 +1,6 @@
 import { round } from "../shared/rounding.js";
 import type { DailySummary } from "./daily.js";
-import { JST_OFFSET_MS, MINUTES_PER_DAY } from "./dates.js";
+import { formatHm, jstMinutesOfDay, MINUTES_PER_DAY } from "./dates.js";
 
 export interface MonthlySummary {
   month: string;
@@ -51,20 +51,6 @@ function sum(xs: number[]): number | null {
 
 function r(x: number | null, digits: number): number | null {
   return x === null ? null : round(x, digits);
-}
-
-// ISO 文字列を JST の 0:00 からの経過分に変換
-function jstMinutes(iso: string | null | undefined): number | null {
-  if (!iso) return null;
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return null;
-  const d = new Date(t + JST_OFFSET_MS);
-  return d.getUTCHours() * 60 + d.getUTCMinutes();
-}
-
-function formatHm(minutes: number): string {
-  const m = ((Math.round(minutes) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }
 
 function avgBedtime(xs: number[]): string | null {
@@ -123,9 +109,9 @@ export function summarizeMonth(month: string, days: DailySummary[]): MonthlySumm
       nights,
       avg_asleep_hours: asleep === null ? null : round(asleep / 60, 2),
       avg_in_bed_hours: inBed === null ? null : round(inBed / 60, 2),
-      avg_bedtime: avgBedtime(vals(sleepDays.map((s) => jstMinutes(s.start)))),
+      avg_bedtime: avgBedtime(vals(sleepDays.map((s) => jstMinutesOfDay(s.start)))),
       avg_wake_time: (() => {
-        const w = avg(vals(sleepDays.map((s) => jstMinutes(s.end))));
+        const w = avg(vals(sleepDays.map((s) => jstMinutesOfDay(s.end))));
         return w === null ? null : formatHm(w);
       })(),
       total_nap_minutes: sum(vals(sleepDays.map((s) => s.nap_minutes))),

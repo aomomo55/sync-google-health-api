@@ -1,4 +1,4 @@
-import { JST_OFFSET_MS } from "../domain/dates.js";
+import { formatHm, jstMinutesOfDay } from "../domain/dates.js";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
@@ -12,11 +12,8 @@ export function numOrNull(x: number | null | undefined): number | null {
 
 // 任意のオフセット付き ISO 文字列を Asia/Tokyo の "HH:MM" に変換
 export function jstHm(iso: string | null | undefined): string | null {
-  if (!iso) return null;
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return null;
-  const d = new Date(t + JST_OFFSET_MS);
-  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+  const minutes = jstMinutesOfDay(iso);
+  return minutes === null ? null : formatHm(minutes);
 }
 
 // "YYYY-MM-DD" の曜日（暦上の曜日なのでタイムゾーン非依存）

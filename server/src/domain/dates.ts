@@ -3,6 +3,7 @@ export const MINUTES_PER_DAY = 1440;
 export const MS_PER_DAY = MINUTES_PER_DAY * MS_PER_MINUTE;
 // 日付はすべて Asia/Tokyo の暦日。日本は夏時間が無いので、オフセットは常に +09:00
 export const JST_OFFSET_MS = 9 * 60 * MS_PER_MINUTE;
+export const JST_OFFSET = "+09:00";
 
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MONTH_RE = /^(\d{4})-(\d{2})$/;
@@ -43,4 +44,19 @@ export function addDays(date: string, n: number): string {
 // 文字列で比べるので、月末は実在するかに関係なく -31 で足りる
 export function monthKeyRange(month: string): { start: string; end: string } {
   return { start: `${month}-01`, end: `${month}-31` };
+}
+
+// 任意のオフセット付き ISO 文字列を、Asia/Tokyo の 0:00 からの経過分（秒は切り捨て）に変換。不正なら null
+export function jstMinutesOfDay(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  const d = new Date(t + JST_OFFSET_MS);
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
+}
+
+// 0:00 からの経過分を "HH:MM" にする。分に四捨五入し、24 時間で巻き戻す
+export function formatHm(minutes: number): string {
+  const m = ((Math.round(minutes) % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
 }
