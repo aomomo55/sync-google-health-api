@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: 24
 
-      # pnpm の入れ方は ci.yml と同じ。版は server/Dockerfile の COREPACK_VERSION と合わせる
+      # pnpm の入れ方は ci.yml と同じ。版は server/Dockerfile の COREPACK_VERSION と ci.yml に合わせる
       - name: pnpm を有効化
         env:
           COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
