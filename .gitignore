@@ -33,3 +33,8 @@ android/keystore.properties
 android/.kotlin/
 *.iml
 *.apk
+
+# バックアップと age の鍵（リポジトリの外に置く決まりだが、誤って置いたときの保険）
+*.age
+*backup-key*.txt
+*restore-key*.txt
