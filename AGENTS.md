@@ -4,12 +4,13 @@
 
 ## 構成
 
-- `server/` — TypeScript / Hono のサーバー。日次データの受信・保存（CouchDB）、Google Takeout の取り込み、Obsidian ノートの生成と obsidian-sync-mcp 経由の書き込み
+- `server/` — TypeScript / Hono のサーバー。日次データの受信・保存（CouchDB）、Google Takeout の取り込み、Obsidian ノートの生成と obsidian-sync-mcp 経由の書き込み、暗号化したバックアップの提供と復元
   - `src/domain/` 日次・月次のデータ型と集計（純粋関数）
   - `src/store/` 保存先（`HealthStore`。CouchDB 実装とテスト用のメモリ実装）
   - `src/notes/` ノート・ダッシュボード・Bases の生成（純粋関数、出力は決定的）
   - `src/sync/` どのノートを更新するかの計画と実行
   - `src/vault/` obsidian-sync-mcp を MCP クライアントとして呼ぶ書き込み
+  - `src/routes/` HTTP の経路（`/api/*` と `/backup/*`）。組み立ては `src/app.ts`
   - `src/takeout/` Takeout（Google Fit 形式）の解析
   - `src/backup/` バックアップの形式（JSON → gzip → age での暗号化と復号）
   - `src/shared/` 複数の層から使う、健康データを知らない汎用の部品（純粋関数のユーティリティ、汎用の基底クラスなど）。必要になったときに作る
