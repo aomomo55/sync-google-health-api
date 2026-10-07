@@ -8,6 +8,8 @@ export const MIN_API_TOKEN_LENGTH = 32;
 export const BEARER_TOKEN_PATTERN = /^[A-Za-z0-9._~+/-]+=*$/;
 // トークンを平文で送ってよい、ローカルでの試験用のホスト
 export const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+// エラーメッセージに並べる表記。一覧を変えたときにメッセージが食い違わないよう、定数から作る
+export const LOCAL_HOSTS_LABEL = [...LOCAL_HOSTS].join(" / ");
 // fly.io のプライベートネットワークのホスト名の末尾。通信は fly.io の WireGuard の中だけを通る
 const FLY_PRIVATE_HOST_SUFFIXES = [".internal", ".flycast"];
 
@@ -57,8 +59,7 @@ const couchdbUrl = z
       return !u || isHttpsOrAllowedHttp(u, isLocalOrFlyPrivateHost);
     },
     {
-      message:
-        "https: の URL を指定してください（http: は localhost / 127.0.0.1 / [::1] と、fly.io のプライベートネットワークの .internal / .flycast のみ可）",
+      message: `https: の URL を指定してください（http: は ${LOCAL_HOSTS_LABEL} と、fly.io のプライベートネットワークの ${FLY_PRIVATE_HOST_SUFFIXES.join(" / ")} のみ可）`,
     },
   )
   .refine(
@@ -81,7 +82,7 @@ const obsidianMcpUrl = z
       return !u || isHttpsOrAllowedHttp(u, isLocalHost);
     },
     {
-      message: "https: の URL を指定してください（http: は localhost / 127.0.0.1 / [::1] のみ可）",
+      message: `https: の URL を指定してください（http: は ${LOCAL_HOSTS_LABEL} のみ可）`,
     },
   )
   // COUCHDB_URL と同じく、fetch の失敗時に資格情報入りの URL がエラー文に出るのを防ぐ

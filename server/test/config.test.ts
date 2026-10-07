@@ -46,11 +46,26 @@ describe("COUCHDB_URL", () => {
       "http://localhost.example.com:5984",
       "http://couch.internal.example.com",
       "http://internal",
+      // 末尾の . や、パス・クエリ・\\ で .internal に見せかけても、つなぐ先のホスト名で判定する
+      "http://couch.internal.:5984",
+      "http://evil.example.com/.internal",
+      "http://evil.example.com?.internal",
+      "http://evil.example.com\\@couch.internal",
     ]) {
       const msg = errorOf({ ...BASE, COUCHDB_URL: url });
       expect(msg).toMatch(/COUCHDB_URL: https:/);
       expect(msg).not.toContain(url);
     }
+  });
+
+  it("http を許すホストの一覧をメッセージに示す", () => {
+    const msg = errorOf({ ...BASE, COUCHDB_URL: "http://couch.example.com" });
+    expect(msg).toContain("localhost / 127.0.0.1 / [::1]");
+    expect(msg).toContain(".internal / .flycast");
+  });
+
+  it("ホスト名の大文字・小文字は区別しない", () => {
+    expect(() => loadConfig({ ...BASE, COUCHDB_URL: "http://COUCH.Internal:5984" })).not.toThrow();
   });
 
   it("ユーザー名・パスワード入りの URL は拒否し、値をメッセージに出さない", () => {
