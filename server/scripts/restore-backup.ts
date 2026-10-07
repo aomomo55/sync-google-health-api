@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { parseArgs } from "node:util";
-import { decryptBackup } from "../src/backup/backup.js";
+import { BackupTooLargeError, decryptBackup, MAX_BACKUP_JSON_BYTES } from "../src/backup/backup.js";
 import { type CouchdbConnection, loadCouchdbConnection } from "../src/config.js";
 import { CouchStore } from "../src/store/couch-store.js";
 
@@ -33,12 +33,16 @@ if (!values.file) fail("--file にバックアップのファイルを指定し�
 if (!values.identity) fail("--identity に age の秘密鍵のファイルを指定してください");
 
 // 読めないときはスタックトレースではなく、どの引数のファイルかが分かるメッセージで止める
+function failUnreadable(e: unknown, path: string, option: string): never {
+  const code = (e as NodeJS.ErrnoException).code ?? "";
+  return fail(`${option} のファイルを読めません（${code}）: ${path}`);
+}
+
 function readOrFail(path: string, option: string): Buffer {
   try {
     return readFileSync(path);
   } catch (e) {
-    const code = (e as NodeJS.ErrnoException).code ?? "";
-    return fail(`${option} のファイルを読めません（${code}）: ${path}`);
+    return failUnreadable(e, path, option);
   }
 }
 
@@ -49,12 +53,29 @@ const identity = readOrFail(values.identity, "--identity")
   .find((l) => l.startsWith("AGE-SECRET-KEY-"));
 if (!identity) fail("--identity のファイルに age の秘密鍵（AGE-SECRET-KEY-...）が見つかりません");
 
+// 復号はファイル全体をメモリに読んでから行うので、解凍後の上限より大きいファイルは読む前に止める
+// （圧縮と暗号化の後のファイルは、解凍後の JSON より十分小さい）
+const fileSize = (() => {
+  try {
+    return statSync(values.file).size;
+  } catch (e) {
+    return failUnreadable(e, values.file, "--file");
+  }
+})();
+if (fileSize > MAX_BACKUP_JSON_BYTES) {
+  fail(
+    `バックアップを読み込めません: ファイルが大きすぎます（${fileSize} バイト）: ${values.file}`,
+  );
+}
+
 const backup = await decryptBackup(
   new Uint8Array(readOrFail(values.file, "--file")),
   identity,
 ).catch((e: unknown) =>
   fail(
-    `バックアップを復号できません（鍵が違うか、ファイルが壊れています）: ${e instanceof Error ? e.message : String(e)}`,
+    e instanceof BackupTooLargeError
+      ? `バックアップを読み込めません: ${e.message}`
+      : `バックアップを復号できません（鍵が違うか、ファイルが壊れています）: ${e instanceof Error ? e.message : String(e)}`,
   ),
 );
 

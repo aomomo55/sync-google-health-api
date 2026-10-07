@@ -1,7 +1,14 @@
 import { parseArgs } from "node:util";
 import { addDays, inclusiveDays, isRealDate } from "../src/domain/dates.js";
 import { MAX_SPAN_DAYS } from "../src/routes/health.js";
-import { checkApiToken, checkApiUrl, describeError, scrubToken } from "./cli-guard.js";
+import {
+  checkApiToken,
+  checkApiUrl,
+  describeError,
+  isTimeoutError,
+  REQUEST_TIMEOUT_MS,
+  scrubToken,
+} from "./cli-guard.js";
 
 const DEFAULT_CHUNK_DAYS = 120;
 const RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
@@ -50,7 +57,9 @@ const endpoint = `${apiUrl.replace(/\/+$/, "")}/api/notes/sync`;
 
 const describe = (e: unknown) => describeError(e, token);
 
-// 同期は何度やり直しても同じ結果になるので、通信エラーと 5xx は待ってから再試行する
+// 同期は何度やり直しても同じ結果になるので、通信エラーと 5xx は待ってから再試行する。
+// タイムアウトはやり直さない。区間が大きすぎて間に合わないことが多く、同じ区間でやり直しても再び時間切れになり、
+// 1 区間で最大 4 回分（40 分）待つことになるため。その区間は失敗として、--days を小さくするよう案内する
 async function postWithRetry(body: unknown): Promise<Response> {
   // リトライの回数そのものがループの制御なので let にする
   for (let attempt = 0; ; attempt++) {
@@ -59,11 +68,12 @@ async function postWithRetry(body: unknown): Promise<Response> {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (res.status < 500 || attempt >= RETRY_DELAYS_MS.length) return res;
       console.error(`  HTTP ${res.status}。再試行します`);
     } catch (e) {
-      if (attempt >= RETRY_DELAYS_MS.length) throw e;
+      if (isTimeoutError(e) || attempt >= RETRY_DELAYS_MS.length) throw e;
       console.error(`  ${describe(e)}。再試行します`);
     }
     await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
@@ -98,7 +108,8 @@ for (let start = from, first = true; start <= to; first = false) {
     );
   } catch (e) {
     errorChunks.push(`${start}..${end}`);
-    console.error(`${start}..${end}: エラー ${describe(e)}`);
+    const hint = isTimeoutError(e) ? "（--days を小さくしてやり直してください）" : "";
+    console.error(`${start}..${end}: エラー ${describe(e)}${hint}`);
   }
   start = addDays(end, 1);
 }
