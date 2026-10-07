@@ -11,6 +11,7 @@ on:
     paths:
       - server/package.json
       - server/pnpm-lock.yaml
+      - .github/workflows/audit.yml
 
 permissions:
   contents: read

@@ -58,7 +58,7 @@ jobs:
 
       # server/package.json の packageManager の版を sha512 を検査して入れる
       # (corepack prepare はハッシュを検査せずにキャッシュするので使わない)
-      # corepack は Node 25 以降に同梱されないため npm で固定版を入れる。版は server/Dockerfile の COREPACK_VERSION と合わせる
+      # corepack は Node 25 以降に同梱されないため npm で固定版を入れる。版は server/Dockerfile の COREPACK_VERSION と audit.yml と合わせる
       - name: pnpm を有効化
         env:
           COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
