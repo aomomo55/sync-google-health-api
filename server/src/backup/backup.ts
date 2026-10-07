@@ -10,8 +10,27 @@ import { issuePath } from "../shared/issue-path.js";
 export const BACKUP_FORMAT = "sync-google-health-backup";
 export const BACKUP_VERSION = 1;
 
+// 解凍後の JSON の上限。1 日分は全項目を桁の多い数値で埋めても約 1 KB なので、100 年分（約 3.7 万日）
+// でも 40 MB ほどに収まる。その 3 倍ほどの余裕を取り、小さなファイルが巨大に膨らむ圧縮爆弾で
+// メモリを使い切る前に止める
+export const MAX_BACKUP_JSON_BYTES = 128 * 1024 * 1024;
+const BYTES_PER_MIB = 1024 * 1024;
+
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
+
+async function gunzipWithLimit(compressed: Uint8Array): Promise<Buffer> {
+  try {
+    return await gunzipAsync(compressed, { maxOutputLength: MAX_BACKUP_JSON_BYTES });
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "ERR_BUFFER_TOO_LARGE") {
+      throw new Error(
+        `解凍後のサイズが上限（${MAX_BACKUP_JSON_BYTES / BYTES_PER_MIB} MiB）を超えています`,
+      );
+    }
+    throw e;
+  }
+}
 
 export interface BackupPayload {
   format: typeof BACKUP_FORMAT;
@@ -66,7 +85,7 @@ export async function decryptBackup(data: Uint8Array, identity: string): Promise
   const decrypter = new Decrypter();
   decrypter.addIdentity(identity);
   const compressed = await decrypter.decrypt(data);
-  const json: unknown = JSON.parse((await gunzipAsync(compressed)).toString("utf8"));
+  const json: unknown = JSON.parse((await gunzipWithLimit(compressed)).toString("utf8"));
   const payload = PayloadSchema.parse(json);
   const results = payload.days.map((d, index) => ({
     index,

@@ -9,6 +9,7 @@ import {
   decryptBackup,
   encryptBackup,
   isAgeRecipient,
+  MAX_BACKUP_JSON_BYTES,
 } from "../src/backup/backup.js";
 import { loadConfig } from "../src/config.js";
 import type { DailySummary } from "../src/domain/daily.js";
@@ -59,6 +60,20 @@ describe("encryptBackup / decryptBackup", () => {
       [1, "day:broken"],
       [2, "2026-01-04"],
     ]);
+  });
+
+  it("解凍後のサイズが上限を超えるファイルは throw", async () => {
+    // gzip のメンバーをつなげたものは 1 つの gzip として解凍できる。1 MiB の 0 を圧縮したものを
+    // 上限より 1 つ多く並べ、大きなデータを用意せずに上限を超えさせる
+    const mib = 1024 * 1024;
+    const member = gzipSync(Buffer.alloc(mib));
+    const compressed = Buffer.concat(
+      Array.from({ length: MAX_BACKUP_JSON_BYTES / mib + 1 }, () => member),
+    );
+    const e = new Encrypter();
+    e.addRecipient(recipient);
+    const data = await e.encrypt(new Uint8Array(compressed));
+    await expect(decryptBackup(data, identity)).rejects.toThrow(/解凍後のサイズが上限/);
   });
 
   it("形式が違うファイルは throw", async () => {
