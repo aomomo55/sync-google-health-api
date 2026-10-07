@@ -10,9 +10,9 @@ Android アプリから送られる日次ヘルスデータを受け取るサー
 | `PORT` | いいえ | `8080` | 待ち受けポート |
 | `API_TOKEN` | はい | - | `/api/*` 用の Bearer トークン（32文字以上。使える文字は英数字と `. _ ~ + / -`、末尾の `=`） |
 | `COUCHDB_URL` | はい | - | CouchDB のベース URL（`http:` / `https:`。ユーザー名・パスワードは含めず `COUCHDB_USER` / `COUCHDB_PASSWORD` で指定） |
-| `COUCHDB_USER` | はい | - | CouchDB ユーザー |
+| `COUCHDB_USER` | はい | - | CouchDB ユーザー（DB が既にあれば、管理者でなくその DB のメンバーのユーザーでよい） |
 | `COUCHDB_PASSWORD` | はい | - | CouchDB パスワード |
-| `COUCHDB_HEALTH_DB` | いいえ | `health` | データベース名（起動時に無ければ作成） |
+| `COUCHDB_HEALTH_DB` | いいえ | `health` | データベース名（起動時に無ければ作成する。作るには管理者の権限が要り、作れなければ止まる） |
 | `OBSIDIAN_MCP_URL` | いいえ | - | obsidian-sync-mcp の `/mcp` URL（`https:`。`http:` は `localhost` / `127.0.0.1` / `[::1]` のみ可。ユーザー名・パスワードを含む URL は不可。`OBSIDIAN_MCP_TOKEN` と両方指定するか両方未設定） |
 | `OBSIDIAN_MCP_TOKEN` | いいえ | - | obsidian-sync-mcp 用 Bearer トークン（16文字以上） |
 | `VAULT_HEALTH_PREFIX` | いいえ | `Health/` | Vault 内で書き込みを許可するフォルダ。ノートもこの下に生成する（文字・数字・空白・`_`・`-` からなるフォルダ名を `/` で区切る。先頭の `/`、`.` / `..`、空のフォルダ名、フォルダ名の前後の空白は不可） |
@@ -52,6 +52,11 @@ pnpm start       # node dist/index.js（環境変数は自前で渡す）
 
 CLI（`pnpm import:takeout` / `pnpm sync:notes` / `pnpm restore:backup`）は下の各節にある。pnpm 12 は `pnpm <スクリプト> -- --opt` の `--` もそのまま渡すが、どの CLI も先頭の `--` は読み飛ばすので、付けても付けなくてもよい。
 
+### 結合テスト
+
+- CouchDB: `COUCHDB_TEST_URL=http://user:pass@host:5984` を設定すると実 CouchDB 向けテストが走る（未設定ならスキップ）。CI では CouchDB のコンテナを立てて走らせている
+- obsidian-sync-mcp: `OBSIDIAN_MCP_TEST_URL` と `OBSIDIAN_MCP_TEST_TOKEN` を設定すると実 obsidian-sync-mcp 向けテストが走る（未設定ならスキップ。CI では走らない）。ノート同期の結合テスト（`test/note-sync-integration.test.ts`）は `COUCHDB_TEST_URL` も要る。テスト用の Vault にだけ向けること
+
 ## エンドポイント
 
 - `GET /healthz` — 認証なし。`{"status":"ok"}`
@@ -61,20 +66,23 @@ CLI（`pnpm import:takeout` / `pnpm sync:notes` / `pnpm restore:backup`）は下
   - 範囲の誤り（数値の上限超え、小数の歩数、睡眠の `end` が `start` より前）はその日だけを拒否し、他の日は通常どおり保存・同期する。拒否した日は `rejected` に日付と、項目名を挙げた日本語のエラー文で載る（値は載らない）。`rejected` は常にあり、無ければ空配列。全日が拒否されても 200 で `written:0`
   - 睡眠の `start <= end` は受け取ったデータの中だけで確かめる。片方だけを送ると、保存済みの値とマージした後の前後関係は保証されないので、クライアントは両方を一緒に送る
   - `failed[].error` と `notes.error` は、メモ欄のマーカー欠落と Vault パスの違反以外は固定の文で、詳細はサーバーのログに出る
-  - Vault への書き込み（obsidian-sync-mcp の `read_note` / `write_note`）が一時的なエラーで失敗したら、1 秒・3 秒・9 秒あけて最大 3 回やり直す。一時的とみなすのは、通信の失敗、HTTP の 5xx・408・429、タイムアウト、ツールが返したエラーのうち書き込みの拒否（`Write access denied`）と引数の誤り以外のもの（例: `Database write layer error!`）。ツールのエラーがやり直しても直らなかったときは、全てのノートで待ち時間が積み上がらないよう、その後 60 秒はツールのエラーをやり直さない。やり直したことはサーバーのログに出る
-- `POST /api/notes/sync` — `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","includeStatic":bool?}`（最大400日。本文は 16 KB まで）。範囲内のノートを再生成し、内容が同じものは書き込まない。`{"written":n,"unchanged":n,"failed":[...]}`。Vault 未設定は 503
+- `POST /api/notes/sync` — `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","includeStatic":bool?}`（最大400日。本文は 16 KB まで、超えると 413）。範囲内のノートを再生成し、内容が同じものは書き込まない。`{"written":n,"unchanged":n,"failed":[...]}`。Vault 未設定は 503
 - `GET /api/summary?date=YYYY-MM-DD` または `?from=&to=`（最大400日）— `{"days":[...]}`。`types=activity,heart_rate,body,sleep,nutrition` で絞り込み
 - `GET /api/summary/monthly?from=YYYY-MM&to=YYYY-MM`（最大120か月）— 月次集計 `{"months":[...]}`（データのある月のみ）
 - `GET /backup/health` — `Authorization: Bearer <BACKUP_TOKEN>` 必須（`API_TOKEN` では取れない）。全期間の日次データを JSON → gzip → age で暗号化して返す（`application/octet-stream`、`X-Backup-Days` に日数）。`BACKUP_TOKEN` と `BACKUP_AGE_RECIPIENT` が未設定なら 404。復元は `pnpm restore:backup`（[docs/backup.md](../docs/backup.md)）
 
+### Vault への書き込みのやり直し
+
+`POST /api/ingest` と `POST /api/notes/sync`（つまり `import:takeout --post` と `sync:notes` も）のノートの読み書き（obsidian-sync-mcp の `read_note` / `write_note`）は、一時的なエラーで失敗したら 1 秒・3 秒・9 秒あけて最大 3 回やり直す。やり直したことはサーバーのログに出る。
+
+- 一時的とみなすのは、通信の失敗、HTTP の 5xx・408・429、タイムアウト、ツールが返したエラーのうち書き込みの拒否（`Write access denied`）と引数の誤り以外のもの（例: `Database write layer error!`）。HTTP の 401・403 はやり直さない
+- obsidian-sync-mcp のセッションが切れた（404 など）ときは、待たずに 1 回だけつなぎ直す（上の 3 回とは別）
+- 1 回の呼び出しは 60 秒で打ち切る。やり直しを使い切ると、1 つのノートに 4 分ほどかかることがある
+- ツールのエラーがやり直しても直らなかったときは、全てのノートで待ち時間が積み上がらないよう、最大 60 秒はツールのエラーをやり直さない（呼び出しが 1 回成功すると解除。通信の失敗や 5xx などはこの間もやり直す）
+
 ### nutrition セクション
 
 食事の摂取量。日合計を `nutrition: {energy_kcal, protein_g, fat_g, carbs_g}` で送る（0 以上の数値。他のセクションと同じく、項目の省略は既存値を残し、`null` は値を消す）。`activity.calories_kcal` は消費カロリーで、摂取とは別。月次集計には `activity.avg_calories_kcal`（消費の平均）と `nutrition`（`days_logged`、`avg_energy_kcal`、`avg_protein_g`、`avg_fat_g`、`avg_carbs_g`。値のある日だけで平均）が加わる。
-
-## 結合テスト
-
-- CouchDB: `COUCHDB_TEST_URL=http://user:pass@host:5984` を設定すると実 CouchDB 向けテストが走る（未設定ならスキップ）。CI では CouchDB のコンテナを立てて走らせている
-- obsidian-sync-mcp: `OBSIDIAN_MCP_TEST_URL` と `OBSIDIAN_MCP_TEST_TOKEN` を設定すると実 obsidian-sync-mcp 向けテストが走る（未設定ならスキップ。CI では走らない）。テスト用の Vault にだけ向けること
 
 ## Google Takeout の取り込み
 
@@ -94,13 +102,16 @@ pnpm import:takeout --takeout "<Takeout>/Takeout/Fit" --post --batch 30 --api-ur
 - 範囲外の値がある日（[ADR 0012](../docs/adr/0012-input-validation-and-error-exposure.md)）は送らずに日付と理由を表示し、サーバーが `rejected` で拒否した日もバッチごとに表示する。残りのバッチは送り続け、そうした日が 1 日でもあれば最後に終了コード 1 になる
 - `--from` / `--to`（YYYY-MM-DD）で期間を絞れる。`--takeout` の代わりに環境変数 `TAKEOUT_DIR` でもよい
 - `--out` で書き出し先を変えられる（既定は `out/takeout-days.json`）。`--batch` は 1 回の POST で送る日数で、1〜400（既定 300）
-- サーバーがノートの書き込みに失敗したものがあれば、件数を表示して終了コード 1 になる（データは保存済みなので、`sync:notes` で同じ期間を同期し直す）
+- 送信中は、バッチごとに送った件数と期間、サーバーが返したノートの結果（書き込み・変更なし・失敗）を表示し、最後にノートの合計を表示する
+- サーバーがノートの書き込みに失敗したものがあれば、終了コード 1 になる（データは保存済みなので、`sync:notes` で同じ期間を同期し直す。拒否された日もあるときは、そちらのメッセージだけが出る）
+- バッチの POST が通信エラーや 2xx 以外で失敗すると、やり直さずにそこで止まる（`sync:notes` と違う）。それまでのバッチは保存済みなので、`--from` で続きから送り直す
+- 時刻が 2000〜2100 年の外にある睡眠・食事の記録は壊れたものとして捨て、件数を `dropped (invalid time): ...` の行で表示する
 - 睡眠は複数アプリの記録が重なるため、起床日ごとに 1 つのソースだけ採用する。その日にステージ (4/5/6 = 浅い/深い/REM) を含むソースを優先し、その中で合計時間が最長のもの、同点ならソース ID の辞書順で最小のものを選ぶ。区間の間隔が 60 分以内なら同じセッションとみなし、さらにセッションの間隔が 2 時間以内なら一晩の睡眠として結合する（起床日は結合後の起床時刻で決める）。その日で最も長いまとまりを本睡眠、残りを仮眠とする。区間の間の隙間は中途覚醒に数える（[ADR 0013](../docs/adr/0013-merge-split-sleep-sessions.md)）
 - 食事は 1 データポイントが 1 食（1 品）で、`fitValue[0]` の `mapVal` から `calories` / `protein` / `fat.total` / `carbs.total` を読み、開始時刻の日付（JST）ごとに合計する（摂取カロリーは整数、P/F/C は小数 1 桁）。値の無い項目は出力しない。複数ソースに同じ日の記録があるときは、その日の記録件数が最も多いソースだけを使い（合算しない）、同数なら合計 kcal が大きいもの、それも同じならソース ID の辞書順で最小のものを選ぶ。dry run の統計に `nutrition: ...` の行（日数と期間）が出る
 
 ## ノートの一括同期（バックフィル）
 
-Takeout 取り込み後などに、保存済みデータから Vault のノートをまとめて作る。サーバーの `POST /api/notes/sync` を 120 日ずつ呼ぶ。`API_TOKEN` は環境変数で渡す。
+Takeout 取り込み後などに、保存済みデータから Vault のノートをまとめて作る。サーバーの `POST /api/notes/sync` を、既定では 120 日ずつ呼ぶ。`API_TOKEN` は環境変数で渡す。
 
 ```sh
 pnpm sync:notes --from 2022-01-01 --to 2026-09-30 --api-url http://localhost:8080 --include-static

@@ -4,7 +4,7 @@
 
 ## 構成
 
-- `server/` — TypeScript / Hono のサーバー。日次データの受信・保存（CouchDB）、Google Takeout の取り込み、Obsidian ノートの生成と obsidian-sync-mcp 経由の書き込み
+- `server/` — TypeScript / Hono のサーバー。日次データの受信・保存（CouchDB）、Google Takeout の取り込み、Obsidian ノートの生成と obsidian-sync-mcp 経由の書き込み、暗号化したバックアップの提供と復元
   - `src/domain/` 日次・月次のデータ型と集計（純粋関数）
   - `src/store/` 保存先（`HealthStore`。CouchDB 実装とテスト用のメモリ実装）
   - `src/notes/` ノート・ダッシュボード・Bases の生成（純粋関数、出力は決定的）

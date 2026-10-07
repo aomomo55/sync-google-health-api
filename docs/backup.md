@@ -127,14 +127,14 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<アプリ名>.fly.dev/backup/h
 
 ```sh
 cd <リポジトリ>/server
-pnpm restore:backup -- --file ~/Downloads/health-2026-10-06.json.gz.age --identity ~/health-restore-key.txt --dry-run
+pnpm restore:backup --file ~/Downloads/health-2026-10-06.json.gz.age --identity ~/health-restore-key.txt --dry-run
 ```
 
 PowerShell の場合:
 
 ```powershell
 cd <リポジトリ>\server
-pnpm restore:backup -- --file "$HOME\Downloads\health-2026-10-06.json.gz.age" --identity "$HOME\health-restore-key.txt" --dry-run
+pnpm restore:backup --file "$HOME\Downloads\health-2026-10-06.json.gz.age" --identity "$HOME\health-restore-key.txt" --dry-run
 ```
 
 作成日時、日数、期間が表示される。形が不正な日があれば一覧が出る（その日は除いて復元される）。`バックアップを復号できません` と出たら、鍵が違うか、鍵のファイルの中身が途中で切れている。
@@ -147,7 +147,7 @@ CouchDB の接続情報を環境変数に入れて実行する。`--db` には�
 cd <リポジトリ>/server
 export COUCHDB_URL=https://<CouchDB のホスト> COUCHDB_USER=<ユーザー名>
 read -rs COUCHDB_PASSWORD && export COUCHDB_PASSWORD
-pnpm restore:backup -- --file ~/Downloads/health-2026-10-06.json.gz.age --identity ~/health-restore-key.txt --db health_restore_20261006
+pnpm restore:backup --file ~/Downloads/health-2026-10-06.json.gz.age --identity ~/health-restore-key.txt --db health_restore_20261006
 unset COUCHDB_PASSWORD
 ```
 
@@ -159,7 +159,7 @@ $env:COUCHDB_URL = "https://<CouchDB のホスト>"
 $env:COUCHDB_USER = "<ユーザー名>"
 $p = Read-Host "CouchDB のパスワード" -AsSecureString
 $env:COUCHDB_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($p))
-pnpm restore:backup -- --file "$HOME\Downloads\health-2026-10-06.json.gz.age" --identity "$HOME\health-restore-key.txt" --db health_restore_20261006
+pnpm restore:backup --file "$HOME\Downloads\health-2026-10-06.json.gz.age" --identity "$HOME\health-restore-key.txt" --db health_restore_20261006
 Remove-Item Env:COUCHDB_PASSWORD
 ```
 
