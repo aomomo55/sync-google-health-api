@@ -29,7 +29,7 @@ GAS ◀──────────── health-YYYY-MM-DD.json.gz.age ──
 age-keygen -o health-backup-key.txt
 ```
 
-- 表示される `Public key: age1...` が公開鍵（サーバーに登録する）
+- 表示される `Public key: age1…` の、`age1` から後ろ（62 文字）が公開鍵（サーバーに登録する）。`health-backup-key.txt` の `# public key:` の行にも同じものがある
 - `health-backup-key.txt` が秘密鍵。**サーバーやリポジトリ、Google Drive には置かない**。パスワードマネージャーなど、手元の安全な場所に保管する。失くすとバックアップを復号できない
 
 ### 2. サーバーに登録する
@@ -40,13 +40,17 @@ age-keygen -o health-backup-key.txt
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-fly.io の secrets に登録する。シェルの履歴に残らないよう、標準入力から渡す（入力後に Ctrl-D）。
+fly.io の secrets に登録する。シェルの履歴に残らないよう、標準入力から渡す。`<…>` は自分の値に置き換える部分。
 
 ```sh
 fly secrets import -a <アプリ名>
 BACKUP_TOKEN=<作ったトークン>
-BACKUP_AGE_RECIPIENT=age1...
+BACKUP_AGE_RECIPIENT=<公開鍵（age1 で始まる 62 文字）>
 ```
+
+- 1 行目を実行すると入力待ちになるので、2・3 行目を貼り付ける
+- 貼り付けたあと **Enter を押してカーソルを空の行に移してから Ctrl-D** を押す。最後の行に改行が無いまま Ctrl-D を押すと、その行が確定するだけで、入力待ちのまま終わらない
+- `BACKUP_AGE_RECIPIENT` には公開鍵だけを入れる。`Public key:` などの前置きや、秘密鍵（`AGE-SECRET-KEY-…`）を入れると、サーバーが起動しなくなる（[うまくいかないとき](#うまくいかないとき)）
 
 登録するとサーバーが再起動する。`BACKUP_TOKEN` と `BACKUP_AGE_RECIPIENT` は両方そろって初めて `/backup/health` が有効になる（片方だけだと起動時にエラー）。
 
@@ -105,6 +109,25 @@ COUCHDB_URL=https://... COUCHDB_USER=... COUCHDB_PASSWORD=... \
 2. サーバーの `COUCHDB_HEALTH_DB` を書き戻した DB の名前に切り替える（`fly secrets import` で登録。サーバーが再起動する）
 3. `sync:notes` でノートを作り直し、内容を確かめる
 4. 問題なければ、古い DB は一定期間残してから削除する
+
+## うまくいかないとき
+
+### secrets を登録したら、サーバーが応答しなくなった（502）
+
+起動時の設定の検査で止まり、再起動を繰り返している。`fly logs -a <アプリ名>` に `環境変数が不正です` と、どの値が不正かが出る。
+
+- `BACKUP_AGE_RECIPIENT: age の公開鍵（age1...）を指定してください`: 公開鍵の値が違う。前置きが付いている、途中で切れている、秘密鍵を入れた、などを確かめ、正しい公開鍵だけを `fly secrets import` で登録し直す
+- `BACKUP_TOKEN: …`: トークンが短い、使えない文字を含む、`API_TOKEN` と同じ、のどれか
+
+正しい値を登録すれば、サーバーは自動で再起動して戻る。
+
+### GAS の実行が `サーバーが HTTP 401 を返しました` で失敗する
+
+GAS のスクリプト プロパティの `BACKUP_TOKEN` が、サーバーに登録した値と一致していない。
+
+- プロパティの値の前後に空白や改行が入っていないか確かめる（GAS は前後の空白を取り除かない）
+- トークンを作るコマンドを 2 回実行して、別の値をそれぞれに登録していないか確かめる
+- 分からなければ、新しいトークンを作り、サーバー（`fly secrets import`）と GAS の両方に同じ値を登録し直す
 
 ## 確認済みのこと
 
