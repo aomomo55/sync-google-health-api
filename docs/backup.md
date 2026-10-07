@@ -29,7 +29,7 @@ GAS ◀──────────── health-YYYY-MM-DD.json.gz.age ──
 age-keygen -o health-backup-key.txt
 ```
 
-- 表示される `Public key: age1…` の、`age1` から後ろ（62 文字）が公開鍵（サーバーに登録する）。`health-backup-key.txt` の `# public key:` の行にも同じものがある
+- 表示される `Public key: age1…` のうち、`Public key: ` より後ろの `age1…` 全体が公開鍵（`age1` も含めて 62 文字。サーバーに登録する）。`health-backup-key.txt` の `# public key:` の行にも同じものがある
 - `health-backup-key.txt` が秘密鍵。**サーバーやリポジトリ、Google Drive には置かない**。パスワードマネージャーなど、手元の安全な場所に保管する。失くすとバックアップを復号できない
 
 ### 2. サーバーに登録する
@@ -45,7 +45,7 @@ fly.io の secrets に登録する。シェルの履歴に残らないよう、�
 ```sh
 fly secrets import -a <アプリ名>
 BACKUP_TOKEN=<作ったトークン>
-BACKUP_AGE_RECIPIENT=<公開鍵（age1 で始まる 62 文字）>
+BACKUP_AGE_RECIPIENT=<公開鍵（age1 も含めた 62 文字）>
 ```
 
 - 1 行目を実行すると入力待ちになるので、2・3 行目を貼り付ける
