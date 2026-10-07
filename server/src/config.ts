@@ -8,6 +8,10 @@ export const MIN_API_TOKEN_LENGTH = 32;
 export const BEARER_TOKEN_PATTERN = /^[A-Za-z0-9._~+/-]+=*$/;
 // トークンを平文で送ってよい、ローカルでの試験用のホスト
 export const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+// エラーメッセージに並べる表記。一覧を変えたときにメッセージが食い違わないよう、定数から作る
+export const LOCAL_HOSTS_LABEL = [...LOCAL_HOSTS].join(" / ");
+// fly.io のプライベートネットワークのホスト名の末尾。通信は fly.io の WireGuard の中だけを通る
+const FLY_PRIVATE_HOST_SUFFIXES = [".internal", ".flycast"];
 
 // 端末に貼り付けたときに紛れ込む制御文字（ESC など）は HTTP ヘッダーに使えず、
 // 実行時に原因の分かりにくい "fetch failed" になるため起動時に弾く
@@ -36,15 +40,27 @@ const parseUrl = (v: string): URL | null => {
   }
 };
 
+// https: か、平文でも外のネットワークを通らないホストへの http: かを確かめる。
+// どのホストに http: を許すかは、送る相手ごとに isHttpAllowedHost で決める
+const isHttpsOrAllowedHttp = (u: URL, isHttpAllowedHost: (hostname: string) => boolean): boolean =>
+  u.protocol === "https:" || (u.protocol === "http:" && isHttpAllowedHost(u.hostname));
+const isLocalHost = (hostname: string): boolean => LOCAL_HOSTS.has(hostname);
+const isLocalOrFlyPrivateHost = (hostname: string): boolean =>
+  isLocalHost(hostname) || FLY_PRIVATE_HOST_SUFFIXES.some((suffix) => hostname.endsWith(suffix));
+
+// Basic 認証のパスワードを平文で流さないため https: に限る。
+// http: はローカルでの試験用の localhost と、fly.io のプライベートネットワークのホストだけ許す。
 // 資格情報を URL に含めると、fetch の失敗時にパスワード入りの URL がエラーメッセージ経由でログに出る
 const couchdbUrl = z
   .url()
   .refine(
     (v) => {
       const u = parseUrl(v);
-      return !u || u.protocol === "http:" || u.protocol === "https:";
+      return !u || isHttpsOrAllowedHttp(u, isLocalOrFlyPrivateHost);
     },
-    { message: "http: または https: の URL を指定してください" },
+    {
+      message: `https: の URL を指定してください（http: は ${LOCAL_HOSTS_LABEL} と、fly.io のプライベートネットワークの ${FLY_PRIVATE_HOST_SUFFIXES.join(" / ")} のみ可）`,
+    },
   )
   .refine(
     (v) => {
@@ -63,11 +79,10 @@ const obsidianMcpUrl = z
   .refine(
     (v) => {
       const u = parseUrl(v);
-      if (!u) return true;
-      return u.protocol === "https:" || (u.protocol === "http:" && LOCAL_HOSTS.has(u.hostname));
+      return !u || isHttpsOrAllowedHttp(u, isLocalHost);
     },
     {
-      message: "https: の URL を指定してください（http: は localhost / 127.0.0.1 / [::1] のみ可）",
+      message: `https: の URL を指定してください（http: は ${LOCAL_HOSTS_LABEL} のみ可）`,
     },
   )
   // COUCHDB_URL と同じく、fetch の失敗時に資格情報入りの URL がエラー文に出るのを防ぐ
@@ -92,13 +107,19 @@ const vaultPrefix = z
     "文字・数字・空白・_・- からなるフォルダ名を / で区切って指定してください（先頭の / や . / ..、フォルダ名の前後の空白は不可）",
   );
 
+// CouchDB への接続情報。サーバーの設定と、復元の CLI（scripts/restore-backup.ts）で同じ検査を使う
+const couchdbConnection = {
+  COUCHDB_URL: couchdbUrl,
+  COUCHDB_USER: credential,
+  COUCHDB_PASSWORD: credential,
+};
+const couchdbConnectionSchema = z.object(couchdbConnection);
+
 const schema = z
   .object({
     PORT: z.coerce.number().int().min(1).max(65535).default(8080),
     API_TOKEN: bearerToken,
-    COUCHDB_URL: couchdbUrl,
-    COUCHDB_USER: credential,
-    COUCHDB_PASSWORD: credential,
+    ...couchdbConnection,
     COUCHDB_HEALTH_DB: z.string().min(1).default("health"),
     OBSIDIAN_MCP_URL: obsidianMcpUrl.optional(),
     OBSIDIAN_MCP_TOKEN: token(16).optional(),
@@ -126,9 +147,13 @@ const schema = z
   });
 
 export type Config = z.infer<typeof schema>;
+export type CouchdbConnection = z.infer<typeof couchdbConnectionSchema>;
 
-export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
-  const result = schema.safeParse(env);
+type Env = Record<string, string | undefined>;
+
+// 検査に失敗したら、どの環境変数がなぜ不正かだけを並べて投げる
+function parseEnv<T>(target: z.ZodType<T>, env: Env): T {
+  const result = target.safeParse(env);
   if (!result.success) {
     const details = result.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
@@ -137,4 +162,13 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     throw new Error(`環境変数が不正です:\n${details}`);
   }
   return result.data;
+}
+
+export function loadConfig(env: Env = process.env): Config {
+  return parseEnv(schema, env);
+}
+
+/** COUCHDB_URL / COUCHDB_USER / COUCHDB_PASSWORD だけを、サーバーの設定と同じ規則で検査する */
+export function loadCouchdbConnection(env: Env = process.env): CouchdbConnection {
+  return parseEnv(couchdbConnectionSchema, env);
 }

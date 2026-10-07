@@ -9,7 +9,7 @@ Android アプリから送られる日次ヘルスデータを受け取るサー
 | --- | --- | --- | --- |
 | `PORT` | いいえ | `8080` | 待ち受けポート |
 | `API_TOKEN` | はい | - | `/api/*` 用の Bearer トークン（32文字以上。使える文字は英数字と `. _ ~ + / -`、末尾の `=`） |
-| `COUCHDB_URL` | はい | - | CouchDB のベース URL（`http:` / `https:`。ユーザー名・パスワードは含めず `COUCHDB_USER` / `COUCHDB_PASSWORD` で指定） |
+| `COUCHDB_URL` | はい | - | CouchDB のベース URL（`https:`。`http:` は `localhost` / `127.0.0.1` / `[::1]` と、fly.io のプライベートネットワークのホスト（`.internal` / `.flycast`）のみ可。ユーザー名・パスワードは含めず `COUCHDB_USER` / `COUCHDB_PASSWORD` で指定）。[ADR 0019](../docs/adr/0019-restrict-couchdb-url-to-https.md) |
 | `COUCHDB_USER` | はい | - | CouchDB ユーザー（DB が既にあれば、管理者でなくその DB のメンバーのユーザーでよい） |
 | `COUCHDB_PASSWORD` | はい | - | CouchDB パスワード |
 | `COUCHDB_HEALTH_DB` | いいえ | `health` | データベース名（起動時に無ければ作成する。作るには管理者の権限が要り、作れなければ止まる） |
@@ -139,7 +139,7 @@ pnpm sync:notes --from 2022-01-01 --to 2026-09-30 --api-url http://localhost:808
 # 中身を確かめる（書き込まない）
 pnpm restore:backup --file <バックアップのファイル> --identity <age の秘密鍵のファイル> --dry-run
 
-# 書き戻す。COUCHDB_URL / COUCHDB_USER / COUCHDB_PASSWORD は環境変数で渡す
+# 書き戻す。COUCHDB_URL / COUCHDB_USER / COUCHDB_PASSWORD は環境変数で渡す（サーバーと同じ規則で検査する）
 pnpm restore:backup --file <バックアップのファイル> --identity <age の秘密鍵のファイル> --db <書き戻し先の DB 名>
 ```
 
