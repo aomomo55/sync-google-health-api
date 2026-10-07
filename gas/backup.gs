@@ -26,6 +26,10 @@ function runBackup() {
 function backup() {
   const props = PropertiesService.getScriptProperties();
   const url = requiredProperty(props, "BACKUP_URL");
+  // http:// だと最初のリクエストでトークンが平文で流れる（リダイレクトで https に移る前に送ってしまう）ので、送る前に止める
+  if (!/^https:\/\//i.test(url)) {
+    throw new Error(`BACKUP_URL は https:// で始めてください。トークンを送らずに止めました（${url}）`);
+  }
   const token = requiredProperty(props, "BACKUP_TOKEN");
   const folder = DriveApp.getFolderById(requiredProperty(props, "FOLDER_ID"));
 
