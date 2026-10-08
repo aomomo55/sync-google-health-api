@@ -130,6 +130,8 @@ done
 
 ## 依存の更新（Dependabot など）
 
+Dependabot の脆弱性アラートとセキュリティ更新は、リポジトリの設定（Settings → Advanced Security）で有効にしている（`dependabot.yml` には現れない）。月次の更新とは別に来るセキュリティ更新の PR も、この観点で見る。
+
 - [ ] CI が成功していても、CI の外で壊れないか（本番の実行環境、Node のメジャー更新と corepack の同梱の有無など）
 - [ ] lockfile で、本体以外の依存がどれだけ変わっているか
 - [ ] server の依存を変える PR なら、Audit のワークフロー（`.github/workflows/audit.yml`、`pnpm audit --prod --audit-level=high`）が成功しているか
