@@ -122,11 +122,13 @@ if (existingDocs > 0) {
 const batches = Array.from({ length: Math.ceil(backup.days.length / BATCH) }, (_, n) =>
   backup.days.slice(n * BATCH, (n + 1) * BATCH),
 );
-const writtenCounts: number[] = [];
+// 進み具合は「処理した日数」で数える。中身が変わらず書き込まなかった日（unchanged）も含めないと、
+// 分母の日数に届かない表示になる
+const doneCounts: number[] = [];
 for (const batch of batches) {
-  const { written } = await store.upsertDays(batch);
-  writtenCounts.push(written);
-  console.log(`書き戻し ${writtenCounts.reduce((a, b) => a + b, 0)}/${backup.days.length}`);
+  const { written, unchanged } = await store.upsertDays(batch);
+  doneCounts.push(written + unchanged);
+  console.log(`書き戻し ${doneCounts.reduce((a, b) => a + b, 0)}/${backup.days.length}`);
 }
 console.log(`完了: DB "${db}" に ${backup.days.length} 日分を書き戻しました`);
 if (backup.invalid.length > 0) process.exit(1);
