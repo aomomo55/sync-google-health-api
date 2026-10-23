@@ -1,6 +1,6 @@
 # 0008: Android アプリの送信方式と Health Connect の項目の対応
 
-- ステータス: 採用
+- ステータス: 採用（送信の間隔は [0021](0021-shorten-android-sync-interval.md) で更新）
 - 日付: 2026-10-04
 
 ## 背景

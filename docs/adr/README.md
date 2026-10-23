@@ -11,7 +11,7 @@
 | [0005](0005-store-health-data-in-couchdb.md) | 健康データを既存 CouchDB の別データベースに保存する | 採用 |
 | [0006](0006-server-rendered-notes-from-notion-layout.md) | ノートはサーバーが生成し、Notion のダッシュボード構成を移植する | 採用 |
 | [0007](0007-write-via-obsidian-sync-mcp.md) | Vault への書き込みと Claude との接続を obsidian-sync-mcp に任せる | 採用 |
-| [0008](0008-android-app-health-connect-mapping.md) | Android アプリの送信方式と Health Connect の項目の対応 | 採用 |
+| [0008](0008-android-app-health-connect-mapping.md) | Android アプリの送信方式と Health Connect の項目の対応 | 採用（送信の間隔を 0021 で更新） |
 | [0009](0009-protect-daily-note-memo.md) | 日次ノートのメモ欄を消さないよう、不在の判定とマーカーの無いノートの扱いを厳しくする | 採用 |
 | [0010](0010-pin-dependencies-and-dependabot.md) | CI・ビルドの依存を固定し、Dependabot で月に一度更新する | 採用（一部を 0014 で更新） |
 | [0011](0011-android-release-signing.md) | Android アプリのリリース署名は仕組みだけを用意し、鍵は利用者が管理する | 採用 |
@@ -24,6 +24,7 @@
 | [0018](0018-per-directory-agents-md.md) | エージェント向けの指示をディレクトリごとの AGENTS.md に分ける | 採用 |
 | [0019](0019-restrict-couchdb-url-to-https.md) | COUCHDB_URL を https に限り、http は localhost と fly.io のプライベートネットワークだけ許す | 採用 |
 | [0020](0020-no-rate-limit-on-auth.md) | 認証の試行回数を制限しない | 採用 |
+| [0021](0021-shorten-android-sync-interval.md) | Android アプリの自動送信の間隔を 6 時間から 1 時間に縮める | 採用 |
 
 ## 書き方
 
