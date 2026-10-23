@@ -25,7 +25,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
     companion object {
         private const val UNIQUE_NAME = "periodic_sync"
         // 定期送信の間隔。権限の説明画面 (RationaleActivity) の文言にも使う
-        const val INTERVAL_HOURS = 6L
+        const val INTERVAL_HOURS = 1L
         private const val BACKOFF_MINUTES = 15L
 
         fun schedule(context: Context) {
