@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import java.text.SimpleDateFormat
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
@@ -13,6 +14,8 @@ enum class SyncStatus { OK, AUTH_ERROR, RETRYABLE, FAILED }
 data class SyncOutcome(
     val status: SyncStatus,
     val message: String,
+    // 送った範囲に今日 (起床した日) の睡眠があったか。送信が成功したときだけ意味を持つ
+    val hasTodaySleep: Boolean = false,
 )
 
 object SyncRunner {
@@ -34,7 +37,23 @@ object SyncRunner {
         }
         store.lastSyncMillis = System.currentTimeMillis()
         store.lastResult = outcome.message
+        if (outcome.status == SyncStatus.OK) {
+            // 通知は補助なので、失敗しても送信の結果は変えない
+            runCatching { updateMissingSleepNotice(context, store, outcome.hasTodaySleep, requireBackground) }
+        }
         return outcome
+    }
+
+    private fun updateMissingSleepNotice(context: Context, store: SettingsStore, hasTodaySleep: Boolean, background: Boolean) {
+        val now = LocalDateTime.now(ZoneId.systemDefault())
+        when (missingSleepAction(now, hasTodaySleep, background, store.lastMissingSleepNotified)) {
+            MissingSleepAction.NOTIFY -> {
+                MissingSleepNotifier.notify(context)
+                store.lastMissingSleepNotified = now.toLocalDate()
+            }
+            MissingSleepAction.CANCEL -> MissingSleepNotifier.cancel(context)
+            MissingSleepAction.NONE -> Unit
+        }
     }
 
     private suspend fun execute(
@@ -72,10 +91,13 @@ object SyncRunner {
         val readFrom = readableStart(from, to, PermissionPolicy.canReadHistory(granted))
         val skippedDays = countDays(from, readFrom) - 1
 
-        // チャンクごとの結果を積み上げ、途中で return するループなので var
+        // チャンクごとの結果 (件数と今日の睡眠の有無) を積み上げ、途中で return するループなので var
         var tally = SyncTally()
+        var hasTodaySleep = false
         for ((s, e) in chunkRanges(readFrom, to)) {
-            for (chunk in chunkDays(reader.readDays(s, e, includeNutrition))) {
+            val summaries = reader.readDays(s, e, includeNutrition)
+            if (hasSleepOn(summaries, to)) hasTodaySleep = true
+            for (chunk in chunkDays(summaries)) {
                 when (val r = IngestClient.post(store.serverUrl, token, chunk)) {
                     // 範囲外で拒否された日があっても他の日は保存されているので、続きのチャンクも送る
                     is IngestResult.Success -> tally = tally.add(chunk.size, r.ok)
@@ -89,7 +111,7 @@ object SyncRunner {
 
         val message = buildSyncMessage(tally, includeNutrition)
         val note = if (skippedDays > 0) "（履歴の権限が無いため、$readFrom より前の $skippedDays 日分は読まずに送っていません）" else ""
-        return SyncOutcome(SyncStatus.OK, message + note)
+        return SyncOutcome(SyncStatus.OK, message + note, hasTodaySleep)
     }
 
     fun formatTime(millis: Long): String =

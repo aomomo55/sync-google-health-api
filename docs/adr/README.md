@@ -25,6 +25,7 @@
 | [0019](0019-restrict-couchdb-url-to-https.md) | COUCHDB_URL を https に限り、http は localhost と fly.io のプライベートネットワークだけ許す | 採用 |
 | [0020](0020-no-rate-limit-on-auth.md) | 認証の試行回数を制限しない | 採用 |
 | [0021](0021-shorten-android-sync-interval.md) | Android アプリの自動送信の間隔を 6 時間から 1 時間に縮める | 採用 |
+| [0022](0022-notify-missing-sleep.md) | 朝の自動送信で今日の睡眠が無ければ通知する | 採用 |
 
 ## 書き方
 

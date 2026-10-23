@@ -6,6 +6,7 @@ import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import java.security.KeyStore
+import java.time.LocalDate
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -120,6 +121,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getString(KEY_LAST_RESULT, "") ?: ""
         set(v) = prefs.edit().putString(KEY_LAST_RESULT, v).apply()
 
+    // 睡眠の未反映を最後に通知した日 (1 日 1 回にするため)
+    var lastMissingSleepNotified: LocalDate?
+        get() = prefs.getString(KEY_MISSING_SLEEP_NOTIFIED, null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        set(v) = prefs.edit().putString(KEY_MISSING_SLEEP_NOTIFIED, v?.toString()).apply()
+
     private fun key(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (ks.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
@@ -138,6 +144,7 @@ class SettingsStore(context: Context) {
         private const val KEY_URL = "server_url"
         private const val KEY_TOKEN = "token_enc"
         private const val KEY_LAST_TIME = "last_sync_millis"
+        private const val KEY_MISSING_SLEEP_NOTIFIED = "missing_sleep_notified_date"
         private const val KEY_LAST_RESULT = "last_result"
         private const val KEY_ALIAS = "api_token_key"
         private const val TRANSFORM = "AES/GCM/NoPadding"

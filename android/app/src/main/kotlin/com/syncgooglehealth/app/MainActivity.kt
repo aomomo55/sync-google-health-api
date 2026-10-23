@@ -1,11 +1,14 @@
 package com.syncgooglehealth.app
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -168,6 +171,14 @@ fun MainScreen() {
         AppState.scope.launch { refresh() }
     }
     LaunchedEffect(Unit) { refresh() }
+
+    // 昨夜の睡眠が未反映のときの通知に使う。拒否されても送信は今までどおり動く
+    val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // 入力内容を保存する。成功したら true
     fun save(): Boolean {
