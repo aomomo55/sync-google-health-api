@@ -20,7 +20,8 @@ object MissingSleepNotifier {
         if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "睡眠データの未反映", NotificationManager.IMPORTANCE_DEFAULT),
+            // 音を鳴らさない (まだ寝ている時刻に起こさないため)
+            NotificationChannel(CHANNEL_ID, "睡眠データの未反映", NotificationManager.IMPORTANCE_LOW),
         )
         val open = PendingIntent.getActivity(
             context,
@@ -29,7 +30,7 @@ object MissingSleepNotifier {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val notification = Notification.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("昨夜の睡眠がまだ届いていません")
             .setContentText("ウェアラブルのアプリを開いて同期してください")
             .setStyle(

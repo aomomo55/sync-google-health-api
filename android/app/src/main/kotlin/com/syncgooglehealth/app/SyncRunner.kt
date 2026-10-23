@@ -46,7 +46,7 @@ object SyncRunner {
 
     private fun updateMissingSleepNotice(context: Context, store: SettingsStore, hasTodaySleep: Boolean, background: Boolean) {
         val now = LocalDateTime.now(ZoneId.systemDefault())
-        when (missingSleepAction(now, hasTodaySleep, background, store.lastMissingSleepNotified)) {
+        when (missingSleepAction(now, hasTodaySleep, background, store.lastMissingSleepNotified, store.sleepCheckWindow)) {
             MissingSleepAction.NOTIFY -> {
                 MissingSleepNotifier.notify(context)
                 store.lastMissingSleepNotified = now.toLocalDate()
