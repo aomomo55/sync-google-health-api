@@ -1,7 +1,8 @@
 import type { DailySummary } from "../domain/daily.js";
 
 export interface HealthStore {
-  upsertDays(days: DailySummary[]): Promise<{ written: number }>;
+  // 既存とマージして保存する。マージ後も中身が変わらない日は書き込まず、unchanged に数える
+  upsertDays(days: DailySummary[]): Promise<{ written: number; unchanged: number }>;
   // from/to を両端含む。日付昇順
   getDays(from: string, to: string): Promise<DailySummary[]>;
   // 保存されている全ての日。日付昇順（バックアップ用）

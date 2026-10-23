@@ -51,6 +51,7 @@ describe("POST /api/ingest（ノート同期）", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       written: 1,
+      unchanged: 0,
       rejected: [],
       notes: { written: 2, unchanged: 0, failed: [] },
     });
@@ -94,7 +95,7 @@ describe("POST /api/ingest（ノート同期）", () => {
   it("noteSync が無ければ notes は null", async () => {
     app = createApp({ config: { API_TOKEN: TOKEN }, store: new MemoryStore() });
     const res = await ingest(oneDay);
-    expect(await res.json()).toEqual({ written: 1, rejected: [], notes: null });
+    expect(await res.json()).toEqual({ written: 1, unchanged: 0, rejected: [], notes: null });
   });
 
   it("同期が例外を投げても 200 で error を返し、トークンは含まない", async () => {

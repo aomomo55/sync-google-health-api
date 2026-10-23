@@ -61,7 +61,7 @@ CLI（`pnpm import:takeout` / `pnpm sync:notes` / `pnpm restore:backup`）は下
 
 - `GET /healthz` — 認証なし。`{"status":"ok"}`
 - `GET /api/ping` — `Authorization: Bearer <API_TOKEN>` 必須。`{"pong":true}`
-- `POST /api/ingest` — `{"days":[DailySummary]}`（1〜400件、日付重複不可。本文は 2 MB まで、超えると 413）。セクション単位でマージ保存し（セクションは `activity` / `heart_rate` / `body` / `sleep` / `nutrition`）、Vault 設定があれば影響するノート（該当日・前後の日・月次）を同期する。`{"written":n,"rejected":[{"date","error"}],"notes":{"written":n,"unchanged":n,"failed":[{"path","error"}]}}`。Vault 未設定なら `notes:null`、同期が例外で失敗しても保存済みなので 200 で `notes:{"error":"..."}`。検証は 2 段（[ADR 0012](../docs/adr/0012-input-validation-and-error-exposure.md)）:
+- `POST /api/ingest` — `{"days":[DailySummary]}`（1〜400件、日付重複不可。本文は 2 MB まで、超えると 413）。セクション単位でマージ保存し（セクションは `activity` / `heart_rate` / `body` / `sleep` / `nutrition`）、Vault 設定があれば影響するノート（該当日・前後の日・月次）を同期する。`{"written":n,"unchanged":n,"rejected":[{"date","error"}],"notes":{"written":n,"unchanged":n,"failed":[{"path","error"}]}}`。マージ後も中身が変わらない日は DB に書き込まず、`unchanged` に数える（ノートの同期はその日も行う）。Vault 未設定なら `notes:null`、同期が例外で失敗しても保存済みなので 200 で `notes:{"error":"..."}`。検証は 2 段（[ADR 0012](../docs/adr/0012-input-validation-and-error-exposure.md)）:
   - 形の誤り（本文の形、`days` が配列でない・空・401件以上、日付の重複、実在しない日付、未知のキー、型の違い、負の数、オフセット無しの日時など）はリクエスト全体を 400 で拒否する
   - 範囲の誤り（数値の上限超え、小数の歩数、睡眠の `end` が `start` より前）はその日だけを拒否し、他の日は通常どおり保存・同期する。拒否した日は `rejected` に日付と、項目名を挙げた日本語のエラー文で載る（値は載らない）。`rejected` は常にあり、無ければ空配列。全日が拒否されても 200 で `written:0`
   - 睡眠の `start <= end` は受け取ったデータの中だけで確かめる。片方だけを送ると、保存済みの値とマージした後の前後関係は保証されないので、クライアントは両方を一緒に送る

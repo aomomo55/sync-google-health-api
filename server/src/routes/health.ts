@@ -119,13 +119,16 @@ export function healthRoutes(store: HealthStore, noteSync: NoteSync | null = nul
         if (error === null) days.push(d);
         else rejected.push({ date: d.date, error });
       }
-      const { written } = days.length > 0 ? await store.upsertDays(days) : { written: 0 };
-      if (!noteSync) return c.json({ written, rejected, notes: null });
+      const { written, unchanged } =
+        days.length > 0 ? await store.upsertDays(days) : { written: 0, unchanged: 0 };
+      if (!noteSync) return c.json({ written, unchanged, rejected, notes: null });
+      // 中身が変わらなかった日も同期する（前回のノートの同期が失敗していても、送り直しで直るように）
       // 保存は済んでいるので、ノート同期の失敗は 200 で知らせる
       try {
         const report = await noteSync.syncDates(days.map((d) => d.date));
         return c.json({
           written,
+          unchanged,
           rejected,
           notes: {
             written: report.written.length,
@@ -138,6 +141,7 @@ export function healthRoutes(store: HealthStore, noteSync: NoteSync | null = nul
         console.error(`ノートの同期に失敗: ${describeForLog(e)}`);
         return c.json({
           written,
+          unchanged,
           rejected,
           notes: { error: SYNC_FAILURE_MESSAGE },
         });

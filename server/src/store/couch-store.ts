@@ -1,4 +1,4 @@
-import { type DailySummary, mergeDay } from "../domain/daily.js";
+import { type DailySummary, isSameDay, mergeDay } from "../domain/daily.js";
 import type { HealthStore } from "./health-store.js";
 
 export interface CouchStoreOptions {
@@ -154,13 +154,14 @@ export class CouchStore implements HealthStore {
     return hit ? hit.id.slice(DAY_ID_PREFIX.length) : null;
   }
 
-  async upsertDays(days: DailySummary[]): Promise<{ written: number }> {
+  async upsertDays(days: DailySummary[]): Promise<{ written: number; unchanged: number }> {
     // 同一日付が複数あれば先にマージしておく
     const merged = new Map<string, DailySummary>();
     for (const d of days) merged.set(d.date, mergeDay(merged.get(d.date), d));
     // 競合した分だけを再送するリトライの制御なので let にする
     let pending = [...merged.values()];
     let written = 0;
+    let unchanged = 0;
 
     for (let attempt = 0; pending.length > 0; attempt++) {
       if (attempt > MAX_CONFLICT_RETRIES) {
@@ -171,14 +172,19 @@ export class CouchStore implements HealthStore {
       });
       const existing = new Map(CouchStore.docsOf(existingJson).map((d) => [d._id, d]));
       const now = new Date().toISOString();
-      const docs = pending.map((incoming) => {
+      // マージ後も中身が変わらない日は書き込まない（送り直しのたびに版を増やさないため）
+      const docs = pending.flatMap((incoming) => {
         const id = dayId(incoming.date);
         const old = existing.get(id);
-        const m = mergeDay(old ? CouchStore.toDay(old) : undefined, incoming);
+        const oldDay = old ? CouchStore.toDay(old) : undefined;
+        const m = mergeDay(oldDay, incoming);
+        if (oldDay && isSameDay(oldDay, m)) return [];
         const doc: CouchDoc = { ...m, _id: id, type: "daily", updated_at: now };
         if (old?._rev) doc._rev = old._rev;
-        return doc;
+        return [doc];
       });
+      unchanged += pending.length - docs.length;
+      if (docs.length === 0) break;
 
       const json = await this.request("POST", "/_bulk_docs", { docs });
       const results = Array.isArray(json) ? (json as BulkResult[]) : [];
@@ -191,6 +197,6 @@ export class CouchStore implements HealthStore {
       }
       pending = pending.filter((d) => conflicts.has(dayId(d.date)));
     }
-    return { written };
+    return { written, unchanged };
   }
 }

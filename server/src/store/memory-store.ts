@@ -1,4 +1,4 @@
-import { type DailySummary, mergeDay } from "../domain/daily.js";
+import { type DailySummary, isSameDay, mergeDay } from "../domain/daily.js";
 import type { HealthStore } from "./health-store.js";
 
 export class MemoryStore implements HealthStore {
@@ -6,11 +6,21 @@ export class MemoryStore implements HealthStore {
 
   async ensureReady(): Promise<void> {}
 
-  async upsertDays(days: DailySummary[]): Promise<{ written: number }> {
-    for (const d of days) {
-      this.days.set(d.date, mergeDay(this.days.get(d.date), d));
-    }
-    return { written: days.length };
+  async upsertDays(days: DailySummary[]): Promise<{ written: number; unchanged: number }> {
+    // 同一日付が複数あれば先にマージしておく（CouchStore と同じ）
+    const merged = days.reduce(
+      (acc, d) => acc.set(d.date, mergeDay(acc.get(d.date), d)),
+      new Map<string, DailySummary>(),
+    );
+    const changed = [...merged.values()]
+      .map((incoming) => {
+        const old = this.days.get(incoming.date);
+        const m = mergeDay(old, incoming);
+        return old && isSameDay(old, m) ? null : m;
+      })
+      .filter((d): d is DailySummary => d !== null);
+    for (const d of changed) this.days.set(d.date, d);
+    return { written: changed.length, unchanged: merged.size - changed.length };
   }
 
   async getDays(from: string, to: string): Promise<DailySummary[]> {

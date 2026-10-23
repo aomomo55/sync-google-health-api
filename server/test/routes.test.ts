@@ -131,6 +131,13 @@ describe("POST /api/ingest", () => {
     });
   });
 
+  it("同じ内容を送り直すと written は 0、unchanged に数える", async () => {
+    const day = { date: "2026-01-01", activity: { steps: 100 }, source: "health_connect" };
+    await ingest({ days: [day] });
+    const res = await ingest({ days: [day, { date: "2026-01-02", activity: { steps: 5 } }] });
+    expect(await res.json()).toEqual({ written: 1, unchanged: 1, rejected: [], notes: null });
+  });
+
   it("JSON が壊れていれば 400", async () => {
     const res = await call("/api/ingest", { method: "POST", body: "{" });
     expect(res.status).toBe(400);
@@ -156,7 +163,7 @@ describe("POST /api/ingest", () => {
       ],
     });
     expect(r1.status).toBe(200);
-    expect(await r1.json()).toEqual({ written: 1, rejected: [], notes: null });
+    expect(await r1.json()).toEqual({ written: 1, unchanged: 0, rejected: [], notes: null });
 
     await ingest({
       days: [

@@ -141,6 +141,19 @@ export function mergeDay(existing: DailySummary | undefined, incoming: DailySumm
   return out as DailySummary;
 }
 
+// 2 つの日の中身が同じか。キーの順序と値が undefined の項目は区別しない（JSON に保存した後と同じ見方）
+export function isSameDay(a: DailySummary, b: DailySummary): boolean {
+  return canonicalJson(a) === canonicalJson(b);
+}
+
+// オブジェクトのキーを並べ替えて JSON にする。配列の順序はそのまま
+const canonicalJson = (value: unknown): string =>
+  JSON.stringify(value, (_key, v: unknown) =>
+    v !== null && typeof v === "object" && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([p], [q]) => (p < q ? -1 : p > q ? 1 : 0)))
+      : v,
+  );
+
 export function pickSections(day: DailySummary, types: Section[]): DailySummary {
   const out: DailySummary = { date: day.date };
   for (const s of types) {
