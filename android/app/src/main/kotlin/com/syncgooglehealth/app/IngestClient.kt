@@ -72,22 +72,22 @@ fun parseErrorMessage(body: String): String? = try {
 }
 
 // ステータスコードと本文から結果を決める (テスト可能にするため分離)
-fun classifyIngestResponse(code: Int, body: String): IngestResult = when {
+fun classifyIngestResponse(texts: Texts, code: Int, body: String): IngestResult = when {
     code == 401 -> IngestResult.Unauthorized
     // リダイレクトには従わない (POST の本文やトークンを別の宛先へ送らないため)
-    code in 300..399 -> IngestResult.ClientError(
-        "サーバーがリダイレクト ($code) を返しました。サーバー URL が正しいか確認してください",
-    )
+    code in 300..399 -> IngestResult.ClientError(texts.get(R.string.ingest_error_redirect, code))
     code in 200..299 -> try {
         IngestResult.Success(parseIngestResponse(body))
     } catch (_: Exception) {
-        IngestResult.ClientError("サーバーの応答を解釈できませんでした (保存できたか確認できません)")
+        IngestResult.ClientError(texts.get(R.string.ingest_error_unparseable))
     }
     // タイムアウトと流量制限は時間をおけば通るので再試行する
-    code == 408 || code == 429 -> IngestResult.Retryable("サーバーが一時的に受け付けませんでした ($code)")
+    code == 408 || code == 429 -> IngestResult.Retryable(texts.get(R.string.ingest_error_busy, code))
     code in 400..499 ->
-        IngestResult.ClientError("送信エラー ($code): ${parseErrorMessage(body) ?: "不明なエラー"}")
-    else -> IngestResult.Retryable("サーバーエラー ($code)")
+        IngestResult.ClientError(
+            texts.get(R.string.ingest_error_client, code, parseErrorMessage(body) ?: texts.get(R.string.ingest_error_unknown)),
+        )
+    else -> IngestResult.Retryable(texts.get(R.string.ingest_error_server, code))
 }
 
 object IngestClient {
@@ -107,14 +107,14 @@ object IngestClient {
     private val JSON_TYPE = "application/json; charset=utf-8".toMediaType()
 
     // 通信はメインスレッドで行えない (NetworkOnMainThreadException) ので必ず IO スレッドで実行する
-    suspend fun post(serverUrl: String, token: String, days: List<DailySummary>): IngestResult =
-        withContext(Dispatchers.IO) { postBlocking(serverUrl, token, days) }
+    suspend fun post(texts: Texts, serverUrl: String, token: String, days: List<DailySummary>): IngestResult =
+        withContext(Dispatchers.IO) { postBlocking(texts, serverUrl, token, days) }
 
-    private fun postBlocking(serverUrl: String, token: String, days: List<DailySummary>): IngestResult {
+    private fun postBlocking(texts: Texts, serverUrl: String, token: String, days: List<DailySummary>): IngestResult {
         val base = serverUrl.trim().trimEnd('/')
         val url = "$base/api/ingest".toHttpUrlOrNull()
         if (url == null || url.scheme != "https") {
-            return IngestResult.ClientError("サーバー URL は https:// で始まる正しい URL を入力してください")
+            return IngestResult.ClientError(texts.get(R.string.ingest_error_invalid_url))
         }
         val body = ingestJson.encodeToString(IngestRequest.serializer(), IngestRequest(days))
         val request = Request.Builder()
@@ -124,10 +124,10 @@ object IngestClient {
             .build()
         return try {
             client.newCall(request).execute().use { res ->
-                classifyIngestResponse(res.code, res.body.string())
+                classifyIngestResponse(texts, res.code, res.body.string())
             }
         } catch (e: IOException) {
-            IngestResult.Retryable("通信エラー: ${e.message ?: e.javaClass.simpleName}")
+            IngestResult.Retryable(texts.get(R.string.ingest_error_network, e.message ?: e.javaClass.simpleName))
         }
     }
 }

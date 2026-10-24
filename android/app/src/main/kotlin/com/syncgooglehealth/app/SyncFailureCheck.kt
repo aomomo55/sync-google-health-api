@@ -69,24 +69,31 @@ data class FailureNotice(val title: String, val text: String, val detail: String
 
 // 失敗の通知の文。健康データの値は載せない (ロック画面にも出るため)。
 // lastSuccess は表示用に整えた時刻 (記録が無ければ null)、sleepUnchecked は睡眠を確かめる時間帯の中か
-fun failureNotice(status: SyncStatus, message: String, lastSuccess: String?, sleepUnchecked: Boolean): FailureNotice {
-    val since = lastSuccess?.let { "最後に成功したのは $it です" } ?: "成功した記録がありません"
+fun failureNotice(
+    texts: Texts,
+    status: SyncStatus,
+    message: String,
+    lastSuccess: String?,
+    sleepUnchecked: Boolean,
+): FailureNotice {
+    val since = lastSuccess?.let { texts.get(R.string.notification_sync_failure_since_success, it) }
+        ?: texts.get(R.string.notification_sync_failure_no_success)
     val detail = listOfNotNull(
-        "原因: $message",
-        failureHint(status),
-        "$since。それより後のデータはノートに入っていません",
-        "送れていない間は、睡眠の未反映の通知も出ません".takeIf { sleepUnchecked },
+        texts.get(R.string.notification_sync_failure_cause, message),
+        failureHint(texts, status),
+        texts.get(R.string.notification_sync_failure_not_in_notes, since),
+        texts.get(R.string.notification_sync_failure_sleep_unchecked).takeIf { sleepUnchecked },
     ).joinToString("\n")
     return FailureNotice(
-        title = "健康データを送れていません",
-        text = "$since。アプリを開いて確かめてください",
+        title = texts.get(R.string.notification_sync_failure_title),
+        text = texts.get(R.string.notification_sync_failure_text, since),
         detail = detail,
     )
 }
 
 // 失敗の種類ごとに、次に何をすればよいか
-fun failureHint(status: SyncStatus): String = when (status) {
-    SyncStatus.AUTH_ERROR -> "アプリの設定で API トークンを確かめてください"
-    SyncStatus.RETRYABLE -> "サーバーかネットワークの一時的な問題とみて、自動で再試行しています。続くときはサーバーが動いているか確かめてください"
-    SyncStatus.FAILED, SyncStatus.OK -> "アプリを開き、画面の「結果」に沿って直してください"
+fun failureHint(texts: Texts, status: SyncStatus): String = when (status) {
+    SyncStatus.AUTH_ERROR -> texts.get(R.string.notification_sync_failure_hint_auth)
+    SyncStatus.RETRYABLE -> texts.get(R.string.notification_sync_failure_hint_retryable)
+    SyncStatus.FAILED, SyncStatus.OK -> texts.get(R.string.notification_sync_failure_hint_failed)
 }

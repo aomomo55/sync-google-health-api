@@ -69,13 +69,12 @@ fun missingSleepAction(
 data class MissingSleepNotice(val title: String, val text: String, val detail: String)
 
 // 通知の文。確かめた時刻を入れ、起きる前に確かめた結果か、起きた後に確かめ直した結果かを見分けられるようにする
-fun missingSleepNotice(checkedAt: LocalTime): MissingSleepNotice {
+fun missingSleepNotice(texts: Texts, checkedAt: LocalTime): MissingSleepNotice {
     val time = checkedAt.format(CHECKED_AT_FORMAT)
     return MissingSleepNotice(
-        title = "昨夜の睡眠がまだ届いていません",
-        text = "ウェアラブルのアプリを開いて同期してください（$time に確認）",
-        detail = "$time の自動送信の時点で、今日の睡眠が届いていません。ウェアラブルのアプリを開いて同期してください。" +
-            "次の自動送信か「今すぐ送信」で取り込み、届いたらこの通知は消えます",
+        title = texts.get(R.string.notification_missing_sleep_title),
+        text = texts.get(R.string.notification_missing_sleep_text, time),
+        detail = texts.get(R.string.notification_missing_sleep_detail, time),
     )
 }
 

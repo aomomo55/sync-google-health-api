@@ -29,12 +29,16 @@ object SyncRunner {
         onProgress: (String) -> Unit = {},
     ): SyncOutcome {
         val store = SettingsStore(context)
+        val texts = ContextTexts(context)
         val outcome = try {
-            execute(context, store, days, requireBackground, startDate, onProgress)
+            execute(context, texts, store, days, requireBackground, startDate, onProgress)
         } catch (e: SecurityException) {
-            SyncOutcome(SyncStatus.FAILED, "ヘルスコネクトの権限が不足しています。「権限を付与」を押してください")
+            SyncOutcome(SyncStatus.FAILED, texts.get(R.string.sync_message_permission_missing))
         } catch (e: Exception) {
-            SyncOutcome(SyncStatus.FAILED, "予期しないエラー: ${e.javaClass.simpleName} ${e.message ?: ""}".trim())
+            SyncOutcome(
+                SyncStatus.FAILED,
+                texts.get(R.string.sync_message_unexpected_error, e.javaClass.simpleName, e.message ?: "").trim(),
+            )
         }
         val now = System.currentTimeMillis()
         val succeeded = outcome.status == SyncStatus.OK
@@ -62,9 +66,10 @@ object SyncRunner {
             SyncFailureAction.NOTIFY -> {
                 val now = Instant.ofEpochMilli(nowMillis).atZone(zone)
                 val notice = failureNotice(
+                    texts = ContextTexts(context),
                     status = outcome.status,
                     message = outcome.message,
-                    lastSuccess = store.syncHistory().lastSuccessMillis?.let { formatTime(it) },
+                    lastSuccess = store.syncHistory().lastSuccessMillis?.let { formatTime(context, it) },
                     sleepUnchecked = now.hour in window,
                 )
                 SyncFailureNotifier.notify(context, notice)
@@ -80,7 +85,7 @@ object SyncRunner {
         val showing = MissingSleepNotifier.isShowing(context)
         when (missingSleepAction(now, hasTodaySleep, background, store.lastMissingSleepNotified, showing, store.sleepCheckWindow)) {
             MissingSleepAction.NOTIFY -> {
-                if (MissingSleepNotifier.notify(context, missingSleepNotice(now.toLocalTime()))) {
+                if (MissingSleepNotifier.notify(context, missingSleepNotice(ContextTexts(context), now.toLocalTime()))) {
                     store.lastMissingSleepNotified = now.toLocalDate()
                 }
             }
@@ -91,6 +96,7 @@ object SyncRunner {
 
     private suspend fun execute(
         context: Context,
+        texts: Texts,
         store: SettingsStore,
         days: Int,
         requireBackground: Boolean,
@@ -99,21 +105,21 @@ object SyncRunner {
     ): SyncOutcome {
         val token = when (val t = store.readToken()) {
             is StoredToken.Available -> t.token
-            StoredToken.None -> return SyncOutcome(SyncStatus.FAILED, "API トークンが設定されていません。設定画面で入力し直してください")
+            StoredToken.None -> return SyncOutcome(SyncStatus.FAILED, texts.get(R.string.sync_message_token_none))
             // Keystore の一時的な不調。保存データは残しているので時間をおいて再試行する
-            StoredToken.Unavailable -> return SyncOutcome(SyncStatus.RETRYABLE, "API トークンを一時的に読み出せませんでした")
+            StoredToken.Unavailable -> return SyncOutcome(SyncStatus.RETRYABLE, texts.get(R.string.sync_message_token_unavailable))
         }
 
         val status = HealthConnectClient.getSdkStatus(context)
         if (status != HealthConnectClient.SDK_AVAILABLE) {
-            return SyncOutcome(SyncStatus.FAILED, "ヘルスコネクトが利用できません")
+            return SyncOutcome(SyncStatus.FAILED, texts.get(R.string.sync_message_health_connect_unavailable))
         }
 
         val reader = HealthReader(context)
         val granted = reader.grantedPermissions()
         val required = PermissionPolicy.required(HealthPermissions.all, requireBackground)
         if (!granted.containsAll(required)) {
-            return SyncOutcome(SyncStatus.FAILED, "ヘルスコネクトの権限が不足しています。「権限を付与」を押してください")
+            return SyncOutcome(SyncStatus.FAILED, texts.get(R.string.sync_message_permission_missing))
         }
 
         val includeNutrition = PermissionPolicy.canReadNutrition(granted)
@@ -131,22 +137,22 @@ object SyncRunner {
             val summaries = reader.readDays(s, e, includeNutrition)
             if (hasSleepOn(summaries, to)) hasTodaySleep = true
             for (chunk in chunkDays(summaries)) {
-                when (val r = IngestClient.post(store.serverUrl, token, chunk)) {
+                when (val r = IngestClient.post(texts, store.serverUrl, token, chunk)) {
                     // 範囲外で拒否された日があっても他の日は保存されているので、続きのチャンクも送る
                     is IngestResult.Success -> tally = tally.add(chunk.size, r.ok)
-                    IngestResult.Unauthorized -> return SyncOutcome(SyncStatus.AUTH_ERROR, "トークンが正しくありません")
+                    IngestResult.Unauthorized -> return SyncOutcome(SyncStatus.AUTH_ERROR, texts.get(R.string.sync_message_token_invalid))
                     is IngestResult.ClientError -> return SyncOutcome(SyncStatus.FAILED, r.message)
                     is IngestResult.Retryable -> return SyncOutcome(SyncStatus.RETRYABLE, r.message)
                 }
             }
-            onProgress(formatProgress(readFrom, to, s, e))
+            onProgress(formatProgress(texts, readFrom, to, s, e))
         }
 
-        val message = buildSyncMessage(tally, includeNutrition)
-        val note = if (skippedDays > 0) "（履歴の権限が無いため、$readFrom より前の $skippedDays 日分は読まずに送っていません）" else ""
+        val message = buildSyncMessage(texts, tally, includeNutrition)
+        val note = if (skippedDays > 0) texts.get(R.string.sync_message_history_skipped, readFrom, skippedDays) else ""
         return SyncOutcome(SyncStatus.OK, message + note, hasTodaySleep)
     }
 
-    fun formatTime(millis: Long): String =
-        if (millis == 0L) "未実行" else SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.JAPAN).format(Date(millis))
+    fun formatTime(context: Context, millis: Long): String =
+        if (millis == 0L) context.getString(R.string.sync_time_never) else SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.JAPAN).format(Date(millis))
 }

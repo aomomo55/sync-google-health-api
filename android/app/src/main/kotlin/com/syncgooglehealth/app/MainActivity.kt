@@ -13,6 +13,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -49,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -99,24 +101,35 @@ class MainActivity : ComponentActivity() {
 }
 
 // 画面に出す文の種類。問題のある文は、色だけでなく見出し語でも見分けられるようにする
-private enum class MessageKind(val prefix: String) {
-    INFO(""),
-    SUCCESS(""),
-    WARNING("注意: "),
-    ACTION_NEEDED("要対応: "),
-    ERROR("エラー: "),
+private enum class MessageKind(@StringRes val prefix: Int?) {
+    INFO(null),
+    SUCCESS(null),
+    WARNING(R.string.message_prefix_warning),
+    ACTION_NEEDED(R.string.message_prefix_action_needed),
+    ERROR(R.string.message_prefix_error),
 }
 
-private data class ScreenMessage(val text: String, val kind: MessageKind)
+// 文言は strings.xml のリソース ID と引数で持ち、表示するときに解決する (画面の設定が変わっても古い文のままにならない)。
+// 引数にリソース ID を入れたいときは TextRes で包む
+private data class TextRes(@StringRes val id: Int)
+
+private data class ScreenMessage(@StringRes val textRes: Int, val kind: MessageKind, val args: List<Any> = emptyList())
 
 @Composable
 private fun MessageText(message: ScreenMessage) {
-    val color = when (message.kind) {
+    val args = message.args.map { if (it is TextRes) stringResource(it.id) else it }
+    MessageLine(message.kind, stringResource(message.textRes, *args.toTypedArray()))
+}
+
+// 資源にない文 (送信の結果など) をそのまま出すときは、こちらを使う
+@Composable
+private fun MessageLine(kind: MessageKind, text: String) {
+    val color = when (kind) {
         MessageKind.INFO -> Color.Unspecified
         MessageKind.SUCCESS -> MaterialTheme.colorScheme.primary
         MessageKind.WARNING, MessageKind.ACTION_NEEDED, MessageKind.ERROR -> MaterialTheme.colorScheme.error
     }
-    Text(message.kind.prefix + message.text, color = color)
+    Text((kind.prefix?.let { stringResource(it) } ?: "") + text, color = color)
 }
 
 // 「最後に成功」と「最後に試した」を分けて出す。失敗が続いても時刻だけ新しく見えないようにするため (ADR 0026)
@@ -124,25 +137,22 @@ private fun MessageText(message: ScreenMessage) {
 private fun SyncHistoryText(history: SyncHistory) {
     val success = history.lastSuccessMillis
     val attempt = history.lastAttemptMillis
+    val context = LocalContext.current
     if (success == null && attempt == null) {
-        Text("まだ送信していません")
+        Text(stringResource(R.string.sync_history_never))
         return
     }
-    Text("最後に成功: ${success?.let { SyncRunner.formatTime(it) } ?: "記録なし"}")
+    val successText = success?.let { SyncRunner.formatTime(context, it) } ?: stringResource(R.string.sync_history_no_record)
+    Text(stringResource(R.string.sync_history_last_success, successText))
     if (attempt != null && attempt != success) {
-        Text("最後に試した: ${SyncRunner.formatTime(attempt)}${if (history.lastFailed) "（失敗）" else ""}")
+        val failedSuffix = if (history.lastFailed) stringResource(R.string.sync_history_failed_suffix) else ""
+        Text(stringResource(R.string.sync_history_last_attempt, SyncRunner.formatTime(context, attempt), failedSuffix))
     }
     history.lastResult?.let { result ->
-        if (history.lastFailed) MessageText(ScreenMessage(result, MessageKind.ERROR)) else Text("結果: $result")
+        if (history.lastFailed) MessageLine(MessageKind.ERROR, result) else Text(stringResource(R.string.sync_history_result, result))
     }
     if (isSuccessStale(System.currentTimeMillis(), success)) {
-        MessageText(
-            ScreenMessage(
-                "${STALE_SUCCESS_WARNING_HOURS}時間以上、送信に成功していません。自動送信が止まっているか、失敗が続いています。" +
-                    "「今すぐ送信」で結果を確かめてください",
-                MessageKind.WARNING,
-            ),
-        )
+        MessageText(ScreenMessage(R.string.sync_history_stale, MessageKind.WARNING, listOf(STALE_SUCCESS_WARNING_HOURS)))
     }
 }
 
@@ -155,12 +165,12 @@ private suspend fun backgroundReadStatus(context: Context): ScreenMessage {
         if (client.features.getFeatureStatus(HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND)
             == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
         ) {
-            ScreenMessage("バックグラウンド読み取り: 利用可能", MessageKind.INFO)
+            ScreenMessage(R.string.health_connect_background_available, MessageKind.INFO)
         } else {
-            ScreenMessage("この端末ではバックグラウンド読み取りを利用できません (自動送信は動作しません)", MessageKind.WARNING)
+            ScreenMessage(R.string.health_connect_background_unavailable, MessageKind.WARNING)
         }
     } catch (e: Exception) {
-        ScreenMessage("バックグラウンド読み取りを利用できるか確認できませんでした", MessageKind.WARNING)
+        ScreenMessage(R.string.health_connect_background_unknown, MessageKind.WARNING)
     }
 }
 
@@ -200,6 +210,8 @@ fun MainScreen() {
     val keyboard = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
     val store = remember { SettingsStore(context) }
+    val texts = remember(context) { ContextTexts(context) }
+    val listSeparator = stringResource(R.string.common_list_separator)
     var url by remember { mutableStateOf(store.serverUrl) }
     var token by remember { mutableStateOf("") }
     var tokenSaved by remember { mutableStateOf(store.hasToken()) }
@@ -233,7 +245,7 @@ fun MainScreen() {
     val granted = grantedPermissions.containsAll(PermissionPolicy.required(HealthPermissions.all, true))
     val nutritionGranted = PermissionPolicy.canReadNutrition(grantedPermissions)
     val historyGranted = PermissionPolicy.canReadHistory(grantedPermissions)
-    val permissionStatus = healthPermissionStatus(HealthPermissions.all, grantedPermissions, historyAvailable)
+    val permissionStatus = healthPermissionStatus(texts, HealthPermissions.all, grantedPermissions, historyAvailable)
 
     fun refreshNotificationState() {
         notificationState = currentNotificationState()
@@ -250,11 +262,11 @@ fun MainScreen() {
             }
             HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> {
                 sdkOk = false
-                sdkMessage = ScreenMessage("ヘルスコネクトの更新が必要です。Google Play で更新してください", MessageKind.ACTION_NEEDED)
+                sdkMessage = ScreenMessage(R.string.health_connect_update_required, MessageKind.ACTION_NEEDED)
             }
             else -> {
                 sdkOk = false
-                sdkMessage = ScreenMessage("この端末ではヘルスコネクトを利用できません", MessageKind.WARNING)
+                sdkMessage = ScreenMessage(R.string.health_connect_unavailable, MessageKind.WARNING)
             }
         }
         refreshNotificationState()
@@ -286,18 +298,18 @@ fun MainScreen() {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { scope.launch { refresh() } }
 
     // 入力内容を検証して保存する。誤りがあれば、その箇所までで止めて誤りの文を返す
-    fun saveSettings(): String? {
+    fun saveSettings(): Int? {
         val u = url.trim()
-        if (!u.startsWith("https://")) return "サーバー URL は https:// で始まる必要があります"
+        if (!u.startsWith("https://")) return R.string.settings_error_server_url_scheme
         val t = token.trim()
         if (t.isNotEmpty()) {
-            if (!SettingsStore.isValidToken(t)) return "トークンに使えない文字が含まれています"
+            if (!SettingsStore.isValidToken(t)) return R.string.settings_error_token_invalid_chars
             store.saveToken(t)
             tokenSaved = true
             token = ""
         }
         val window = SleepCheckWindow.parse(checkStart, checkEnd)
-            ?: return "通知の時間帯は 0〜24 の時で、開始を終了より前にしてください"
+            ?: return R.string.settings_error_sleep_window
         store.sleepCheckWindow = window
         store.serverUrl = u
         if (granted && store.hasToken()) SyncWorker.schedule(context)
@@ -309,10 +321,10 @@ fun MainScreen() {
     fun save(fromSend: Boolean): Boolean {
         val error = saveSettings()
         val shown = when {
-            error != null && fromSend -> ScreenMessage("$error。送信していません", MessageKind.ERROR)
+            error != null && fromSend -> ScreenMessage(R.string.settings_error_not_sent, MessageKind.ERROR, listOf(TextRes(error)))
             error != null -> ScreenMessage(error, MessageKind.ERROR)
-            fromSend -> ScreenMessage("設定を保存しました。送信を始めます", MessageKind.SUCCESS)
-            else -> ScreenMessage("設定を保存しました", MessageKind.SUCCESS)
+            fromSend -> ScreenMessage(R.string.settings_saved_and_sending, MessageKind.SUCCESS)
+            else -> ScreenMessage(R.string.settings_saved, MessageKind.SUCCESS)
         }
         saveMessage = shown.takeUnless { fromSend }
         sendMessage = shown.takeIf { fromSend }
@@ -329,13 +341,13 @@ fun MainScreen() {
         Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("ヘルス同期", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineSmall)
 
         OutlinedTextField(
             value = url,
             onValueChange = { url = it },
-            label = { Text("サーバー URL") },
-            placeholder = { Text("https://<your-app>.fly.dev") },
+            label = { Text(stringResource(R.string.settings_server_url_label)) },
+            placeholder = { Text(stringResource(R.string.settings_server_url_placeholder)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
             modifier = Modifier.fillMaxWidth(),
@@ -343,60 +355,58 @@ fun MainScreen() {
         OutlinedTextField(
             value = token,
             onValueChange = { token = it },
-            label = { Text("API トークン") },
-            placeholder = { if (tokenSaved) Text("保存済み (変更する場合のみ入力)") },
+            label = { Text(stringResource(R.string.settings_token_label)) },
+            placeholder = { if (tokenSaved) Text(stringResource(R.string.settings_token_saved_placeholder)) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth(),
         )
-        Text("睡眠が未反映のときに通知する時間帯", style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.settings_sleep_window_title), style = MaterialTheme.typography.bodyMedium)
         Text(
-            "開始は、ふだん起きる時刻より後にしてください。睡眠の記録は起きた後にできるので、" +
-                "起きる前に確かめると、届いていなくて当然の状態で通知が出ます（音は鳴りません）。" +
-                "遅く起きた日も、時間帯の中の自動送信のたびに確かめ直し、届いたら通知を消します",
+            stringResource(R.string.settings_sleep_window_hint),
             style = MaterialTheme.typography.bodyMedium,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = checkStart,
                 onValueChange = { checkStart = it },
-                label = { Text("開始 (時)") },
+                label = { Text(stringResource(R.string.settings_sleep_window_start_label)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f),
             )
-            Text("〜")
+            Text(stringResource(R.string.settings_sleep_window_separator))
             OutlinedTextField(
                 value = checkEnd,
                 onValueChange = { checkEnd = it },
-                label = { Text("終了 (時)") },
+                label = { Text(stringResource(R.string.settings_sleep_window_end_label)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.weight(1f),
             )
         }
         OutlinedButton(onClick = { save(fromSend = false) }, enabled = !running, modifier = Modifier.fillMaxWidth()) {
-            Text("設定を保存")
+            Text(stringResource(R.string.settings_save_button))
         }
         saveMessage?.let { MessageText(it) }
 
         sdkMessage?.let { MessageText(it) }
         if (sdkOk) {
             if (permissionStatus.missingRequired.isEmpty()) {
-                Text("ヘルスコネクトの権限: 送信に必要なものは付与済み")
+                Text(stringResource(R.string.permission_health_granted))
             } else {
                 MessageText(
                     ScreenMessage(
-                        "ヘルスコネクトの権限が足りません（${permissionStatus.missingRequired.joinToString("、")}）。" +
-                            "『権限を付与』で許可してください",
+                        R.string.permission_health_missing,
                         MessageKind.ACTION_NEEDED,
+                        listOf(permissionStatus.missingRequired.joinToString(listSeparator)),
                     ),
                 )
             }
             if (!nutritionGranted) {
                 MessageText(
-                    ScreenMessage("栄養の権限がありません。摂取カロリーも送るには『権限を付与』を押してください", MessageKind.ACTION_NEEDED),
+                    ScreenMessage(R.string.permission_nutrition_missing, MessageKind.ACTION_NEEDED),
                 )
             }
         }
@@ -410,90 +420,86 @@ fun MainScreen() {
                 onClick = requestPermissions,
                 enabled = !running,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("権限を付与") }
+            ) { Text(stringResource(R.string.permission_grant_button)) }
             permissionStatus.missingOptional.isNotEmpty() -> OutlinedButton(
                 onClick = requestPermissions,
                 enabled = !running,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("権限を付与（任意: ${permissionStatus.missingOptional.joinToString("、")}）") }
+            ) { Text(stringResource(R.string.permission_grant_optional_button, permissionStatus.missingOptional.joinToString(listSeparator))) }
             else -> OutlinedButton(
                 onClick = {
                     val opened = startActivitySafely(context, HealthConnectClient.getHealthConnectManageDataIntent(context))
-                    settingsMessage = if (opened) null else ScreenMessage("ヘルスコネクトの設定を開けませんでした", MessageKind.ERROR)
+                    settingsMessage = if (opened) null else ScreenMessage(R.string.permission_health_settings_open_failed, MessageKind.ERROR)
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("ヘルスコネクトの権限を見直す") }
+            ) { Text(stringResource(R.string.permission_review_button)) }
         }
 
         when (notificationState) {
-            NotificationPermissionState.GRANTED -> Text("通知の権限: 付与済み")
+            NotificationPermissionState.GRANTED -> Text(stringResource(R.string.permission_notification_granted))
             NotificationPermissionState.REQUESTABLE -> {
                 MessageText(
-                    ScreenMessage("通知の権限がありません。睡眠の未反映や送信の失敗が続いたときに通知が出ません", MessageKind.ACTION_NEEDED),
+                    ScreenMessage(R.string.permission_notification_missing, MessageKind.ACTION_NEEDED),
                 )
                 OutlinedButton(onClick = { requestNotificationPermission() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("通知を許可する")
+                    Text(stringResource(R.string.permission_notification_allow_button))
                 }
             }
             NotificationPermissionState.BLOCKED -> {
                 MessageText(
-                    ScreenMessage(
-                        "通知の権限がありません。睡眠の未反映や送信の失敗が続いたときに通知が出ません。" +
-                            "許可を求める画面はもう表示されないため、アプリの通知設定で許可してください",
-                        MessageKind.ACTION_NEEDED,
-                    ),
+                    ScreenMessage(R.string.permission_notification_blocked, MessageKind.ACTION_NEEDED),
                 )
                 OutlinedButton(
                     onClick = {
                         val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
                             .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
                         val opened = startActivitySafely(context, intent)
-                        settingsMessage = if (opened) null else ScreenMessage("通知の設定を開けませんでした", MessageKind.ERROR)
+                        settingsMessage = if (opened) null else ScreenMessage(R.string.permission_notification_settings_open_failed, MessageKind.ERROR)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("通知の設定を開く") }
+                ) { Text(stringResource(R.string.permission_notification_settings_button)) }
             }
         }
         settingsMessage?.let { MessageText(it) }
 
-        Text("送信のボタンは、入力中の設定を保存してから送ります", style = MaterialTheme.typography.bodyMedium)
+        Text(stringResource(R.string.sync_buttons_hint), style = MaterialTheme.typography.bodyMedium)
         Button(
             onClick = { if (save(fromSend = true)) AppState.start(context, RECENT_SYNC_DAYS) },
             enabled = sdkOk && !running,
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("今すぐ送信（直近${RECENT_SYNC_DAYS}日）") }
+        ) { Text(stringResource(R.string.sync_recent_button, RECENT_SYNC_DAYS)) }
         Button(
             onClick = { if (save(fromSend = true)) AppState.start(context, BACKFILL_SYNC_DAYS) },
             enabled = sdkOk && !running,
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("過去${BACKFILL_SYNC_DAYS}日を送る") }
+        ) { Text(stringResource(R.string.sync_backfill_button, BACKFILL_SYNC_DAYS)) }
 
         val today = LocalDate.now()
         OutlinedButton(
             onClick = { showDatePicker = true },
             enabled = sdkOk && !running,
             modifier = Modifier.fillMaxWidth(),
-        ) { Text(startDate?.let { "開始日: $it" } ?: "開始日を選ぶ") }
+        ) {
+            Text(startDate?.let { stringResource(R.string.sync_start_date_selected_button, it) } ?: stringResource(R.string.sync_start_date_pick_button))
+        }
         Button(
             onClick = { startDate?.let { d -> if (save(fromSend = true)) AppState.start(context, countDays(d, today), d) } },
             enabled = sdkOk && !running && startDate != null,
             modifier = Modifier.fillMaxWidth(),
-        ) { Text(startDate?.let { "$it から今日まで送る" } ?: "開始日を指定して送る") }
+        ) {
+            Text(startDate?.let { stringResource(R.string.sync_from_start_date_button, it) } ?: stringResource(R.string.sync_from_start_date_unselected_button))
+        }
         Text(
-            "選べるのは今日から ${MAX_START_DAYS_BACK} 日前まで（${earliestSelectableStart(today)} 以降）。" +
-                "それより前は Google Takeout を取り直して import:takeout で取り込んでください",
+            stringResource(R.string.sync_start_date_hint, MAX_START_DAYS_BACK, earliestSelectableStart(today)),
             style = MaterialTheme.typography.bodySmall,
         )
         val selected = startDate
         if (sdkOk && selected != null && needsHistoryPermission(selected, today) && !historyGranted) {
             MessageText(
                 ScreenMessage(
-                    if (historyAvailable) {
-                        "履歴の権限が無いため、${earliestReadableWithoutHistory(today)} より前は読まずに送りません。『権限を付与』で履歴の権限も許可してください"
-                    } else {
-                        "この端末では履歴の権限を使えないため、${earliestReadableWithoutHistory(today)} より前は読まずに送りません"
-                    },
+                    if (historyAvailable) R.string.permission_history_missing else R.string.permission_history_unavailable,
                     MessageKind.WARNING,
+                    listOf(earliestReadableWithoutHistory(today)),
                 ),
             )
         }
@@ -512,15 +518,15 @@ fun MainScreen() {
                             startDate = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
                         }
                         showDatePicker = false
-                    }) { Text("決定") }
+                    }) { Text(stringResource(R.string.sync_date_picker_confirm)) }
                 },
-                dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("キャンセル") } },
+                dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text(stringResource(R.string.common_cancel)) } },
             ) { DatePicker(state = pickerState) }
         }
 
         // 送信中に前回の結果（古いエラーなど）が見えると紛らわしいので隠す
         if (running) {
-            Text(progress ?: "送信中…")
+            Text(progress ?: stringResource(R.string.sync_running))
         } else {
             SyncHistoryText(history)
         }
@@ -528,6 +534,6 @@ fun MainScreen() {
         OutlinedButton(
             onClick = { context.startActivity(Intent(context, RationaleActivity::class.java)) },
             modifier = Modifier.fillMaxWidth(),
-        ) { Text("読み取るデータと送信先について") }
+        ) { Text(stringResource(R.string.sync_rationale_button)) }
     }
 }

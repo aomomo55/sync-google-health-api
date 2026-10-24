@@ -9,6 +9,8 @@ Health Connect から日次サマリーを作り、サーバーの `POST /api/in
 - 集計ロジックは Android に依存しない純粋な Kotlin にする（`DayAggregator`、`SleepAssigner`、`Chunking` など）。`android.*` / `androidx.*`、I/O、現在時刻、乱数、環境変数を入れない
 - 今は 1 つのパッケージ。機能ごとにパッケージを分けたら、複数の機能から使う汎用の部品は `shared` パッケージに置く（ルートの AGENTS.md の `shared` の約束に従う）
 
+- 利用者に見える文言（画面・通知・結果やエラーの文）は `app/src/main/res/values/strings.xml` に置き、機能ごとの接頭辞で名前をそろえる。値の埋め込みは `%1$s` / `%1$d` の位置指定にする。Compose では `stringResource`、Compose の外では `Texts`（`ContextTexts`）で引く。文を作る関数は `Texts` を受け取り、単体テストは `TestTexts`（strings.xml を直接読む）を渡す。ログと例外のメッセージ、内部の識別子は移さない
+
 ## コマンド
 
 `android/` で実行する。JDK 21 が必要で、`JAVA_HOME` を JDK 21 にする。

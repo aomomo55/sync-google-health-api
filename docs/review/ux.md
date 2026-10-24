@@ -136,10 +136,12 @@
 
 ## 文言の探し方
 
-画面・通知・エラーの文言は、ほとんどがコードに直書きされている（`strings.xml` は `app_name` だけ）。一覧はここに写さず、必要なときに探す。
+Android の利用者向けの文言（画面・通知・エラー）は `android/app/src/main/res/values/strings.xml` にある。機能ごとの接頭辞（`settings_`、`permission_`、`sync_`、`notification_` など）でそろえている。サーバーの文言はコードに直書きされている。一覧はここに写さず、必要なときに探す。
 
 ```sh
-# Android の利用者向けの文言（日本語を含む文字列）
+# Android の利用者向けの文言
+cat android/app/src/main/res/values/strings.xml
+# コードに文言が直書きされていないか（ログ・例外のメッセージを除く）
 git grep -n '"[^"]*[ぁ-んァ-ヶ一-龠][^"]*"' -- 'android/app/src/main/**/*.kt'
 # サーバーが返すエラー文とノートの文
 git grep -n -E 'error:|message:' -- 'server/src/routes/*.ts' 'server/src/sync/*.ts'

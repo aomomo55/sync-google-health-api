@@ -426,21 +426,21 @@ class IngestResponseTest {
 class IngestClassifyTest {
     @Test
     fun success() {
-        val r = classifyIngestResponse(200, """{"written":2,"notes":null}""")
+        val r = classifyIngestResponse(TestTexts, 200, """{"written":2,"notes":null}""")
         assertEquals(IngestResult.Success(IngestOk(2, null)), r)
     }
 
     @Test
     fun twoXxWithoutWrittenIsError() {
-        assertTrue(classifyIngestResponse(200, """{"ok":true}""") is IngestResult.ClientError)
-        assertTrue(classifyIngestResponse(200, "<html></html>") is IngestResult.ClientError)
-        assertTrue(classifyIngestResponse(204, "") is IngestResult.ClientError)
+        assertTrue(classifyIngestResponse(TestTexts, 200, """{"ok":true}""") is IngestResult.ClientError)
+        assertTrue(classifyIngestResponse(TestTexts, 200, "<html></html>") is IngestResult.ClientError)
+        assertTrue(classifyIngestResponse(TestTexts, 204, "") is IngestResult.ClientError)
     }
 
     @Test
     fun redirectIsError() {
         for (code in listOf(301, 302, 307, 308)) {
-            val r = classifyIngestResponse(code, "")
+            val r = classifyIngestResponse(TestTexts, code, "")
             assertTrue("$code", r is IngestResult.ClientError)
             assertTrue((r as IngestResult.ClientError).message.contains("リダイレクト"))
         }
@@ -448,26 +448,26 @@ class IngestClassifyTest {
 
     @Test
     fun authError() {
-        assertEquals(IngestResult.Unauthorized, classifyIngestResponse(401, """{"error":"unauthorized"}"""))
+        assertEquals(IngestResult.Unauthorized, classifyIngestResponse(TestTexts, 401, """{"error":"unauthorized"}"""))
     }
 
     @Test
     fun retriesOnTimeoutAndRateLimit() {
-        assertTrue(classifyIngestResponse(408, "") is IngestResult.Retryable)
-        assertTrue(classifyIngestResponse(429, """{"error":"too many"}""") is IngestResult.Retryable)
+        assertTrue(classifyIngestResponse(TestTexts, 408, "") is IngestResult.Retryable)
+        assertTrue(classifyIngestResponse(TestTexts, 429, """{"error":"too many"}""") is IngestResult.Retryable)
     }
 
     @Test
     fun doesNotRetryOther4xx() {
-        val r = classifyIngestResponse(400, """{"error":"bad"}""")
+        val r = classifyIngestResponse(TestTexts, 400, """{"error":"bad"}""")
         assertEquals(IngestResult.ClientError("送信エラー (400): bad"), r)
-        assertTrue(classifyIngestResponse(413, "") is IngestResult.ClientError)
+        assertTrue(classifyIngestResponse(TestTexts, 413, "") is IngestResult.ClientError)
     }
 
     @Test
     fun retriesOnServerError() {
-        assertTrue(classifyIngestResponse(500, "") is IngestResult.Retryable)
-        assertTrue(classifyIngestResponse(503, "") is IngestResult.Retryable)
+        assertTrue(classifyIngestResponse(TestTexts, 500, "") is IngestResult.Retryable)
+        assertTrue(classifyIngestResponse(TestTexts, 503, "") is IngestResult.Retryable)
     }
 }
 
@@ -590,14 +590,14 @@ class IngestRejectedTest {
 
     @Test
     fun uninterpretableRejectedIsError() {
-        assertTrue(classifyIngestResponse(200, """{"written":1,"rejected":"x"}""") is IngestResult.ClientError)
-        assertTrue(classifyIngestResponse(200, """{"written":1,"rejected":[1]}""") is IngestResult.ClientError)
-        assertTrue(classifyIngestResponse(200, """{"written":1,"rejected":[{"error":"x"}]}""") is IngestResult.ClientError)
+        assertTrue(classifyIngestResponse(TestTexts, 200, """{"written":1,"rejected":"x"}""") is IngestResult.ClientError)
+        assertTrue(classifyIngestResponse(TestTexts, 200, """{"written":1,"rejected":[1]}""") is IngestResult.ClientError)
+        assertTrue(classifyIngestResponse(TestTexts, 200, """{"written":1,"rejected":[{"error":"x"}]}""") is IngestResult.ClientError)
     }
 
     @Test
     fun successEvenWithRejected() {
-        val r = classifyIngestResponse(200, """{"written":1,"notes":null,"rejected":[{"date":"2026-01-03","error":"x"}]}""")
+        val r = classifyIngestResponse(TestTexts, 200, """{"written":1,"notes":null,"rejected":[{"date":"2026-01-03","error":"x"}]}""")
         assertEquals(IngestResult.Success(IngestOk(1, null, listOf(RejectedDay("2026-01-03", "x")))), r)
     }
 }
@@ -608,7 +608,7 @@ class SyncMessageTest {
     @Test
     fun unchangedWhenNothingRejected() {
         val t = SyncTally().add(3, IngestOk(3, notes))
-        assertEquals("3日分を送信しました / ノート 更新2・変更なし1・失敗0", buildSyncMessage(t, includeNutrition = true))
+        assertEquals("3日分を送信しました / ノート 更新2・変更なし1・失敗0", buildSyncMessage(TestTexts, t, includeNutrition = true))
     }
 
     @Test
@@ -616,7 +616,7 @@ class SyncMessageTest {
         val t = SyncTally().add(1, IngestOk(1, NotesResult(0, 0, 1, "boom")))
         assertEquals(
             "1日分を送信しました（栄養は権限が無いため送っていません） / ノート 更新0・変更なし0・失敗1 / ノートエラー: boom",
-            buildSyncMessage(t, includeNutrition = false),
+            buildSyncMessage(TestTexts, t, includeNutrition = false),
         )
     }
 
@@ -629,7 +629,7 @@ class SyncMessageTest {
         assertEquals(
             "35日分を送信しました（2日分は値が範囲外のため保存されませんでした: 2026-01-02, 2026-01-05 / 理由: 歩数が範囲外です） " +
                 "/ ノート 更新2・変更なし1・失敗0",
-            buildSyncMessage(t, includeNutrition = true),
+            buildSyncMessage(TestTexts, t, includeNutrition = true),
         )
     }
 
@@ -637,7 +637,7 @@ class SyncMessageTest {
     fun truncatesWhenManyRejected() {
         val rejected = (1..7).map { RejectedDay("2026-01-0$it", "理由$it") }
         val t = SyncTally().add(7, IngestOk(0, null, rejected))
-        val msg = buildSyncMessage(t, includeNutrition = true)
+        val msg = buildSyncMessage(TestTexts, t, includeNutrition = true)
         assertTrue(msg, msg.contains("7日分は値が範囲外のため保存されませんでした: 2026-01-01, 2026-01-02, 2026-01-03, 2026-01-04, 2026-01-05 ほか2日"))
         assertTrue(msg, msg.contains("理由: 理由1、理由2 ほか）"))
         assertFalse(msg, msg.contains("2026-01-06"))
@@ -647,7 +647,7 @@ class SyncMessageTest {
     fun truncatesLongReason() {
         val long = "あ".repeat(100)
         val t = SyncTally().add(1, IngestOk(0, null, listOf(RejectedDay("2026-01-01", long))))
-        val msg = buildSyncMessage(t, includeNutrition = true)
+        val msg = buildSyncMessage(TestTexts, t, includeNutrition = true)
         assertTrue(msg, msg.contains("あ".repeat(40) + "…）"))
         assertFalse(msg, msg.contains("あ".repeat(41)))
     }
@@ -697,9 +697,9 @@ class SyncRangeTest {
         val from = LocalDate.of(2026, 8, 1)
         val to = from.plusDays(59)
         val (s, e) = chunkRanges(from, to).first()
-        assertEquals("2026-08-01〜2026-08-30 を送信済み（30/60 日）", formatProgress(from, to, s, e))
+        assertEquals("2026-08-01〜2026-08-30 を送信済み（30/60 日）", formatProgress(TestTexts, from, to, s, e))
         val (s2, e2) = chunkRanges(from, to).last()
-        assertEquals("2026-08-31〜2026-09-29 を送信済み（60/60 日）", formatProgress(from, to, s2, e2))
+        assertEquals("2026-08-31〜2026-09-29 を送信済み（60/60 日）", formatProgress(TestTexts, from, to, s2, e2))
     }
 
     @Test

@@ -1,3 +1,141 @@
 <resources>
+    <!-- アプリ全体 -->
     <string name="app_name">ヘルス同期</string>
+    <string name="common_list_separator">、</string>
+    <string name="common_cancel">キャンセル</string>
+
+    <!-- 画面に出す文の見出し語 (問題のある文を色以外でも見分けるため) -->
+    <string name="message_prefix_warning">"注意: "</string>
+    <string name="message_prefix_action_needed">"要対応: "</string>
+    <string name="message_prefix_error">"エラー: "</string>
+
+    <!-- 設定 (サーバー・トークン・睡眠を確かめる時間帯) -->
+    <string name="settings_server_url_label">サーバー URL</string>
+    <string name="settings_server_url_placeholder">https://&lt;your-app&gt;.fly.dev</string>
+    <string name="settings_token_label">API トークン</string>
+    <string name="settings_token_saved_placeholder">保存済み (変更する場合のみ入力)</string>
+    <string name="settings_sleep_window_title">睡眠が未反映のときに通知する時間帯</string>
+    <string name="settings_sleep_window_hint">開始は、ふだん起きる時刻より後にしてください。睡眠の記録は起きた後にできるので、起きる前に確かめると、届いていなくて当然の状態で通知が出ます（音は鳴りません）。遅く起きた日も、時間帯の中の自動送信のたびに確かめ直し、届いたら通知を消します</string>
+    <string name="settings_sleep_window_start_label">開始 (時)</string>
+    <string name="settings_sleep_window_end_label">終了 (時)</string>
+    <string name="settings_sleep_window_separator">〜</string>
+    <string name="settings_save_button">設定を保存</string>
+    <string name="settings_saved">設定を保存しました</string>
+    <string name="settings_saved_and_sending">設定を保存しました。送信を始めます</string>
+    <string name="settings_error_not_sent">%1$s。送信していません</string>
+    <string name="settings_error_server_url_scheme">サーバー URL は https:// で始まる必要があります</string>
+    <string name="settings_error_token_invalid_chars">トークンに使えない文字が含まれています</string>
+    <string name="settings_error_sleep_window">通知の時間帯は 0〜24 の時で、開始を終了より前にしてください</string>
+
+    <!-- ヘルスコネクトの状態と権限 -->
+    <string name="health_connect_update_required">ヘルスコネクトの更新が必要です。Google Play で更新してください</string>
+    <string name="health_connect_unavailable">この端末ではヘルスコネクトを利用できません</string>
+    <string name="health_connect_background_available">バックグラウンド読み取り: 利用可能</string>
+    <string name="health_connect_background_unavailable">この端末ではバックグラウンド読み取りを利用できません (自動送信は動作しません)</string>
+    <string name="health_connect_background_unknown">バックグラウンド読み取りを利用できるか確認できませんでした</string>
+    <string name="permission_health_granted">ヘルスコネクトの権限: 送信に必要なものは付与済み</string>
+    <string name="permission_health_missing">ヘルスコネクトの権限が足りません（%1$s）。『権限を付与』で許可してください</string>
+    <string name="permission_nutrition_missing">栄養の権限がありません。摂取カロリーも送るには『権限を付与』を押してください</string>
+    <string name="permission_grant_button">権限を付与</string>
+    <string name="permission_grant_optional_button">権限を付与（任意: %1$s）</string>
+    <string name="permission_review_button">ヘルスコネクトの権限を見直す</string>
+    <string name="permission_health_settings_open_failed">ヘルスコネクトの設定を開けませんでした</string>
+    <string name="permission_history_missing">履歴の権限が無いため、%1$s より前は読まずに送りません。『権限を付与』で履歴の権限も許可してください</string>
+    <string name="permission_history_unavailable">この端末では履歴の権限を使えないため、%1$s より前は読まずに送りません</string>
+
+    <!-- ヘルスコネクトの権限の名前 (画面に出す) -->
+    <string name="permission_label_steps">歩数</string>
+    <string name="permission_label_distance">移動距離</string>
+    <string name="permission_label_calories_burned">消費カロリー</string>
+    <string name="permission_label_exercise">運動</string>
+    <string name="permission_label_heart_rate">心拍数</string>
+    <string name="permission_label_resting_heart_rate">安静時心拍数</string>
+    <string name="permission_label_weight">体重</string>
+    <string name="permission_label_body_fat">体脂肪率</string>
+    <string name="permission_label_sleep">睡眠</string>
+    <string name="permission_label_nutrition">栄養</string>
+    <string name="permission_label_background_read">バックグラウンドでの読み取り</string>
+    <string name="permission_label_history">履歴（30 日より前の読み取り）</string>
+
+    <!-- 通知の権限 -->
+    <string name="permission_notification_granted">通知の権限: 付与済み</string>
+    <string name="permission_notification_missing">通知の権限がありません。睡眠の未反映や送信の失敗が続いたときに通知が出ません</string>
+    <string name="permission_notification_blocked">通知の権限がありません。睡眠の未反映や送信の失敗が続いたときに通知が出ません。許可を求める画面はもう表示されないため、アプリの通知設定で許可してください</string>
+    <string name="permission_notification_allow_button">通知を許可する</string>
+    <string name="permission_notification_settings_button">通知の設定を開く</string>
+    <string name="permission_notification_settings_open_failed">通知の設定を開けませんでした</string>
+
+    <!-- 送信のボタンと開始日の指定 -->
+    <string name="sync_buttons_hint">送信のボタンは、入力中の設定を保存してから送ります</string>
+    <string name="sync_recent_button">今すぐ送信（直近%1$d日）</string>
+    <string name="sync_backfill_button">過去%1$d日を送る</string>
+    <string name="sync_start_date_pick_button">開始日を選ぶ</string>
+    <string name="sync_start_date_selected_button">開始日: %1$s</string>
+    <string name="sync_from_start_date_button">%1$s から今日まで送る</string>
+    <string name="sync_from_start_date_unselected_button">開始日を指定して送る</string>
+    <string name="sync_start_date_hint">選べるのは今日から %1$d 日前まで（%2$s 以降）。それより前は Google Takeout を取り直して import:takeout で取り込んでください</string>
+    <string name="sync_date_picker_confirm">決定</string>
+    <string name="sync_running">送信中…</string>
+    <string name="sync_rationale_button">読み取るデータと送信先について</string>
+
+    <!-- 送信の履歴の表示 -->
+    <string name="sync_history_never">まだ送信していません</string>
+    <string name="sync_history_last_success">最後に成功: %1$s</string>
+    <string name="sync_history_no_record">記録なし</string>
+    <string name="sync_history_last_attempt">最後に試した: %1$s%2$s</string>
+    <string name="sync_history_failed_suffix">（失敗）</string>
+    <string name="sync_history_result">結果: %1$s</string>
+    <string name="sync_history_stale">%1$d時間以上、送信に成功していません。自動送信が止まっているか、失敗が続いています。「今すぐ送信」で結果を確かめてください</string>
+    <string name="sync_time_never">未実行</string>
+
+    <!-- 送信の進捗と結果の文 -->
+    <string name="sync_progress">%1$s〜%2$s を送信済み（%3$d/%4$d 日）</string>
+    <string name="sync_message_sent">%1$d日分を送信しました</string>
+    <string name="sync_message_nutrition_skipped">（栄養は権限が無いため送っていません）</string>
+    <string name="sync_message_rejected">（%1$d日分は値が範囲外のため保存されませんでした: %2$s）</string>
+    <string name="sync_message_rejected_more_dates">" ほか%1$d日"</string>
+    <string name="sync_message_rejected_reasons">" / 理由: %1$s"</string>
+    <string name="sync_message_rejected_more_reasons">" ほか"</string>
+    <string name="sync_message_notes">" / ノート 更新%1$d・変更なし%2$d・失敗%3$d"</string>
+    <string name="sync_message_note_errors">" / ノートエラー: %1$s"</string>
+    <string name="sync_message_history_skipped">（履歴の権限が無いため、%1$s より前の %2$d 日分は読まずに送っていません）</string>
+    <string name="sync_message_permission_missing">ヘルスコネクトの権限が不足しています。「権限を付与」を押してください</string>
+    <string name="sync_message_unexpected_error">予期しないエラー: %1$s %2$s</string>
+    <string name="sync_message_token_none">API トークンが設定されていません。設定画面で入力し直してください</string>
+    <string name="sync_message_token_unavailable">API トークンを一時的に読み出せませんでした</string>
+    <string name="sync_message_token_invalid">トークンが正しくありません</string>
+    <string name="sync_message_health_connect_unavailable">ヘルスコネクトが利用できません</string>
+
+    <!-- サーバーの応答のエラー -->
+    <string name="ingest_error_invalid_url">サーバー URL は https:// で始まる正しい URL を入力してください</string>
+    <string name="ingest_error_redirect">サーバーがリダイレクト (%1$d) を返しました。サーバー URL が正しいか確認してください</string>
+    <string name="ingest_error_unparseable">サーバーの応答を解釈できませんでした (保存できたか確認できません)</string>
+    <string name="ingest_error_busy">サーバーが一時的に受け付けませんでした (%1$d)</string>
+    <string name="ingest_error_client">送信エラー (%1$d): %2$s</string>
+    <string name="ingest_error_unknown">不明なエラー</string>
+    <string name="ingest_error_server">サーバーエラー (%1$d)</string>
+    <string name="ingest_error_network">通信エラー: %1$s</string>
+
+    <!-- 通知: 睡眠の未反映 -->
+    <string name="notification_channel_missing_sleep_name">睡眠データの未反映</string>
+    <string name="notification_missing_sleep_title">昨夜の睡眠がまだ届いていません</string>
+    <string name="notification_missing_sleep_text">ウェアラブルのアプリを開いて同期してください（%1$s に確認）</string>
+    <string name="notification_missing_sleep_detail">%1$s の自動送信の時点で、今日の睡眠が届いていません。ウェアラブルのアプリを開いて同期してください。次の自動送信か「今すぐ送信」で取り込み、届いたらこの通知は消えます</string>
+
+    <!-- 通知: 送信の失敗 -->
+    <string name="notification_channel_sync_failure_name">送信の失敗</string>
+    <string name="notification_sync_failure_title">健康データを送れていません</string>
+    <string name="notification_sync_failure_text">%1$s。アプリを開いて確かめてください</string>
+    <string name="notification_sync_failure_since_success">最後に成功したのは %1$s です</string>
+    <string name="notification_sync_failure_no_success">成功した記録がありません</string>
+    <string name="notification_sync_failure_cause">原因: %1$s</string>
+    <string name="notification_sync_failure_not_in_notes">%1$s。それより後のデータはノートに入っていません</string>
+    <string name="notification_sync_failure_sleep_unchecked">送れていない間は、睡眠の未反映の通知も出ません</string>
+    <string name="notification_sync_failure_hint_auth">アプリの設定で API トークンを確かめてください</string>
+    <string name="notification_sync_failure_hint_retryable">サーバーかネットワークの一時的な問題とみて、自動で再試行しています。続くときはサーバーが動いているか確かめてください</string>
+    <string name="notification_sync_failure_hint_failed">アプリを開き、画面の「結果」に沿って直してください</string>
+
+    <!-- 権限の理由説明の画面 -->
+    <string name="rationale_title">読み取るデータと送信先</string>
+    <string name="rationale_body">"\nこのアプリはヘルスコネクトから次のデータを読み取ります。\n\n・歩数、移動距離、消費カロリー\n・運動セッション (運動時間の算出に使用)\n・心拍数、安静時心拍数\n・体重、体脂肪率\n・睡眠セッション\n・栄養（摂取カロリー・たんぱく質・脂質・炭水化物）\n\n読み取ったデータは日ごとに集計し、あなた自身が設定したサーバー へ HTTPS で送信します。それ以外の第三者には送信せず、広告や解析にも使いません。\n\n「バックグラウンドでのデータ読み取り」は、アプリを開いていなくても %1$d 時間ごとに直近 %2$d 日分を自動送信するために使います。\n\nAPI トークンは端末の Keystore で暗号化して保存します。権限はヘルスコネクトの設定からいつでも取り消せます。"</string>
 </resources>

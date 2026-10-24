@@ -38,5 +38,5 @@ fun needsHistoryPermission(start: LocalDate, today: LocalDate): Boolean =
 fun countDays(from: LocalDate, to: LocalDate): Int = (ChronoUnit.DAYS.between(from, to) + 1).toInt()
 
 // 区切りごとの進捗表示。from は全体の開始日、[s, e] は送り終えた区切り
-fun formatProgress(from: LocalDate, to: LocalDate, s: LocalDate, e: LocalDate): String =
-    "$s〜$e を送信済み（${countDays(from, e)}/${countDays(from, to)} 日）"
+fun formatProgress(texts: Texts, from: LocalDate, to: LocalDate, s: LocalDate, e: LocalDate): String =
+    texts.get(R.string.sync_progress, s, e, countDays(from, e), countDays(from, to))
