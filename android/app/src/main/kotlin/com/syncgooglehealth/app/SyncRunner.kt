@@ -3,6 +3,7 @@ package com.syncgooglehealth.app
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import java.text.SimpleDateFormat
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -35,21 +36,53 @@ object SyncRunner {
         } catch (e: Exception) {
             SyncOutcome(SyncStatus.FAILED, "予期しないエラー: ${e.javaClass.simpleName} ${e.message ?: ""}".trim())
         }
-        store.lastSyncMillis = System.currentTimeMillis()
-        store.lastResult = outcome.message
-        if (outcome.status == SyncStatus.OK) {
-            // 通知は補助なので、失敗しても送信の結果は変えない
+        val now = System.currentTimeMillis()
+        val succeeded = outcome.status == SyncStatus.OK
+        val streak = nextFailureStreak(store.syncHistory().failureStreak, succeeded, now)
+        store.recordSync(now, outcome.message, succeeded, streak)
+        // 通知は補助なので、失敗しても送信の結果は変えない
+        runCatching { updateFailureNotice(context, store, outcome, streak, now, requireBackground) }
+        if (succeeded) {
             runCatching { updateMissingSleepNotice(context, store, outcome.hasTodaySleep, requireBackground) }
         }
         return outcome
     }
 
+    private fun updateFailureNotice(
+        context: Context,
+        store: SettingsStore,
+        outcome: SyncOutcome,
+        streak: FailureStreak?,
+        nowMillis: Long,
+        background: Boolean,
+    ) {
+        val zone = ZoneId.systemDefault()
+        val window = store.sleepCheckWindow
+        when (syncFailureAction(nowMillis, zone, streak, background, store.lastSyncFailureNotified, window)) {
+            SyncFailureAction.NOTIFY -> {
+                val now = Instant.ofEpochMilli(nowMillis).atZone(zone)
+                val notice = failureNotice(
+                    status = outcome.status,
+                    message = outcome.message,
+                    lastSuccess = store.syncHistory().lastSuccessMillis?.let { formatTime(it) },
+                    sleepUnchecked = now.hour in window,
+                )
+                SyncFailureNotifier.notify(context, notice)
+                store.lastSyncFailureNotified = now.toLocalDate()
+            }
+            SyncFailureAction.CANCEL -> SyncFailureNotifier.cancel(context)
+            SyncFailureAction.NONE -> Unit
+        }
+    }
+
     private fun updateMissingSleepNotice(context: Context, store: SettingsStore, hasTodaySleep: Boolean, background: Boolean) {
         val now = LocalDateTime.now(ZoneId.systemDefault())
-        when (missingSleepAction(now, hasTodaySleep, background, store.lastMissingSleepNotified, store.sleepCheckWindow)) {
+        val showing = MissingSleepNotifier.isShowing(context)
+        when (missingSleepAction(now, hasTodaySleep, background, store.lastMissingSleepNotified, showing, store.sleepCheckWindow)) {
             MissingSleepAction.NOTIFY -> {
-                MissingSleepNotifier.notify(context)
-                store.lastMissingSleepNotified = now.toLocalDate()
+                if (MissingSleepNotifier.notify(context, missingSleepNotice(now.toLocalTime()))) {
+                    store.lastMissingSleepNotified = now.toLocalDate()
+                }
             }
             MissingSleepAction.CANCEL -> MissingSleepNotifier.cancel(context)
             MissingSleepAction.NONE -> Unit

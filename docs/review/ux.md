@@ -19,7 +19,7 @@
 
 | 段階 | 利用者がしたいこと | 確かめること | 見るところ |
 |---|---|---|---|
-| 1. 起床前 | 何もしない（自動送信に任せる） | 起床前に通知が鳴らないか。自動送信が止まっていても、後の段階で気づけるか | `android/.../SyncWorker.kt`、`SyncRunner.kt`、`MissingSleepCheck.kt` |
+| 1. 起床前 | 何もしない（自動送信に任せる） | 起床前に通知が鳴らないか。自動送信が止まっていても、後の段階で気づけるか | `android/.../SyncWorker.kt`、`SyncRunner.kt`、`MissingSleepCheck.kt`、`SyncFailureCheck.kt` |
 | 2. 起床後の通知 | 昨夜の睡眠が届いたかを知る | 通知が出る条件と出ない条件。出ないことが「届いている」を意味するか。通知の文だけで次の行動が分かるか。タップした先で行動できるか | `MissingSleepCheck.kt`、`MissingSleepNotifier.kt`、ADR 0022 |
 | 3. ノートを開く | 昨夜の睡眠と前日の活動を見る | 判断に要る情報が最初に目に入るか。データが無い項目について、「まだ届いていない」「記録が無い」「0」の区別がつくか | `server/src/notes/daily.ts`、`monthly.ts` |
 | 4. 判断する | その日の過ごし方を決める | 古いデータや欠けたデータのまま判断が進んでしまわないか。届いていないときに、取り込み直す方法がすぐ分かるか | 上の 2・3 |
@@ -30,10 +30,10 @@
 
 | 壊れ方 | 確かめること | 見るところ |
 |---|---|---|
-| トークンが違う・消えた | 自動送信が失敗し続けたとき、通知かノートで気づけるか。エラー文に、どこで何を直すかが書いてあるか | `SyncRunner.kt`、`IngestClient.kt`、`docs/rotate-secrets.md` |
+| トークンが違う・消えた | 自動送信が失敗し続けたとき、通知かノートで気づけるか。エラー文に、どこで何を直すかが書いてあるか | `SyncRunner.kt`、`SyncFailureCheck.kt`、`IngestClient.kt`、`docs/rotate-secrets.md` |
 | Health Connect の権限が外れた | どの権限が足りないかが分かるか。一部の権限（栄養など）だけ足りないときの扱いが分かるか | `SyncRunner.kt`、`PermissionPolicy`、`MainActivity.kt` |
 | 通知の権限が無い・拒否済み | 通知が出ないことに気づけるか。OS がダイアログを出さなくなったあとの手段が示されるか | `MissingSleepNotifier.kt`、`MainActivity.kt` |
-| サーバーが落ちている・5xx | 自動で再試行されることが分かるか。落ち続けたときに気づけるか | `IngestClient.kt`、`SyncWorker.kt` |
+| サーバーが落ちている・5xx | 自動で再試行されることが分かるか。落ち続けたときに気づけるか | `IngestClient.kt`、`SyncWorker.kt`、`SyncFailureCheck.kt` |
 | ネットワークにつながらない | 自動送信が静かに止まったときに気づけるか | `SyncWorker.kt` の実行条件 |
 | データは保存できたが、ノートの書き込みに失敗した | 送信が成功扱いになったときに、ノートが古いことに気づけるか。どのノートが、次に何をすれば直るかが分かるか | `server/src/routes/health.ts`、`server/src/sync/note-sync.ts`、`SyncMessage.kt` |
 | 範囲外の値の日が保存されなかった | 長い結果の文に埋もれずに気づけるか | `server/src/routes/health.ts`、`SyncMessage.kt` |

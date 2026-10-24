@@ -25,10 +25,12 @@
 | [0019](0019-restrict-couchdb-url-to-https.md) | COUCHDB_URL を https に限り、http は localhost と fly.io のプライベートネットワークだけ許す | 採用 |
 | [0020](0020-no-rate-limit-on-auth.md) | 認証の試行回数を制限しない | 採用 |
 | [0021](0021-shorten-android-sync-interval.md) | Android アプリの自動送信の間隔を 6 時間から 1 時間に縮める | 採用 |
-| [0022](0022-notify-missing-sleep.md) | 朝の自動送信で今日の睡眠が無ければ通知する | 採用（一部を 0025 で更新） |
+| [0022](0022-notify-missing-sleep.md) | 朝の自動送信で今日の睡眠が無ければ通知する | 採用（一部を 0025・0026・0027 で更新） |
 | [0023](0023-dependabot-docker-daily.md) | Docker のベースイメージの更新だけ Dependabot で毎日確かめる | 採用 |
 | [0024](0024-ux-review-in-docs-review.md) | UI・UX 観点のレビューの材料は docs/review/ に置き、REVIEW.md から参照する | 採用 |
 | [0025](0025-permission-status-on-main-screen.md) | 画面の権限の表示を、足りないものに合わせて出し分ける | 採用 |
+| [0026](0026-notify-sync-failures.md) | 自動送信の失敗が続いたら通知し、最後に成功した時刻を分けて出す | 採用 |
+| [0027](0027-recheck-missing-sleep-in-window.md) | 睡眠の未反映は時間帯の中の送信のたびに確かめ直し、「1 日 1 回」を利用者が消すまでにする | 採用 |
 | [0028](0028-show-missing-sleep-and-nutrition-in-notes.md) | 日次ノートで、睡眠と食事のデータが無いことを明示する | 採用 |
 
 ## 書き方
