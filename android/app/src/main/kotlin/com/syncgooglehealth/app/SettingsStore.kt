@@ -148,7 +148,7 @@ class SettingsStore(context: Context) {
         }
         set(v) = prefs.edit().putInt(KEY_SLEEP_CHECK_START, v.startHour).putInt(KEY_SLEEP_CHECK_END, v.endHour).apply()
 
-    // 睡眠の未反映を最後に通知した日 (1 日 1 回にするため)
+    // 睡眠の未反映を最後に通知した日 (利用者が消した通知を、その日のうちに出し直さないため)
     var lastMissingSleepNotified: LocalDate?
         get() = prefs.getString(KEY_MISSING_SLEEP_NOTIFIED, null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
         set(v) = prefs.edit().putString(KEY_MISSING_SLEEP_NOTIFIED, v?.toString()).apply()
