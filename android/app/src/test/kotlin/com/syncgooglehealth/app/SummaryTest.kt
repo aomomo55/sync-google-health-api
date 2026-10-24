@@ -621,15 +621,27 @@ class SyncMessageTest {
     }
 
     @Test
-    fun collectsRejectedDaysAcrossChunks() {
+    fun rejectedDaysAreNotInTheResultLine() {
+        val t = SyncTally().add(35, IngestOk(34, notes, listOf(RejectedDay("2026-01-05", "歩数が範囲外です"))))
+        assertEquals("35日分を送信しました / ノート 更新2・変更なし1・失敗0", buildSyncMessage(TestTexts, t, includeNutrition = true))
+    }
+
+    @Test
+    fun noWarningWhenNothingRejected() {
+        val t = SyncTally().add(3, IngestOk(3, notes))
+        assertNull(buildRejectedWarning(TestTexts, t))
+    }
+
+    @Test
+    fun collectsRejectedDaysAcrossChunksIntoOneWarning() {
         val t = SyncTally()
             .add(30, IngestOk(29, notes, listOf(RejectedDay("2026-01-05", "歩数が範囲外です"))))
             .add(5, IngestOk(4, null, listOf(RejectedDay("2026-01-02", "歩数が範囲外です"))))
         assertEquals(35, t.sent)
         assertEquals(
-            "35日分を送信しました（2日分は値が範囲外のため保存されませんでした: 2026-01-02, 2026-01-05 / 理由: 歩数が範囲外です） " +
-                "/ ノート 更新2・変更なし1・失敗0",
-            buildSyncMessage(TestTexts, t, includeNutrition = true),
+            "2日分は値が範囲外のため保存されませんでした: 2026-01-02, 2026-01-05 / 理由: 歩数が範囲外です。" +
+                "ヘルスコネクトでその日の記録を確かめ、直したら「開始日を指定して送る」で送り直してください",
+            buildRejectedWarning(TestTexts, t),
         )
     }
 
@@ -637,19 +649,36 @@ class SyncMessageTest {
     fun truncatesWhenManyRejected() {
         val rejected = (1..7).map { RejectedDay("2026-01-0$it", "理由$it") }
         val t = SyncTally().add(7, IngestOk(0, null, rejected))
-        val msg = buildSyncMessage(TestTexts, t, includeNutrition = true)
+        val msg = buildRejectedWarning(TestTexts, t).orEmpty()
         assertTrue(msg, msg.contains("7日分は値が範囲外のため保存されませんでした: 2026-01-01, 2026-01-02, 2026-01-03, 2026-01-04, 2026-01-05 ほか2日"))
-        assertTrue(msg, msg.contains("理由: 理由1、理由2 ほか）"))
+        assertTrue(msg, msg.contains("理由: 理由1、理由2 ほか。"))
         assertFalse(msg, msg.contains("2026-01-06"))
+        // 日付や理由を短くしても、次にすることは切られない
+        assertTrue(msg, msg.endsWith("「開始日を指定して送る」で送り直してください"))
     }
 
     @Test
-    fun truncatesLongReason() {
+    fun truncatesLongReasonButKeepsTheNextStep() {
         val long = "あ".repeat(100)
         val t = SyncTally().add(1, IngestOk(0, null, listOf(RejectedDay("2026-01-01", long))))
-        val msg = buildSyncMessage(TestTexts, t, includeNutrition = true)
-        assertTrue(msg, msg.contains("あ".repeat(40) + "…）"))
+        val msg = buildRejectedWarning(TestTexts, t).orEmpty()
+        assertTrue(msg, msg.contains("あ".repeat(40) + "…。"))
         assertFalse(msg, msg.contains("あ".repeat(41)))
+        assertTrue(msg, msg.endsWith("送り直してください"))
+    }
+
+    @Test
+    fun errorTextsSayWhatToDoNext() {
+        val unparseable = (classifyIngestResponse(TestTexts, 200, "<html>") as IngestResult.ClientError).message
+        assertTrue(unparseable, unparseable.contains("同じ日は上書きされ、重複しません"))
+        val server = (classifyIngestResponse(TestTexts, 503, "") as IngestResult.Retryable).message
+        assertTrue(server, server.contains("503") && server.contains("次の自動送信で再試行します") && server.contains("サーバーが動いているか"))
+        val busy = (classifyIngestResponse(TestTexts, 429, "") as IngestResult.Retryable).message
+        assertTrue(busy, busy.contains("次の自動送信で再試行します"))
+        val token = TestTexts.get(R.string.sync_message_token_invalid)
+        assertTrue(token, token.contains("「API トークン」") && token.contains("「設定を保存」") && token.contains("入れ替えた後"))
+        val keystore = TestTexts.get(R.string.sync_message_token_unavailable)
+        assertTrue(keystore, keystore.contains("「今すぐ送信」") && keystore.contains("入れ直して"))
     }
 }
 

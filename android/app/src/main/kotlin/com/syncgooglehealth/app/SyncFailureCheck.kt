@@ -26,6 +26,8 @@ data class SyncHistory(
     val lastSuccessMillis: Long?,
     val lastResult: String?,
     val failureStreak: FailureStreak?,
+    // 送信は成功したが注意が必要なこと (範囲外で保存されなかった日など)。結果の文とは別の行に出す
+    val lastWarning: String? = null,
 ) {
     // 最後に試した送信が失敗したか
     val lastFailed: Boolean get() = failureStreak != null

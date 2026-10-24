@@ -151,6 +151,7 @@ private fun SyncHistoryText(history: SyncHistory) {
     history.lastResult?.let { result ->
         if (history.lastFailed) MessageLine(MessageKind.ERROR, result) else Text(stringResource(R.string.sync_history_result, result))
     }
+    history.lastWarning?.let { MessageLine(MessageKind.WARNING, it) }
     if (isSuccessStale(System.currentTimeMillis(), success)) {
         MessageText(ScreenMessage(R.string.sync_history_stale, MessageKind.WARNING, listOf(STALE_SUCCESS_WARNING_HOURS)))
     }

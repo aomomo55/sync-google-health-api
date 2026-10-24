@@ -163,6 +163,9 @@ describe("NoteSync", () => {
     const r = await sync.syncDates(["2026-02-01", "2026-02-02"]);
     // 内部のエラー文は応答に出さず、固定の文にしてログにだけ残す
     expect(r.failed).toEqual([{ path: bad, error: NOTE_FAILURE_MESSAGE }]);
+    expect(NOTE_FAILURE_MESSAGE).toMatch(
+      /保存済み.*次の送信.*obsidian-sync-mcp.*サーバーのログを確かめてください/,
+    );
     expect(r.written).toHaveLength(2);
     expect(writer.notes.has(bad)).toBe(false);
     expect(errorLog.mock.calls.flat().join("\n")).toContain("boom");
