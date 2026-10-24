@@ -24,24 +24,30 @@ private const val MAX_REJECTED_REASONS = 2
 private const val MAX_REASON_LENGTH = 40
 
 // 結果の文を作る。保存されなかった日は日付と理由だけを短く示す (健康データの値は載せない)
-fun buildSyncMessage(tally: SyncTally, includeNutrition: Boolean): String = buildString {
-    append("${tally.sent}日分を送信しました")
-    if (!includeNutrition) append("（栄養は権限が無いため送っていません）")
+fun buildSyncMessage(texts: Texts, tally: SyncTally, includeNutrition: Boolean): String = buildString {
+    append(texts.get(R.string.sync_message_sent, tally.sent))
+    if (!includeNutrition) append(texts.get(R.string.sync_message_nutrition_skipped))
     val dates = tally.rejected.map { it.date }.distinct().sorted()
     if (dates.isNotEmpty()) {
-        append("（${dates.size}日分は値が範囲外のため保存されませんでした: ")
-        append(dates.take(MAX_REJECTED_DATES).joinToString(", "))
-        if (dates.size > MAX_REJECTED_DATES) append(" ほか${dates.size - MAX_REJECTED_DATES}日")
-        val reasons = tally.rejected.map { it.error.trim() }.filter { it.isNotEmpty() }.distinct()
-        if (reasons.isNotEmpty()) {
-            append(" / 理由: ")
-            append(reasons.take(MAX_REJECTED_REASONS).joinToString("、") { shorten(it) })
-            if (reasons.size > MAX_REJECTED_REASONS) append(" ほか")
+        val detail = buildString {
+            append(dates.take(MAX_REJECTED_DATES).joinToString(", "))
+            if (dates.size > MAX_REJECTED_DATES) {
+                append(texts.get(R.string.sync_message_rejected_more_dates, dates.size - MAX_REJECTED_DATES))
+            }
+            val reasons = tally.rejected.map { it.error.trim() }.filter { it.isNotEmpty() }.distinct()
+            if (reasons.isNotEmpty()) {
+                val separator = texts.get(R.string.common_list_separator)
+                val shown = reasons.take(MAX_REJECTED_REASONS).joinToString(separator) { shorten(it) } +
+                    if (reasons.size > MAX_REJECTED_REASONS) texts.get(R.string.sync_message_rejected_more_reasons) else ""
+                append(texts.get(R.string.sync_message_rejected_reasons, shown))
+            }
         }
-        append("）")
+        append(texts.get(R.string.sync_message_rejected, dates.size, detail))
     }
-    append(" / ノート 更新${tally.notesWritten}・変更なし${tally.notesUnchanged}・失敗${tally.notesFailed}")
-    if (tally.noteErrors.isNotEmpty()) append(" / ノートエラー: ${tally.noteErrors.distinct().joinToString()}")
+    append(texts.get(R.string.sync_message_notes, tally.notesWritten, tally.notesUnchanged, tally.notesFailed))
+    if (tally.noteErrors.isNotEmpty()) {
+        append(texts.get(R.string.sync_message_note_errors, tally.noteErrors.distinct().joinToString()))
+    }
 }
 
 private fun shorten(s: String): String =

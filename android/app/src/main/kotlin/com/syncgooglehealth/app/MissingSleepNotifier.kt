@@ -21,7 +21,11 @@ object MissingSleepNotifier {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             // 音を鳴らさない (まだ寝ている時刻に起こさないため)
-            NotificationChannel(CHANNEL_ID, "睡眠データの未反映", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel(
+                CHANNEL_ID,
+                context.getString(R.string.notification_channel_missing_sleep_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ),
         )
         val open = PendingIntent.getActivity(
             context,

@@ -20,7 +20,11 @@ object SyncFailureNotifier {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             // 音を鳴らさない (寝ている間に起こさないため。ADR 0022 と同じ)
-            NotificationChannel(CHANNEL_ID, "送信の失敗", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel(
+                CHANNEL_ID,
+                context.getString(R.string.notification_channel_sync_failure_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ),
         )
         val open = PendingIntent.getActivity(
             context,

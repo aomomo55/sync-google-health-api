@@ -76,7 +76,7 @@ class SyncFailureCheckTest {
 
     @Test
     fun noticeTellsWhenItLastSucceededAndWhatToDo() {
-        val notice = failureNotice(SyncStatus.AUTH_ERROR, "トークンが正しくありません", "2026/01/10 06:00", sleepUnchecked = false)
+        val notice = failureNotice(TestTexts, SyncStatus.AUTH_ERROR, "トークンが正しくありません", "2026/01/10 06:00", sleepUnchecked = false)
         assertEquals("健康データを送れていません", notice.title)
         assertTrue(notice.text.contains("2026/01/10 06:00"))
         assertTrue(notice.detail.contains("原因: トークンが正しくありません"))
@@ -86,7 +86,7 @@ class SyncFailureCheckTest {
 
     @Test
     fun noticeMentionsTheSleepCheckInsideTheWindowAndMissingSuccess() {
-        val notice = failureNotice(SyncStatus.RETRYABLE, "サーバーエラー (503)", null, sleepUnchecked = true)
+        val notice = failureNotice(TestTexts, SyncStatus.RETRYABLE, "サーバーエラー (503)", null, sleepUnchecked = true)
         assertTrue(notice.text.contains("成功した記録がありません"))
         assertTrue(notice.detail.contains("再試行"))
         assertTrue(notice.detail.contains("睡眠の未反映の通知も出ません"))

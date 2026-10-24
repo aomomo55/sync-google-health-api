@@ -83,7 +83,7 @@ class MissingSleepCheckTest {
 
     @Test
     fun noticeShowsWhenItWasChecked() {
-        val notice = missingSleepNotice(LocalTime.of(8, 5))
+        val notice = missingSleepNotice(TestTexts, LocalTime.of(8, 5))
         assertEquals("昨夜の睡眠がまだ届いていません", notice.title)
         assertTrue(notice.text.contains("8:05 に確認"))
         assertTrue(notice.detail.startsWith("8:05 の自動送信の時点で"))
