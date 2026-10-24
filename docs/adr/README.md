@@ -27,6 +27,7 @@
 | [0021](0021-shorten-android-sync-interval.md) | Android アプリの自動送信の間隔を 6 時間から 1 時間に縮める | 採用 |
 | [0022](0022-notify-missing-sleep.md) | 朝の自動送信で今日の睡眠が無ければ通知する | 採用 |
 | [0023](0023-dependabot-docker-daily.md) | Docker のベースイメージの更新だけ Dependabot で毎日確かめる | 採用 |
+| [0024](0024-ux-review-in-docs-review.md) | UX 観点のレビューの材料は docs/review/ に置き、REVIEW.md から参照する | 採用 |
 
 ## 書き方
 
