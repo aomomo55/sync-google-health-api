@@ -337,6 +337,7 @@ describe("GET /api/summary/monthly", () => {
       body: { avg_weight_kg: 60.5 },
       sleep: {
         nights: 2,
+        missing_dates: [],
         avg_asleep_hours: 7,
         avg_in_bed_hours: 8,
         avg_bedtime: "00:00",

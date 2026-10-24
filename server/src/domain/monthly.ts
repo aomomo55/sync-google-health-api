@@ -1,5 +1,5 @@
 import { round } from "../shared/rounding.js";
-import { type DailySummary, hasNutritionRecord } from "./daily.js";
+import { type DailySummary, hasNutritionRecord, isSleepPending } from "./daily.js";
 import { formatHm, jstMinutesOfDay, MINUTES_PER_DAY } from "./dates.js";
 
 export interface MonthlySummary {
@@ -23,6 +23,8 @@ export interface MonthlySummary {
   body: { avg_weight_kg: number | null };
   sleep: {
     nights: number;
+    // 日次データはあるが睡眠の記録が無い日（YYYY-MM-DD、昇順）。まだ届いていない日は含めない
+    missing_dates: string[];
     avg_asleep_hours: number | null;
     avg_in_bed_hours: number | null;
     avg_bedtime: string | null;
@@ -59,21 +61,40 @@ function avgBedtime(xs: number[]): string | null {
   return a === null ? null : formatHm(a);
 }
 
+function hasSleepRecord(s: DailySummary["sleep"]): boolean {
+  return (
+    !!s &&
+    (s.asleep_minutes != null || s.in_bed_minutes != null || s.start != null || s.end != null)
+  );
+}
+
 function hasData(d: DailySummary): boolean {
   return [d.activity, d.heart_rate, d.body, d.sleep, d.nutrition].some(
     (s) => s && Object.values(s).some((v) => v !== null && v !== undefined),
   );
 }
 
-export function summarizeMonth(month: string, days: DailySummary[]): MonthlySummary {
+// nextDateAfterMonth はこの月より後で最も早いデータのある日。無ければ省略する（月末の日が
+// 「まだ届いていない」かの判定に使う）
+export function summarizeMonth(
+  month: string,
+  days: DailySummary[],
+  nextDateAfterMonth?: string,
+): MonthlySummary {
   const a = days.map((d) => d.activity);
   // 値がすべて 0 の日は記録なしとして、記録日数にも平均にも含めない（日次ノートと同じ扱い）
   const n = days.flatMap((d) => (hasNutritionRecord(d.nutrition) ? [d.nutrition] : []));
   const nutritionDays = n.length;
   const sleepDays = days.flatMap((d) => (d.sleep ? [d.sleep] : []));
-  const nights = sleepDays.filter(
-    (s) => s.asleep_minutes != null || s.in_bed_minutes != null || s.start != null || s.end != null,
-  ).length;
+  const nights = sleepDays.filter(hasSleepRecord).length;
+  const sortedDays = [...days].sort((x, y) => x.date.localeCompare(y.date));
+  const missingDates = sortedDays.flatMap((d, i) =>
+    hasData(d) &&
+    !hasSleepRecord(d.sleep) &&
+    !isSleepPending(sortedDays[i + 1]?.date ?? nextDateAfterMonth)
+      ? [d.date]
+      : [],
+  );
   const sleepAvg = (pick: (s: (typeof sleepDays)[number]) => number | null | undefined) =>
     avg(vals(sleepDays.map(pick)));
 
@@ -106,6 +127,7 @@ export function summarizeMonth(month: string, days: DailySummary[]): MonthlySumm
     },
     sleep: {
       nights,
+      missing_dates: missingDates,
       avg_asleep_hours: asleep === null ? null : round(asleep / 60, 2),
       avg_in_bed_hours: inBed === null ? null : round(inBed / 60, 2),
       avg_bedtime: avgBedtime(vals(sleepDays.map((s) => jstMinutesOfDay(s.start)))),
@@ -137,8 +159,15 @@ export function summarizeMonths(days: DailySummary[]): MonthlySummary[] {
     const m = d.date.slice(0, 7);
     groups.set(m, [...(groups.get(m) ?? []), d]);
   }
+  const dates = days.map((d) => d.date).sort();
   return [...groups.entries()]
     .sort(([x], [y]) => x.localeCompare(y))
-    .map(([m, ds]) => summarizeMonth(m, ds))
+    .map(([m, ds]) =>
+      summarizeMonth(
+        m,
+        ds,
+        dates.find((d) => d.slice(0, 7) > m),
+      ),
+    )
     .filter((s) => s.days_with_data > 0);
 }

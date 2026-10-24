@@ -131,6 +131,12 @@ export function hasNutritionRecord(n: DailySummary["nutrition"]): boolean {
   return n !== undefined && Object.values(n).some((v) => typeof v === "number" && v > 0);
 }
 
+// 睡眠が無い日を「まだ届いていない」とみなすか（ADR 0028）。翌日以降のデータが無い最新の日だけが該当する。
+// 日次ノートの表示と月次の「睡眠の記録が無い日」で同じ判定を使う
+export function isSleepPending(nextDate: string | undefined): boolean {
+  return nextDate === undefined;
+}
+
 export const SECTIONS = ["activity", "heart_rate", "body", "sleep", "nutrition"] as const;
 export type Section = (typeof SECTIONS)[number];
 

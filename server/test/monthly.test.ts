@@ -91,6 +91,68 @@ describe("summarizeMonth: カロリー", () => {
   });
 });
 
+describe("summarizeMonth: 睡眠の記録が無い日", () => {
+  const steps = (date: string): DailySummary => ({ date, activity: { steps: 100 } });
+
+  it("日次データはあるが睡眠が無い日を昇順で返す", () => {
+    const m = summarizeMonth("2026-01", [
+      steps("2026-01-07"),
+      sleepDay("2026-01-05", "2026-01-04T23:00:00+09:00"),
+      steps("2026-01-03"),
+      sleepDay("2026-01-09", "2026-01-08T23:00:00+09:00"),
+    ]);
+    expect(m.sleep.missing_dates).toEqual(["2026-01-03", "2026-01-07"]);
+  });
+
+  it("すべて記録があれば空", () => {
+    const m = summarizeMonth("2026-01", [
+      sleepDay("2026-01-01", "2025-12-31T23:00:00+09:00"),
+      sleepDay("2026-01-02", "2026-01-01T23:00:00+09:00"),
+    ]);
+    expect(m.sleep.missing_dates).toEqual([]);
+  });
+
+  it("全項目が空の睡眠は記録なしとして数える", () => {
+    const m = summarizeMonth("2026-01", [
+      { date: "2026-01-01", activity: { steps: 1 }, sleep: { start: null, asleep_minutes: null } },
+      sleepDay("2026-01-02", "2026-01-01T23:00:00+09:00"),
+    ]);
+    expect(m.sleep.missing_dates).toEqual(["2026-01-01"]);
+  });
+
+  it("日次データそのものが無い日は含めない", () => {
+    const m = summarizeMonth("2026-01", [
+      { date: "2026-01-01", activity: { steps: null } },
+      sleepDay("2026-01-02", "2026-01-01T23:00:00+09:00"),
+    ]);
+    expect(m.sleep.missing_dates).toEqual([]);
+  });
+
+  it("翌日以降のデータが無い最新の日は、まだ届いていないので含めない", () => {
+    const m = summarizeMonth("2026-01", [
+      sleepDay("2026-01-01", "2025-12-31T23:00:00+09:00"),
+      steps("2026-01-02"),
+    ]);
+    expect(m.sleep.missing_dates).toEqual([]);
+  });
+
+  it("月末の日は、翌月にデータがあれば含め、無ければ含めない", () => {
+    const days = [sleepDay("2026-01-01", "2025-12-31T23:00:00+09:00"), steps("2026-01-31")];
+    expect(summarizeMonth("2026-01", days, "2026-02-01").sleep.missing_dates).toEqual([
+      "2026-01-31",
+    ]);
+    expect(summarizeMonth("2026-01", days).sleep.missing_dates).toEqual([]);
+  });
+
+  it("summarizeMonths は後の月のデータを見て月末の日を判定する", () => {
+    const r = summarizeMonths([
+      steps("2026-01-31"),
+      sleepDay("2026-02-01", "2026-01-31T23:00:00+09:00"),
+    ]);
+    expect(r.map((m) => m.sleep.missing_dates)).toEqual([["2026-01-31"], []]);
+  });
+});
+
 describe("summarizeMonths", () => {
   it("月ごとに昇順でグルーピングし、全て null の日だけの月は除く", () => {
     const r = summarizeMonths([

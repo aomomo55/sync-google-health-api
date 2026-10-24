@@ -68,7 +68,7 @@ CLI（`pnpm import:takeout` / `pnpm sync:notes` / `pnpm restore:backup`）は下
   - `failed[].error` と `notes.error` は、メモ欄のマーカー欠落と Vault パスの違反以外は固定の文で、詳細はサーバーのログに出る
 - `POST /api/notes/sync` — `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","includeStatic":bool?}`（最大400日。本文は 16 KB まで、超えると 413）。範囲内のノートを再生成し、内容が同じものは書き込まない。`{"written":n,"unchanged":n,"failed":[...]}`。Vault 未設定は 503
 - `GET /api/summary?date=YYYY-MM-DD` または `?from=&to=`（最大400日）— `{"days":[...]}`。`types=activity,heart_rate,body,sleep,nutrition` で絞り込み
-- `GET /api/summary/monthly?from=YYYY-MM&to=YYYY-MM`（最大120か月）— 月次集計 `{"months":[...]}`（データのある月のみ）
+- `GET /api/summary/monthly?from=YYYY-MM&to=YYYY-MM`（最大120か月）— 月次集計 `{"months":[...]}`（データのある月のみ）。`sleep.missing_dates` は、日次データはあるが睡眠の記録が無い日（`YYYY-MM-DD`、昇順）。翌日以降のデータがまだ無い最新の日は「まだ届いていない」ので含めない（[ADR 0028](../docs/adr/0028-show-missing-sleep-and-nutrition-in-notes.md)）。月次ノートでは frontmatter の `睡眠なしの日` と、本文の「睡眠の記録が無い日」になる
 - `GET /backup/health` — `Authorization: Bearer <BACKUP_TOKEN>` 必須（`API_TOKEN` では取れない）。全期間の日次データを JSON → gzip → age で暗号化して返す（`application/octet-stream`、`X-Backup-Days` に日数）。`BACKUP_TOKEN` と `BACKUP_AGE_RECIPIENT` が未設定なら 404。復元は `pnpm restore:backup`（[docs/backup.md](../docs/backup.md)）
 
 ### Vault への書き込みのやり直し

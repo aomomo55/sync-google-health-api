@@ -118,7 +118,24 @@ describe("NoteSync", () => {
     expect(writer.notes.get("Health/Daily/2026-02-20.md")).toContain("Daily/2026-03-05|翌日");
     expect(r.written).toContain("Health/Daily/2026-02-20.md");
     expect(r.written).toContain("Health/Monthly/2026-03.md");
-    expect(r.unchanged).toContain("Health/Monthly/2026-02.md");
+    // 2/20 は翌日以降のデータが届き「まだ届いていない」から「睡眠の記録が無い日」に変わるので、2月の月次も更新される
+    expect(r.written).toContain("Health/Monthly/2026-02.md");
+    expect(writer.notes.get("Health/Monthly/2026-02.md")).toContain("- 睡眠の記録が無い日: 2/20");
+  });
+
+  it("翌月にデータがあれば、前の月の途中だけを作り直しても月末の睡眠なしの日が残る", async () => {
+    const { store, sync, writer } = setup();
+    await store.upsertDays([
+      { date: "2026-10-10", sleep: { asleep_minutes: 400 } },
+      { date: "2026-10-16", sleep: { asleep_minutes: 400 } },
+      { date: "2026-10-17", sleep: { asleep_minutes: 400 } },
+      { date: "2026-10-31", activity: { steps: 1 } },
+      { date: "2026-11-05", sleep: { asleep_minutes: 400 } },
+    ]);
+    await sync.syncRange("2026-10-01", "2026-10-15");
+    const note = writer.notes.get("Health/Monthly/2026-10.md");
+    expect(note).toContain("  - 2026-10-31\n");
+    expect(note).toContain("- 睡眠の記録が無い日: 10/31");
   });
 
   it("データの無い日だけなら何もしない", async () => {

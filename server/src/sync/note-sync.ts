@@ -86,7 +86,10 @@ export class NoteSync {
     // 影響を受ける日は [prev, next] に収まる。月次集計のため、その月は全日読む
     const inner = { start: prev ?? from, end: next ?? to };
     const start = minDate(prevPrev ?? inner.start, monthKeyRange(inner.start.slice(0, 7)).start);
-    const end = maxDate(nextNext ?? inner.end, monthKeyRange(inner.end.slice(0, 7)).end);
+    const monthEnd = maxDate(nextNext ?? inner.end, monthKeyRange(inner.end.slice(0, 7)).end);
+    // 最後の月の末日が「まだ届いていない」かの判定に、その後で最も早いデータのある日も読む
+    // （対象の日にも前後リンクにも入らない）
+    const end = (await this.adjacent(monthEnd, "next")) ?? monthEnd;
     // DB の日付は書き込み時に検証済みのはずだが、手で直された文書などに備えて再検証する。
     // 不正な日付はパスや YAML にそのまま入るので、ノートを作らず失敗として報告する
     const { valid: days, invalid } = splitValidDays(await this.store.getDays(start, end));

@@ -412,6 +412,7 @@ type: health-monthly
 平均心拍: 70
 平均体重kg: 60
 睡眠記録日数: 1
+睡眠なしの日: []
 平均睡眠時間h: 7
 平均ベッド内時間h: 7.5
 平均就寝時刻: "23:00"
@@ -450,13 +451,32 @@ SORT 日付 ASC
 
   it("空の月でもキーは揃い、月跨ぎのリンクが正しい", () => {
     const e = renderMonthlyNote(summarizeMonth("2026-01", []));
-    expect(parseFm(e)).toHaveLength(26);
+    expect(parseFm(e)).toHaveLength(27);
     expect(parseFm(e).find(([k]) => k === "平均歩数")![1]).toBe("");
     expect(e).toContain("[[Health/Monthly/2025-12|2025年12月]]");
     expect(e).toContain("[[Health/Monthly/2026-02|2026年2月]]");
     expect(renderMonthlyNote(summarizeMonth("2026-12", []))).toContain(
       "[[Health/Monthly/2027-01|2027年1月]]",
     );
+  });
+
+  it("睡眠の記録が無い日を、frontmatter のリストと本文の M/D で出す", () => {
+    const note = renderMonthlyNote(
+      summarizeMonth("2026-10", [
+        { date: "2026-10-03", activity: { steps: 100 } },
+        { date: "2026-10-07", activity: { steps: 100 } },
+        { date: "2026-10-08", sleep: { asleep_minutes: 400 } },
+      ]),
+    );
+    expect(note).toContain(
+      "睡眠記録日数: 1\n睡眠なしの日:\n  - 2026-10-03\n  - 2026-10-07\n平均睡眠時間h:",
+    );
+    expect(note).toContain("- 睡眠の記録が無い日: 10/3, 10/7\n");
+  });
+
+  it("睡眠の記録が無い日が無ければ、本文には出さず frontmatter は空のリスト", () => {
+    expect(renderMonthlyNote(m)).not.toContain("睡眠の記録が無い日");
+    expect(renderMonthlyNote(m)).toContain("睡眠なしの日: []\n");
   });
 
   it("決定的", () => {
