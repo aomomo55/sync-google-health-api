@@ -1,4 +1,4 @@
-import type { DailySummary } from "../domain/daily.js";
+import { type DailySummary, hasNutritionRecord } from "../domain/daily.js";
 import { round } from "../shared/rounding.js";
 import { fmtDuration, fmtNum, jstHm, monthLabelJa, numOrNull, weekdayJa } from "./format.js";
 import { linkTarget, notePaths } from "./paths.js";
@@ -35,12 +35,24 @@ function rounded(x: number | null | undefined, digits: number): number | null {
   return n === null ? null : round(n, digits);
 }
 
+// データが無い項目の表し方（ADR 0028）。日によって行を出したり出さなかったりしない
+const NO_RECORD = "記録なし";
+// 睡眠は起床した日に属し、ウェアラブルからの反映が遅れて後から届くことがある。
+// 翌日以降のデータが届くまでは「まだ届いていない」、届いた後は「記録なし」とする
+const SLEEP_PENDING =
+  "まだ届いていません（ウェアラブルのアプリで同期すると、次の送信で反映されます）";
+
+// 食事の記録が無い日（値がすべて 0 の日を含む）は、栄養の値を空として扱う
+function recordedNutrition(day: DailySummary): DailySummary["nutrition"] {
+  return hasNutritionRecord(day.nutrition) ? day.nutrition : undefined;
+}
+
 export function dailyEntries(day: DailySummary): YamlEntry[] {
   const a = day.activity;
   const h = day.heart_rate;
   const b = day.body;
   const s = day.sleep;
-  const n = day.nutrition;
+  const n = recordedNutrition(day);
   const steps = numOrNull(a?.steps);
   const asleep = numOrNull(s?.asleep_minutes);
   return [
@@ -78,7 +90,7 @@ export function dailyEntries(day: DailySummary): YamlEntry[] {
   ];
 }
 
-function summaryLines(day: DailySummary): string[] {
+function summaryLines(day: DailySummary, nav: DailyNav): string[] {
   const lines: string[] = [];
   const a = day.activity;
   const h = day.heart_rate;
@@ -94,11 +106,12 @@ function summaryLines(day: DailySummary): string[] {
   if (move !== null) act.push(`運動 ${fmtDuration(move)}`);
   if (act.length > 0) lines.push(`- 活動: ${act.join(" / ")}`);
 
-  const kcal = int(day.nutrition?.energy_kcal);
+  const n = recordedNutrition(day);
+  const kcal = int(n?.energy_kcal);
   const pfc = [
-    ["P", rounded(day.nutrition?.protein_g, 1)],
-    ["F", rounded(day.nutrition?.fat_g, 1)],
-    ["C", rounded(day.nutrition?.carbs_g, 1)],
+    ["P", rounded(n?.protein_g, 1)],
+    ["F", rounded(n?.fat_g, 1)],
+    ["C", rounded(n?.carbs_g, 1)],
   ].flatMap(([label, v]) => (v === null ? [] : [`${label} ${fmtNum(v as number)}g`]));
   if (kcal !== null || pfc.length > 0) {
     const text =
@@ -106,6 +119,8 @@ function summaryLines(day: DailySummary): string[] {
         ? pfc.join(" / ")
         : `${fmtNum(kcal)} kcal${pfc.length > 0 ? `（${pfc.join(" / ")}）` : ""}`;
     lines.push(`- 食事: ${text}`);
+  } else {
+    lines.push(`- 食事: ${NO_RECORD}`);
   }
 
   const avg = numOrNull(h?.avg_bpm);
@@ -138,6 +153,8 @@ function summaryLines(day: DailySummary): string[] {
     if (rem !== null) stages.push(`REM ${rem}分`);
     if (stages.length > 0) parts.push(`内訳 ${stages.join("・")}`);
     lines.push(`- 睡眠: ${parts.join(" / ")}`);
+  } else {
+    lines.push(`- 睡眠: ${nav.next ? NO_RECORD : SLEEP_PENDING}`);
   }
   const nap = numOrNull(s?.nap_minutes);
   if (nap !== null) lines.push(`- 仮眠: ${fmtDuration(nap)}`);
@@ -154,7 +171,7 @@ export function renderDailyNote(day: DailySummary, nav: DailyNav = {}, root?: st
     frontmatter(dailyEntries(day), ["health/daily"]),
     `# ${day.date}（${weekdayJa(day.date)}）\n`,
   ];
-  const summary = summaryLines(day);
+  const summary = summaryLines(day, nav);
   if (summary.length > 0) parts.push(`${summary.join("\n")}\n`);
 
   const links: string[] = [];
