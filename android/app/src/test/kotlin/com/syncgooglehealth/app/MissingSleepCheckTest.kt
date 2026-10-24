@@ -7,6 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 
 class MissingSleepCheckTest {
     private val today = LocalDate.of(2026, 1, 10)
@@ -17,8 +18,9 @@ class MissingSleepCheckTest {
         hasTodaySleep: Boolean = false,
         background: Boolean = true,
         lastNotified: LocalDate? = null,
+        showing: Boolean = lastNotified != null,
         window: SleepCheckWindow = this.window,
-    ) = missingSleepAction(now, hasTodaySleep, background, lastNotified, window)
+    ) = missingSleepAction(now, hasTodaySleep, background, lastNotified, showing, window)
 
     private val sleep = SleepSummary(
         start = "2026-01-09T23:00:00+09:00",
@@ -59,9 +61,33 @@ class MissingSleepCheckTest {
     }
 
     @Test
-    fun notifiesAtMostOncePerDay() {
-        assertEquals(MissingSleepAction.NONE, action(at(9), lastNotified = today))
-        assertEquals(MissingSleepAction.NOTIFY, action(at(9), lastNotified = today.minusDays(1)))
+    fun rechecksOnEveryRunInsideTheWindowWhileTheNoticeIsShowing() {
+        // 時間帯の開始 (8 時) より遅く起きた日: 起きる前の 8 時に出した通知を、起きた後の送信で確かめ直して出し直す
+        assertEquals(MissingSleepAction.NOTIFY, action(at(10, 30), lastNotified = today, showing = true))
+        assertEquals(MissingSleepAction.NOTIFY, action(at(9), lastNotified = today.minusDays(1), showing = false))
+    }
+
+    @Test
+    fun doesNotNotifyAgainAfterTheUserDismissedTodaysNotice() {
+        assertEquals(MissingSleepAction.NONE, action(at(9), lastNotified = today, showing = false))
+        assertEquals(MissingSleepAction.NONE, action(at(11), lastNotified = today, showing = false))
+    }
+
+    @Test
+    fun lateRiserGetsTheNoticeAfterWakingWhenSleepIsStillMissing() {
+        // 8 時 (寝ている): まだ無いので通知。10 時台 (起きた後): まだ無ければ出したまま確かめ直す。届いたら消す
+        assertEquals(MissingSleepAction.NOTIFY, action(at(8, 5)))
+        assertEquals(MissingSleepAction.NOTIFY, action(at(10, 40), lastNotified = today, showing = true))
+        assertEquals(MissingSleepAction.CANCEL, action(at(11, 10), hasTodaySleep = true, lastNotified = today, showing = true))
+    }
+
+    @Test
+    fun noticeShowsWhenItWasChecked() {
+        val notice = missingSleepNotice(LocalTime.of(8, 5))
+        assertEquals("昨夜の睡眠がまだ届いていません", notice.title)
+        assertTrue(notice.text.contains("8:05 に確認"))
+        assertTrue(notice.detail.startsWith("8:05 の自動送信の時点で"))
+        assertTrue(notice.detail.contains("ウェアラブルのアプリ"))
     }
 
     @Test

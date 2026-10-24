@@ -2,10 +2,13 @@ package com.syncgooglehealth.app
 
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 // 起床後の時間帯 [startHour, endHour) の自動送信で、今日 (起床した日) の睡眠がまだ無ければ通知する。
 // ウェアラブルから Health Connect への反映は、メーカーのアプリを開くまで遅れることがあるため。
-// 睡眠の記録は起床後にできるので、起きる前に判定しないよう、時間帯は利用者が起床時刻に合わせて設定する
+// 睡眠の記録は起床後にできるので、時間帯は利用者が起床時刻に合わせて設定する。
+// 遅く起きた日は起きる前にも確かめることになるが、時間帯の中の送信のたびに確かめ直す
 data class SleepCheckWindow(val startHour: Int, val endHour: Int) {
     init {
         require(isValid(startHour, endHour)) { "時間帯が不正です: $startHour-$endHour" }
@@ -39,22 +42,41 @@ enum class MissingSleepAction { NOTIFY, CANCEL, NONE }
 fun hasSleepOn(days: List<DailySummary>, date: LocalDate): Boolean =
     days.any { it.date == date.toString() && it.sleep != null }
 
-// 送信が成功した後に、睡眠の未反映の通知をどうするか決める。
+// 送信が成功した後に、睡眠の未反映の通知をどうするか決める (ADR 0027)。
 // - 睡眠が届いていれば通知を消す
-// - 通知は自動送信のときだけ、時間帯の中で 1 日 1 回まで
+// - 時間帯の中の自動送信のたびに確かめ直し、まだ無ければ通知を出す (出ていれば、確かめた時刻を新しくする)。
+//   起きる前に確かめた日も、起きた後の送信で確かめ直した結果に置き換わる
+// - 今日出した通知を利用者が消した (今日通知したのに今は出ていない) ら、その日はもう出さない
 // - 前日以前の通知が残っていれば消す (日付が変わったら「昨夜」の意味が変わるため)
 fun missingSleepAction(
     now: LocalDateTime,
     hasTodaySleep: Boolean,
     background: Boolean,
     lastNotified: LocalDate?,
+    showing: Boolean,
     window: SleepCheckWindow,
 ): MissingSleepAction {
     val today = now.toLocalDate()
+    val dismissedToday = lastNotified == today && !showing
     return when {
         hasTodaySleep -> MissingSleepAction.CANCEL
-        background && now.hour in window && lastNotified != today -> MissingSleepAction.NOTIFY
+        background && now.hour in window && !dismissedToday -> MissingSleepAction.NOTIFY
         lastNotified != null && lastNotified < today -> MissingSleepAction.CANCEL
         else -> MissingSleepAction.NONE
     }
 }
+
+data class MissingSleepNotice(val title: String, val text: String, val detail: String)
+
+// 通知の文。確かめた時刻を入れ、起きる前に確かめた結果か、起きた後に確かめ直した結果かを見分けられるようにする
+fun missingSleepNotice(checkedAt: LocalTime): MissingSleepNotice {
+    val time = checkedAt.format(CHECKED_AT_FORMAT)
+    return MissingSleepNotice(
+        title = "昨夜の睡眠がまだ届いていません",
+        text = "ウェアラブルのアプリを開いて同期してください（$time に確認）",
+        detail = "$time の自動送信の時点で、今日の睡眠が届いていません。ウェアラブルのアプリを開いて同期してください。" +
+            "次の自動送信か「今すぐ送信」で取り込み、届いたらこの通知は消えます",
+    )
+}
+
+private val CHECKED_AT_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("H:mm")

@@ -350,7 +350,13 @@ fun MainScreen() {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth(),
         )
-        Text("睡眠が未反映のときに通知する時間帯 (起床時刻より後に)", style = MaterialTheme.typography.bodyMedium)
+        Text("睡眠が未反映のときに通知する時間帯", style = MaterialTheme.typography.bodyMedium)
+        Text(
+            "開始は、ふだん起きる時刻より後にしてください。睡眠の記録は起きた後にできるので、" +
+                "起きる前に確かめると、届いていなくて当然の状態で通知が出ます（音は鳴りません）。" +
+                "遅く起きた日も、時間帯の中の自動送信のたびに確かめ直し、届いたら通知を消します",
+            style = MaterialTheme.typography.bodyMedium,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = checkStart,
