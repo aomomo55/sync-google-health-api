@@ -1,16 +1,20 @@
 package com.syncgooglehealth.app
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -33,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
@@ -85,6 +90,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun hasNotificationPermission(context: Context): Boolean =
+    context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
 private suspend fun backgroundReadStatus(context: Context): String {
     return try {
         val client = HealthConnectClient.getOrCreate(context)
@@ -132,6 +140,10 @@ fun MainScreen() {
     var startDate by remember { mutableStateOf<LocalDate?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var sdkOk by remember { mutableStateOf(false) }
+    var notificationGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
+    val initialWindow = remember { store.sleepCheckWindow }
+    var checkStart by remember { mutableStateOf(initialWindow.startHour.toString()) }
+    var checkEnd by remember { mutableStateOf(initialWindow.endHour.toString()) }
 
     val running by AppState.running.collectAsState()
     val lastTime by AppState.lastTime.collectAsState()
@@ -159,15 +171,24 @@ fun MainScreen() {
                 sdkMessage = "この端末ではヘルスコネクトを利用できません"
             }
         }
+        // 設定アプリで通知の権限を変えた場合も反映する
+        notificationGranted = hasNotificationPermission(context)
         // 復号できず消されたトークンを画面にも反映する
         tokenSaved = store.hasToken()
         if (granted && tokenSaved) SyncWorker.schedule(context)
     }
 
+    // 昨夜の睡眠が未反映のときの通知に使う。「権限を付与」の流れの中で、ヘルスコネクトの権限の後に求める。
+    // 拒否されても送信は今までどおり動く (2 回拒否すると OS が以後のダイアログを出さない)
+    val notificationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        notificationGranted = ok
+    }
     val launcher = rememberLauncherForActivityResult(HealthPermissions.contract()) { _ ->
         AppState.scope.launch { refresh() }
+        if (!hasNotificationPermission(context)) notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
     LaunchedEffect(Unit) { refresh() }
+
 
     // 入力内容を保存する。成功したら true
     fun save(): Boolean {
@@ -186,6 +207,12 @@ fun MainScreen() {
             tokenSaved = true
             token = ""
         }
+        val window = SleepCheckWindow.parse(checkStart, checkEnd)
+        if (window == null) {
+            message = "通知の時間帯は 0〜24 の時で、開始を終了より前にしてください"
+            return false
+        }
+        store.sleepCheckWindow = window
         store.serverUrl = u
         if (granted && store.hasToken()) SyncWorker.schedule(context)
         message = "設定を保存しました"
@@ -220,6 +247,26 @@ fun MainScreen() {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             modifier = Modifier.fillMaxWidth(),
         )
+        Text("睡眠が未反映のときに通知する時間帯 (起床時刻より後に)", style = MaterialTheme.typography.bodyMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = checkStart,
+                onValueChange = { checkStart = it },
+                label = { Text("開始 (時)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+            Text("〜")
+            OutlinedTextField(
+                value = checkEnd,
+                onValueChange = { checkEnd = it },
+                label = { Text("終了 (時)") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f),
+            )
+        }
         OutlinedButton(onClick = { save() }, enabled = !running, modifier = Modifier.fillMaxWidth()) {
             Text("設定を保存")
         }
@@ -234,6 +281,11 @@ fun MainScreen() {
             )
         }
         bgMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        Text(
+            if (notificationGranted) "通知の権限: 付与済み"
+            else "通知の権限: 未付与 (睡眠が未反映のときの通知に使います。『権限を付与』で求めます)",
+            style = MaterialTheme.typography.bodySmall,
+        )
 
         Button(
             onClick = { launcher.launch(if (historyAvailable) HealthPermissions.all else HealthPermissions.all - PermissionPolicy.READ_HISTORY) },
