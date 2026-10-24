@@ -1,4 +1,5 @@
 # 依存の更新を月に一度まとめて提案する。マイナー・パッチはエコシステムごとに 1 つの PR にまとめる
+# Docker のベースイメージだけは毎日確かめる（理由は docs/adr/0023-dependabot-docker-daily.md）
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -14,8 +15,9 @@ updates:
 
   - package-ecosystem: docker
     directory: /server
+    # Node.js 本体の脆弱性はセキュリティ更新の対象にならず、digest の更新でしか気づけないため毎日にする
     schedule:
-      interval: monthly
+      interval: daily
     open-pull-requests-limit: 2
     # Node のメジャー更新は LTS の時期に合わせて手動で行う（奇数版や LTS 前の版を提案させない）
     ignore:
