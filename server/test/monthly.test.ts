@@ -67,6 +67,19 @@ describe("summarizeMonth: カロリー", () => {
     });
   });
 
+  it("栄養の値がすべて 0 の日は、記録日数にも平均にも含めない", () => {
+    const m = summarizeMonth("2026-01", [
+      { date: "2026-01-01", nutrition: { energy_kcal: 1800, protein_g: 60 } },
+      {
+        date: "2026-01-02",
+        nutrition: { energy_kcal: 0, protein_g: 0, fat_g: 0, carbs_g: 0 },
+      },
+    ]);
+    expect(m.nutrition.days_logged).toBe(1);
+    expect(m.nutrition.avg_energy_kcal).toBe(1800);
+    expect(m.nutrition.avg_protein_g).toBe(60);
+  });
+
   it("摂取だけの日も計測日数に含まれ、無ければ null と 0", () => {
     const m = summarizeMonth("2026-01", [{ date: "2026-01-01", nutrition: { fat_g: 10 } }]);
     expect(m.days_with_data).toBe(1);

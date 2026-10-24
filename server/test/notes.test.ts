@@ -220,21 +220,27 @@ ${MEMO_MARKER}
     expect(get("就寝時刻")).toBe("");
     expect(note).toContain("- 活動: 100歩");
     expect(note).not.toContain("- 心拍:");
-    expect(note).not.toContain("- 睡眠:");
+    // 翌日のデータがまだ無いので、睡眠は「まだ届いていません」
+    expect(note).toContain("- 睡眠: まだ届いていません（");
+    expect(note).toContain("- 食事: 記録なし\n");
     expect(note).toContain(
       "← [[Health/Daily/2026-03-15|前日]] | [[Health/Monthly/2026-03|2026年3月]]\n",
     );
     expect(note).not.toContain("翌日");
   });
 
-  it("データなしでもキーは揃い、サマリー行は無い", () => {
-    const note = renderDailyNote({ date: "2026-03-08" }, {});
+  it("データなしでもキーは揃い、サマリーは食事と睡眠が無いことだけを示す", () => {
+    const note = renderDailyNote({ date: "2026-03-08" }, { next: "2026-03-09" });
     expect(parseFm(note).map(([k]) => k)).toEqual(DAILY_KEYS);
-    expect(note.split("---\n")[2]).not.toContain("- ");
+    const body = note.split("---\n")[2]!;
+    expect(body.split("\n").filter((l) => l.startsWith("- "))).toEqual([
+      "- 食事: 記録なし",
+      "- 睡眠: 記録なし",
+    ]);
     expect(note).toContain(MEMO_MARKER);
   });
 
-  it("食事: 一部の項目だけでも出力し、無ければ行を出さない", () => {
+  it("食事: 一部の項目だけでも出力し、無ければ「記録なし」", () => {
     const only = renderDailyNote({ date: "2026-03-15", nutrition: { energy_kcal: 1200 } }, {});
     expect(only).toContain("- 食事: 1,200 kcal\n");
     expect(only).toContain("摂取カロリー: 1200\n");
@@ -244,7 +250,44 @@ ${MEMO_MARKER}
       {},
     );
     expect(pfc).toContain("- 食事: P 50.5g / F 30g\n");
-    expect(renderDailyNote({ date: "2026-03-15", nutrition: {} }, {})).not.toContain("- 食事:");
+    expect(renderDailyNote({ date: "2026-03-15", nutrition: {} }, {})).toContain(
+      "- 食事: 記録なし\n",
+    );
+  });
+
+  it("食事: 値がすべて 0 の日は「記録なし」にし、frontmatter も空にする", () => {
+    const zero = renderDailyNote(
+      {
+        date: "2026-03-15",
+        nutrition: { energy_kcal: 0, protein_g: 0, fat_g: 0, carbs_g: 0 },
+      },
+      {},
+    );
+    expect(zero).toContain("- 食事: 記録なし\n");
+    expect(zero).not.toContain("0 kcal");
+    expect(zero).toContain("摂取カロリー:\n");
+    expect(zero).toContain("たんぱく質g:\n");
+    // 値のある項目が 1 つでもあれば、0 の項目もそのまま出す
+    const partial = renderDailyNote(
+      { date: "2026-03-15", nutrition: { energy_kcal: 0, protein_g: 12 } },
+      {},
+    );
+    expect(partial).toContain("- 食事: 0 kcal（P 12g）\n");
+    expect(partial).toContain("摂取カロリー: 0\n");
+  });
+
+  it("睡眠: 無い日は、翌日のデータが届くまで「まだ届いていません」、届いた後は「記録なし」", () => {
+    const day = { date: "2026-03-15", activity: { steps: 5000 } };
+    const latest = renderDailyNote(day, { prev: "2026-03-14" });
+    expect(latest).toContain(
+      "- 睡眠: まだ届いていません（ウェアラブルのアプリで同期すると、次の送信で反映されます）\n",
+    );
+    const past = renderDailyNote(day, { prev: "2026-03-14", next: "2026-03-16" });
+    expect(past).toContain("- 睡眠: 記録なし\n");
+    expect(past).not.toContain("まだ届いていません");
+    // 睡眠の frontmatter はどちらも空のまま
+    expect(past).toContain("睡眠時間h:\n");
+    expect(latest).toContain("睡眠時間h:\n");
   });
 
   it("睡眠時刻は入力オフセットによらず JST", () => {

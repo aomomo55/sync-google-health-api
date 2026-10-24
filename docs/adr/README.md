@@ -29,6 +29,7 @@
 | [0023](0023-dependabot-docker-daily.md) | Docker のベースイメージの更新だけ Dependabot で毎日確かめる | 採用 |
 | [0024](0024-ux-review-in-docs-review.md) | UI・UX 観点のレビューの材料は docs/review/ に置き、REVIEW.md から参照する | 採用 |
 | [0025](0025-permission-status-on-main-screen.md) | 画面の権限の表示を、足りないものに合わせて出し分ける | 採用 |
+| [0028](0028-show-missing-sleep-and-nutrition-in-notes.md) | 日次ノートで、睡眠と食事のデータが無いことを明示する | 採用 |
 
 ## 書き方
 

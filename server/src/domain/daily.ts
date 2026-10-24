@@ -124,6 +124,13 @@ export function checkDayRanges(day: unknown): string | null {
 
 export type DailySummary = z.infer<typeof DailySummarySchema>;
 
+// 食事の記録があるとみなすか。値がどれも無いか、すべて 0 の日は「記録なし」として扱う（ADR 0028）。
+// 0 kcal・P/F/C 0g の食事はありえず、Health Connect に値が 0（または未入力）の栄養の記録があると
+// 集計が 0 を返し、それがそのまま送られてくるため
+export function hasNutritionRecord(n: DailySummary["nutrition"]): boolean {
+  return n !== undefined && Object.values(n).some((v) => typeof v === "number" && v > 0);
+}
+
 export const SECTIONS = ["activity", "heart_rate", "body", "sleep", "nutrition"] as const;
 export type Section = (typeof SECTIONS)[number];
 

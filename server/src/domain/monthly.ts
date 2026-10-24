@@ -1,5 +1,5 @@
 import { round } from "../shared/rounding.js";
-import type { DailySummary } from "./daily.js";
+import { type DailySummary, hasNutritionRecord } from "./daily.js";
 import { formatHm, jstMinutesOfDay, MINUTES_PER_DAY } from "./dates.js";
 
 export interface MonthlySummary {
@@ -67,10 +67,9 @@ function hasData(d: DailySummary): boolean {
 
 export function summarizeMonth(month: string, days: DailySummary[]): MonthlySummary {
   const a = days.map((d) => d.activity);
-  const n = days.map((d) => d.nutrition);
-  const nutritionDays = n.filter(
-    (x) => x && Object.values(x).some((v) => v !== null && v !== undefined),
-  ).length;
+  // 値がすべて 0 の日は記録なしとして、記録日数にも平均にも含めない（日次ノートと同じ扱い）
+  const n = days.flatMap((d) => (hasNutritionRecord(d.nutrition) ? [d.nutrition] : []));
+  const nutritionDays = n.length;
   const sleepDays = days.flatMap((d) => (d.sleep ? [d.sleep] : []));
   const nights = sleepDays.filter(
     (s) => s.asleep_minutes != null || s.in_bed_minutes != null || s.start != null || s.end != null,
