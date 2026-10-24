@@ -52,7 +52,7 @@ export function splitValidDays(days: DailySummary[]): {
   return { valid, invalid };
 }
 
-// 純粋関数。days は日付昇順で、影響を受ける月の全日を含むこと。
+// 純粋関数。days は日付昇順で、影響を受ける月の全日と、最後の月の後で最も早いデータのある日（月末の日の判定のため）を含むこと。
 // 不正な日付の日はノートのパスや YAML に入らないよう除く
 export function planNotes(
   allDays: DailySummary[],
