@@ -32,6 +32,7 @@
 | [0026](0026-notify-sync-failures.md) | 自動送信の失敗が続いたら通知し、最後に成功した時刻を分けて出す | 採用 |
 | [0027](0027-recheck-missing-sleep-in-window.md) | 睡眠の未反映は時間帯の中の送信のたびに確かめ直し、「1 日 1 回」を利用者が消すまでにする | 採用 |
 | [0028](0028-show-missing-sleep-and-nutrition-in-notes.md) | 日次ノートで、睡眠と食事のデータが無いことを明示する | 採用 |
+| [0029](0029-deploy-from-actions-on-demand.md) | サーバーのデプロイを、手で起動する GitHub Actions でも行えるようにする | 採用 |
 
 ## 書き方
 
