@@ -52,6 +52,33 @@ fly logs -a <アプリ名> --no-tail
 
 `/healthz` が `{"status":"ok"}` を返せば起動している。起動しないときは、ログの `環境変数が不正です` の行に、どの設定が規則に合わないかが出る（値そのものは出ない）。
 
+## GitHub Actions でデプロイする
+
+flyctl が無い環境からも、`.github/workflows/deploy.yml` で main をデプロイできる。手で起動したときだけ動く（理由は [ADR 0029](adr/0029-deploy-from-actions-on-demand.md)）。
+
+```sh
+gh workflow run deploy.yml --ref main
+```
+
+Actions の画面の「Deploy」→「Run workflow」からでもよい。最後に `/healthz` を確かめる。
+
+### 最初の設定
+
+1. リポジトリの Settings → Environments で `production` を作り、「Deployment branches and tags」を `main` だけにする
+2. このアプリだけをデプロイできる、期限付きのトークンを作り、そのまま `production` の secrets に登録する。トークンは画面にもシェルの履歴にも出ない。`-x` は期限（下の例は 180 日）
+
+   ```sh
+   fly tokens create deploy -a <アプリ名> -x 4320h -n github-actions | tr -d '\r\n' | gh secret set FLY_API_TOKEN --env production
+   ```
+
+3. アプリ名も `production` の secrets に登録する。secrets にしておくと、公開されるログでアプリ名が伏せられる
+
+   ```sh
+   gh secret set FLY_APP --env production --body <アプリ名>
+   ```
+
+トークンの期限が来たら、2 をもう一度行う。古いトークンの取り消しと、漏れたときの手順は [rotate-secrets.md](rotate-secrets.md#fly_api_tokengithub-actions-のデプロイ用) にある。
+
 ## Android アプリ
 
 デバッグ署名の APK をビルドして、手動でインストールする。手順は [android/README.md](../android/README.md)。

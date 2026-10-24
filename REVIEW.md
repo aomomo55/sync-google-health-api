@@ -138,6 +138,7 @@ Dependabot の脆弱性アラートとセキュリティ更新は、リポジト
 - [ ] リリースノートの破壊的変更や挙動の変更が、このプロジェクトで使っている API に当たらないか
 - [ ] CI でスキップされる結合テスト（obsidian-sync-mcp）に関わる変更なら、デプロイ後に手で確かめる方法が決まっているか
 - [ ] アクションはコミット SHA、Docker イメージは digest で固定されているか。corepack の版が `server/Dockerfile` と `.github/workflows/ci.yml`・`audit.yml` でそろっているか
+- [ ] `.github/workflows/deploy.yml` の flyctl の版を変えるなら、公開から 3 日以上たった版か。`FLYCTL_SHA256` をリリースの checksums.txt の値に書き換えているか
 
 ## 利用者の体験（UI・UX）
 
