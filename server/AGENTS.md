@@ -50,6 +50,7 @@ pnpm build
 
 サーバーと Android にまたがる前提（日付、`POST /api/ingest` のマージ、トークンの検査）はルートの AGENTS.md にある。
 
+- `HealthStore.upsertDays` はマージ後も中身が変わらない日を書き込まない（送り直しのたびに CouchDB の版を増やさないため）。そのため文書の `updated_at` は「最後に中身が変わった時刻」になる。比較は `isSameDay` で行う
 - ノートの生成は決定的でなければならない（生成日時などを入れない）。同期処理は「内容が変わらないノートは書き込まない」ことに依存している
 - 日次ノートの `%% health:memo` の行より下は利用者のメモ欄。`mergeMemo` で必ず保持する。obsidian-sync-mcp の `write_note` はノート全体を置き換えるので、読んでから書く
 - Vault への書き込みは `VAULT_HEALTH_PREFIX`（既定 `Health/`）配下の `.md` / `.base` に限る

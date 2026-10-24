@@ -187,7 +187,7 @@ describe("CouchStore (fake fetch)", () => {
       { date: "2026-01-01", activity: { steps: 9, distance_m: null }, source: "health_connect" },
       { date: "2026-01-02", body: { weight_kg: 60 } },
     ]);
-    expect(r).toEqual({ written: 2 });
+    expect(r).toEqual({ written: 2, unchanged: 0 });
     expect(calls[0]).toMatchObject({
       method: "POST",
       url: "http://couch.test:5984/health/_all_docs?include_docs=true",
@@ -215,6 +215,59 @@ describe("CouchStore (fake fetch)", () => {
     expect(docs[1]).not.toHaveProperty("_rev");
   });
 
+  it("upsertDays は中身が変わらない日を書き込まず、unchanged に数える", async () => {
+    const stored = (date: string, steps: number) => ({
+      id: `day:${date}`,
+      doc: {
+        _id: `day:${date}`,
+        _rev: "2-x",
+        type: "daily",
+        updated_at: "old",
+        // キーの順序が送る値と違っても同じとみなす
+        activity: { distance_m: 5, steps },
+        date,
+        source: "health_connect",
+      },
+    });
+    const { store, calls } = make([
+      { status: 200, json: { rows: [stored("2026-01-01", 1), stored("2026-01-02", 1)] } },
+      { status: 201, json: [{ ok: true, id: "day:2026-01-02", rev: "3-y" }] },
+    ]);
+    const r = await store.upsertDays([
+      { date: "2026-01-01", activity: { steps: 1, distance_m: 5 }, source: "health_connect" },
+      { date: "2026-01-02", activity: { steps: 2 }, source: "health_connect" },
+    ]);
+    expect(r).toEqual({ written: 1, unchanged: 1 });
+    const bulk = calls[1]?.body as { docs: { _id: string }[] };
+    expect(bulk.docs.map((d) => d._id)).toEqual(["day:2026-01-02"]);
+  });
+
+  it("upsertDays は全日の中身が変わらなければ _bulk_docs を呼ばない", async () => {
+    const { store, calls } = make([
+      {
+        status: 200,
+        json: {
+          rows: [
+            {
+              id: "day:2026-01-01",
+              doc: {
+                _id: "day:2026-01-01",
+                _rev: "2-x",
+                type: "daily",
+                updated_at: "old",
+                date: "2026-01-01",
+                body: { weight_kg: 60 },
+              },
+            },
+          ],
+        },
+      },
+    ]);
+    // 一部のセクションだけを送っても、マージ後に変わらなければ書き込まない
+    expect(await store.upsertDays([{ date: "2026-01-01" }])).toEqual({ written: 0, unchanged: 1 });
+    expect(calls).toHaveLength(1);
+  });
+
   it("conflict は再読込して再試行する", async () => {
     const row = (rev: string) => ({
       rows: [
@@ -238,6 +291,7 @@ describe("CouchStore (fake fetch)", () => {
     ]);
     expect(await store.upsertDays([{ date: "2026-01-01", body: { weight_kg: 1 } }])).toEqual({
       written: 1,
+      unchanged: 0,
     });
     expect(calls).toHaveLength(4);
     const retriedBody = calls[3]?.body as { docs: { _rev: string }[] };
@@ -460,7 +514,7 @@ describe.skipIf(!TEST_URL)("CouchStore (実 CouchDB 統合)", () => {
         { date: "2026-01-01", activity: { steps: 100, distance_m: 50 }, source: "takeout" },
         { date: "2026-02-01", activity: { steps: 1 } },
       ]),
-    ).toEqual({ written: 3 });
+    ).toEqual({ written: 3, unchanged: 0 });
     await store.upsertDays([
       { date: "2026-01-01", activity: { steps: 200, distance_m: null }, source: "health_connect" },
     ]);
@@ -469,5 +523,24 @@ describe.skipIf(!TEST_URL)("CouchStore (実 CouchDB 統合)", () => {
       { date: "2026-01-02", body: { weight_kg: 60 } },
     ]);
     expect(await store.getDays("2025-01-01", "2025-12-31")).toEqual([]);
+  });
+
+  it("同じ内容を送り直しても版を増やさない", async () => {
+    // 他のテストと日付が重ならないよう 2023 年を使う
+    const day = {
+      date: "2023-05-01",
+      activity: { steps: 10, distance_m: 5 },
+      source: "health_connect",
+    };
+    const rev = async () => {
+      const res = await fetch(`${base}/${dbName}/day:2023-05-01`, {
+        headers: { Authorization: auth },
+      });
+      return ((await res.json()) as { _rev: string })._rev;
+    };
+    expect(await store.upsertDays([day])).toEqual({ written: 1, unchanged: 0 });
+    const first = await rev();
+    expect(await store.upsertDays([day])).toEqual({ written: 0, unchanged: 1 });
+    expect(await rev()).toBe(first);
   });
 });
