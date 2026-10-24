@@ -1,0 +1,4 @@
+<resources>
+    <!-- 起動直後（Compose が描く前）の背景も、端末のダークモードに合わせる -->
+    <style name="Theme.App" parent="android:Theme.Material.NoActionBar" />
+</resources>

@@ -135,6 +135,11 @@ class SettingsStore(context: Context) {
         get() = prefs.getString(KEY_MISSING_SLEEP_NOTIFIED, null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
         set(v) = prefs.edit().putString(KEY_MISSING_SLEEP_NOTIFIED, v?.toString()).apply()
 
+    // 通知の権限を一度でも求めたか。2 回拒否されてダイアログが出なくなった状態を見分けるのに使う
+    var notificationPermissionRequested: Boolean
+        get() = prefs.getBoolean(KEY_NOTIFICATION_REQUESTED, false)
+        set(v) = prefs.edit().putBoolean(KEY_NOTIFICATION_REQUESTED, v).apply()
+
     private fun key(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (ks.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
@@ -157,6 +162,7 @@ class SettingsStore(context: Context) {
         private const val KEY_SLEEP_CHECK_START = "sleep_check_start_hour"
         private const val KEY_SLEEP_CHECK_END = "sleep_check_end_hour"
         private const val KEY_LAST_RESULT = "last_result"
+        private const val KEY_NOTIFICATION_REQUESTED = "notification_permission_requested"
         private const val KEY_ALIAS = "api_token_key"
         private const val TRANSFORM = "AES/GCM/NoPadding"
         private const val IV_SIZE = 12
