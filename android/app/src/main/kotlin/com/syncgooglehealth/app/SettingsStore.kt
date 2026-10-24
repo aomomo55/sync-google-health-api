@@ -113,13 +113,31 @@ class SettingsStore(context: Context) {
         }
     }
 
-    var lastSyncMillis: Long
-        get() = prefs.getLong(KEY_LAST_TIME, 0L)
-        set(v) = prefs.edit().putLong(KEY_LAST_TIME, v).apply()
+    // 送信の履歴 (画面の表示と失敗の通知に使う)
+    fun syncHistory(): SyncHistory = SyncHistory(
+        lastAttemptMillis = prefs.getLong(KEY_LAST_TIME, 0L).takeIf { it != 0L },
+        lastSuccessMillis = prefs.getLong(KEY_LAST_SUCCESS, 0L).takeIf { it != 0L },
+        lastResult = prefs.getString(KEY_LAST_RESULT, null)?.ifEmpty { null },
+        failureStreak = prefs.getInt(KEY_FAILURE_COUNT, 0).takeIf { it > 0 }?.let {
+            FailureStreak(prefs.getLong(KEY_FAILURE_SINCE, 0L), it)
+        },
+    )
 
-    var lastResult: String
-        get() = prefs.getString(KEY_LAST_RESULT, "") ?: ""
-        set(v) = prefs.edit().putString(KEY_LAST_RESULT, v).apply()
+    // 送信を試した結果を保存する。成功した時刻は、成功したときだけ更新する
+    fun recordSync(nowMillis: Long, message: String, succeeded: Boolean, streak: FailureStreak?) {
+        val edit = prefs.edit()
+            .putLong(KEY_LAST_TIME, nowMillis)
+            .putString(KEY_LAST_RESULT, message)
+            .putLong(KEY_FAILURE_SINCE, streak?.sinceMillis ?: 0L)
+            .putInt(KEY_FAILURE_COUNT, streak?.count ?: 0)
+        if (succeeded) edit.putLong(KEY_LAST_SUCCESS, nowMillis)
+        edit.apply()
+    }
+
+    // 送信の失敗を最後に通知した日 (1 日 1 回にするため)
+    var lastSyncFailureNotified: LocalDate?
+        get() = prefs.getString(KEY_FAILURE_NOTIFIED, null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        set(v) = prefs.edit().putString(KEY_FAILURE_NOTIFIED, v?.toString()).apply()
 
     // 睡眠の未反映を通知する時間帯。保存値が不正なら既定値に戻す
     var sleepCheckWindow: SleepCheckWindow
@@ -157,7 +175,12 @@ class SettingsStore(context: Context) {
     companion object {
         private const val KEY_URL = "server_url"
         private const val KEY_TOKEN = "token_enc"
+        // 最後に試した時刻。成功・失敗に関係なく更新する (キーの名前は以前の版のまま)
         private const val KEY_LAST_TIME = "last_sync_millis"
+        private const val KEY_LAST_SUCCESS = "last_success_millis"
+        private const val KEY_FAILURE_SINCE = "failure_since_millis"
+        private const val KEY_FAILURE_COUNT = "failure_count"
+        private const val KEY_FAILURE_NOTIFIED = "sync_failure_notified_date"
         private const val KEY_MISSING_SLEEP_NOTIFIED = "missing_sleep_notified_date"
         private const val KEY_SLEEP_CHECK_START = "sleep_check_start_hour"
         private const val KEY_SLEEP_CHECK_END = "sleep_check_end_hour"

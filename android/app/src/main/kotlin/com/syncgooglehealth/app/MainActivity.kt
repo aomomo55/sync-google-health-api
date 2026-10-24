@@ -36,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,8 +68,6 @@ import java.time.ZoneOffset
 // 画面回転でも実行状態を失わないようにプロセス単位で保持する
 object AppState {
     val running = MutableStateFlow(false)
-    val lastTime = MutableStateFlow<Long?>(null)
-    val lastResult = MutableStateFlow<String?>(null)
     val progress = MutableStateFlow<String?>(null)
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -78,9 +77,7 @@ object AppState {
         scope.launch {
             try {
                 progress.value = null
-                val outcome = SyncRunner.run(app, days, startDate = startDate, onProgress = { progress.value = it })
-                lastResult.value = outcome.message
-                lastTime.value = System.currentTimeMillis()
+                SyncRunner.run(app, days, startDate = startDate, onProgress = { progress.value = it })
             } finally {
                 progress.value = null
                 running.value = false
@@ -120,6 +117,33 @@ private fun MessageText(message: ScreenMessage) {
         MessageKind.WARNING, MessageKind.ACTION_NEEDED, MessageKind.ERROR -> MaterialTheme.colorScheme.error
     }
     Text(message.kind.prefix + message.text, color = color)
+}
+
+// 「最後に成功」と「最後に試した」を分けて出す。失敗が続いても時刻だけ新しく見えないようにするため (ADR 0026)
+@Composable
+private fun SyncHistoryText(history: SyncHistory) {
+    val success = history.lastSuccessMillis
+    val attempt = history.lastAttemptMillis
+    if (success == null && attempt == null) {
+        Text("まだ送信していません")
+        return
+    }
+    Text("最後に成功: ${success?.let { SyncRunner.formatTime(it) } ?: "記録なし"}")
+    if (attempt != null && attempt != success) {
+        Text("最後に試した: ${SyncRunner.formatTime(attempt)}${if (history.lastFailed) "（失敗）" else ""}")
+    }
+    history.lastResult?.let { result ->
+        if (history.lastFailed) MessageText(ScreenMessage(result, MessageKind.ERROR)) else Text("結果: $result")
+    }
+    if (isSuccessStale(System.currentTimeMillis(), success)) {
+        MessageText(
+            ScreenMessage(
+                "${STALE_SUCCESS_WARNING_HOURS}時間以上、送信に成功していません。自動送信が止まっているか、失敗が続いています。" +
+                    "「今すぐ送信」で結果を確かめてください",
+                MessageKind.WARNING,
+            ),
+        )
+    }
 }
 
 private fun hasNotificationPermission(context: Context): Boolean =
@@ -201,8 +225,9 @@ fun MainScreen() {
     var checkEnd by remember { mutableStateOf(initialWindow.endHour.toString()) }
 
     val running by AppState.running.collectAsState()
-    val lastTime by AppState.lastTime.collectAsState()
-    val lastResult by AppState.lastResult.collectAsState()
+    // 送信の結果は SyncRunner が保存する。送信が終わったときと、画面に戻ってきたとき (自動送信の結果) に読み直す
+    var history by remember { mutableStateOf(store.syncHistory()) }
+    LaunchedEffect(running) { if (!running) history = store.syncHistory() }
     val progress by AppState.progress.collectAsState()
 
     val granted = grantedPermissions.containsAll(PermissionPolicy.required(HealthPermissions.all, true))
@@ -235,6 +260,7 @@ fun MainScreen() {
         refreshNotificationState()
         // 復号できず消されたトークンを画面にも反映する
         tokenSaved = store.hasToken()
+        history = store.syncHistory()
         val requiredGranted = grantedPermissions.containsAll(PermissionPolicy.required(HealthPermissions.all, true))
         if (requiredGranted && tokenSaved) SyncWorker.schedule(context)
     }
@@ -297,8 +323,6 @@ fun MainScreen() {
         return error == null
     }
 
-    val shownTime = lastTime ?: store.lastSyncMillis.takeIf { it != 0L }
-    val shownResult = lastResult ?: store.lastResult.ifEmpty { null }
 
     Column(
         // targetSdk 35 以降は画面の端まで描かれるので、ステータスバー・ナビゲーションバー・キーボードの分を空ける
@@ -399,7 +423,7 @@ fun MainScreen() {
             NotificationPermissionState.GRANTED -> Text("通知の権限: 付与済み")
             NotificationPermissionState.REQUESTABLE -> {
                 MessageText(
-                    ScreenMessage("通知の権限がありません。睡眠が未反映のときに通知が出ません", MessageKind.ACTION_NEEDED),
+                    ScreenMessage("通知の権限がありません。睡眠の未反映や送信の失敗が続いたときに通知が出ません", MessageKind.ACTION_NEEDED),
                 )
                 OutlinedButton(onClick = { requestNotificationPermission() }, modifier = Modifier.fillMaxWidth()) {
                     Text("通知を許可する")
@@ -408,7 +432,7 @@ fun MainScreen() {
             NotificationPermissionState.BLOCKED -> {
                 MessageText(
                     ScreenMessage(
-                        "通知の権限がありません。睡眠が未反映のときに通知が出ません。" +
+                        "通知の権限がありません。睡眠の未反映や送信の失敗が続いたときに通知が出ません。" +
                             "許可を求める画面はもう表示されないため、アプリの通知設定で許可してください",
                         MessageKind.ACTION_NEEDED,
                     ),
@@ -492,8 +516,7 @@ fun MainScreen() {
         if (running) {
             Text(progress ?: "送信中…")
         } else {
-            Text("最終送信: ${SyncRunner.formatTime(shownTime ?: 0L)}")
-            shownResult?.let { Text("結果: $it") }
+            SyncHistoryText(history)
         }
 
         OutlinedButton(
