@@ -92,7 +92,7 @@
     <string name="sync_progress">%1$s〜%2$s を送信済み（%3$d/%4$d 日）</string>
     <string name="sync_message_sent">%1$d日分を送信しました</string>
     <string name="sync_message_nutrition_skipped">（栄養は権限が無いため送っていません）</string>
-    <string name="sync_message_rejected">（%1$d日分は値が範囲外のため保存されませんでした: %2$s）</string>
+    <string name="sync_message_rejected">%1$d日分は値が範囲外のため保存されませんでした: %2$s。ヘルスコネクトでその日の記録を確かめ、直したら「開始日を指定して送る」で送り直してください</string>
     <string name="sync_message_rejected_more_dates">" ほか%1$d日"</string>
     <string name="sync_message_rejected_reasons">" / 理由: %1$s"</string>
     <string name="sync_message_rejected_more_reasons">" ほか"</string>
@@ -102,19 +102,19 @@
     <string name="sync_message_permission_missing">ヘルスコネクトの権限が不足しています。「権限を付与」を押してください</string>
     <string name="sync_message_unexpected_error">予期しないエラー: %1$s %2$s</string>
     <string name="sync_message_token_none">API トークンが設定されていません。設定画面で入力し直してください</string>
-    <string name="sync_message_token_unavailable">API トークンを一時的に読み出せませんでした</string>
-    <string name="sync_message_token_invalid">トークンが正しくありません</string>
-    <string name="sync_message_health_connect_unavailable">ヘルスコネクトが利用できません</string>
+    <string name="sync_message_token_unavailable">API トークンを一時的に読み出せませんでした。時間をおいて「今すぐ送信」を押してください（自動送信も時間をおいて再試行します）。続くときは、設定の「API トークン」に入れ直して「設定を保存」を押してください</string>
+    <string name="sync_message_token_invalid">トークンが正しくありません。設定の「API トークン」にサーバーと同じ値を入れて「設定を保存」を押してください。サーバー側でトークンを入れ替えた後なら、新しい値を入れてください</string>
+    <string name="sync_message_health_connect_unavailable">ヘルスコネクトが利用できません。Google Play でヘルスコネクトを更新してから、もう一度送信してください</string>
 
     <!-- サーバーの応答のエラー -->
     <string name="ingest_error_invalid_url">サーバー URL は https:// で始まる正しい URL を入力してください</string>
     <string name="ingest_error_redirect">サーバーがリダイレクト (%1$d) を返しました。サーバー URL が正しいか確認してください</string>
-    <string name="ingest_error_unparseable">サーバーの応答を解釈できませんでした (保存できたか確認できません)</string>
-    <string name="ingest_error_busy">サーバーが一時的に受け付けませんでした (%1$d)</string>
+    <string name="ingest_error_unparseable">サーバーの応答を解釈できませんでした (保存できたか確認できません)。もう一度送ってください。同じ日は上書きされ、重複しません。続くときは、サーバー URL が正しいか確かめてください</string>
+    <string name="ingest_error_busy">サーバーが一時的に受け付けませんでした (%1$d)。混み合っている可能性があり、次の自動送信で再試行します。続くときは、少し時間をおいて「今すぐ送信」を押してください</string>
     <string name="ingest_error_client">送信エラー (%1$d): %2$s</string>
     <string name="ingest_error_unknown">不明なエラー</string>
-    <string name="ingest_error_server">サーバーエラー (%1$d)</string>
-    <string name="ingest_error_network">通信エラー: %1$s</string>
+    <string name="ingest_error_server">サーバーエラー (%1$d)。一時的な問題の可能性があり、次の自動送信で再試行します。続くときは、サーバーが動いているか確かめてください</string>
+    <string name="ingest_error_network">通信エラー: %1$s。次の自動送信で再試行します。続くときは、端末がネットワークにつながっているか、サーバーが動いているかを確かめてください</string>
 
     <!-- 通知: 睡眠の未反映 -->
     <string name="notification_channel_missing_sleep_name">睡眠データの未反映</string>
@@ -131,8 +131,8 @@
     <string name="notification_sync_failure_cause">原因: %1$s</string>
     <string name="notification_sync_failure_not_in_notes">%1$s。それより後のデータはノートに入っていません</string>
     <string name="notification_sync_failure_sleep_unchecked">送れていない間は、睡眠の未反映の通知も出ません</string>
-    <string name="notification_sync_failure_hint_auth">アプリの設定で API トークンを確かめてください</string>
-    <string name="notification_sync_failure_hint_retryable">サーバーかネットワークの一時的な問題とみて、自動で再試行しています。続くときはサーバーが動いているか確かめてください</string>
+    <string name="notification_sync_failure_hint_auth">アプリの設定で「API トークン」にサーバーと同じ値を入れ直し、「設定を保存」を押してください。サーバー側でトークンを入れ替えた後なら、新しい値を入れてください</string>
+    <string name="notification_sync_failure_hint_retryable">一時的な問題の可能性があり、自動送信が時間をおいて再試行します。続くときは、サーバーが動いているか、端末が通信できるかを確かめてください</string>
     <string name="notification_sync_failure_hint_failed">アプリを開き、画面の「結果」に沿って直してください</string>
 
     <!-- 権限の理由説明の画面 -->

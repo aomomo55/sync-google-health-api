@@ -12,7 +12,7 @@ const MAX_INVALID_SKIP = 20;
 const DEFAULT_CONCURRENCY = 3;
 
 export const NOTE_FAILURE_MESSAGE =
-  "Vault への書き込みに失敗しました。詳細はサーバーのログを確認してください";
+  "Vault への書き込みに失敗しました。健康データは保存済みで、次の送信で送った日のノートは作り直されます。続くときは、obsidian-sync-mcp が動いているかとサーバーのログを確かめてください";
 
 // 応答に載せるエラー文。利用者が対処できる既知のエラーだけ文面を返し、
 // それ以外（内部の通信エラーなど）は固定の文にする

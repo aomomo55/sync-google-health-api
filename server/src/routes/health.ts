@@ -27,7 +27,7 @@ const MAX_SYNC_BODY_BYTES = 16 * 1024;
 // エラー文に載せる検証エラーの件数
 const MAX_REPORTED_ISSUES = 10;
 const SYNC_FAILURE_MESSAGE =
-  "ノートの同期に失敗しました。データは保存済みです。詳細はサーバーのログを確認してください";
+  "ノートの同期に失敗しました。健康データは保存済みで、次の送信で送った日のノートは作り直されます。続くときは、obsidian-sync-mcp が動いているかとサーバーのログを確かめてください";
 
 const SyncNotesSchema = z.strictObject({
   from: DateSchema,

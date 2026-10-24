@@ -105,7 +105,10 @@ describe("POST /api/ingest（ノート同期）", () => {
     const json = (await res.json()) as { written: number; notes: { error: string } };
     expect(json.written).toBe(1);
     // 内部のエラー文は返さず、固定の文にする
-    expect(json.notes.error).toMatch(/サーバーのログを確認してください/);
+    // 保存済みであることと、次にすること（再送、obsidian-sync-mcp とログの確認）を伝える
+    expect(json.notes.error).toMatch(
+      /保存済み.*次の送信.*obsidian-sync-mcp.*サーバーのログを確かめてください/,
+    );
     expect(JSON.stringify(json)).not.toContain("vault down");
     expect(JSON.stringify(json)).not.toContain(TOKEN);
     expect(errorLog.mock.calls.flat().join("\n")).toContain("vault down");
@@ -173,7 +176,7 @@ describe("POST /api/notes/sync", () => {
     const json = (await res.json()) as { failed: { path: string; error: string }[] };
     const byPath = new Map(json.failed.map((f) => [f.path, f.error]));
     expect(byPath.get("Health/Daily/2026-01-01.md")).toMatch(/マーカー/);
-    expect(byPath.get("Health/Daily/2026-01-02.md")).toMatch(/サーバーのログを確認してください/);
+    expect(byPath.get("Health/Daily/2026-01-02.md")).toMatch(/サーバーのログを確かめてください/);
     expect(JSON.stringify(json)).not.toContain("internal-host");
   });
 });
