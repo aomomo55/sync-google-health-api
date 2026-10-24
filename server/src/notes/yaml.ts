@@ -4,7 +4,8 @@ export type YamlValue = string | number | boolean | null | undefined;
 
 export interface YamlEntry {
   key: string;
-  value: YamlValue;
+  // 文字列の配列は、ブロック形式のリストで出す（空なら `[]`）
+  value: YamlValue | string[];
   // true なら文字列を常に引用符で囲む（"HH:MM" や "YYYY-MM" など）
   quote?: boolean;
   // true なら文字列を加工せずそのまま出す（2026-03-15 のような日付）
@@ -36,6 +37,11 @@ export function yamlScalar(v: YamlValue, opts: { quote?: boolean; raw?: boolean 
 }
 
 export function yamlLine(e: YamlEntry): string {
+  if (Array.isArray(e.value)) {
+    return e.value.length === 0
+      ? `${e.key}: []`
+      : [`${e.key}:`, ...e.value.map((v) => `  - ${yamlScalar(v, e)}`)].join("\n");
+  }
   const s = yamlScalar(e.value, e);
   return s === "" ? `${e.key}:` : `${e.key}: ${s}`;
 }

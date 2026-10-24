@@ -33,6 +33,7 @@ export function monthlyEntries(m: MonthlySummary): YamlEntry[] {
     { key: "平均心拍", value: numOrNull(m.heart_rate.avg_bpm) },
     { key: "平均体重kg", value: numOrNull(m.body.avg_weight_kg) },
     { key: "睡眠記録日数", value: m.sleep.nights },
+    { key: "睡眠なしの日", value: m.sleep.missing_dates, raw: true },
     { key: "平均睡眠時間h", value: numOrNull(m.sleep.avg_asleep_hours) },
     { key: "平均ベッド内時間h", value: numOrNull(m.sleep.avg_in_bed_hours) },
     { key: "平均就寝時刻", value: m.sleep.avg_bedtime, quote: true },
@@ -42,6 +43,11 @@ export function monthlyEntries(m: MonthlySummary): YamlEntry[] {
     { key: "平均浅い睡眠分", value: numOrNull(m.sleep.avg_light_minutes) },
     { key: "平均REM睡眠分", value: numOrNull(m.sleep.avg_rem_minutes) },
   ];
+}
+
+// YYYY-MM-DD を M/D にする
+function shortDate(date: string): string {
+  return `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
 }
 
 function summaryLines(m: MonthlySummary): string[] {
@@ -72,6 +78,9 @@ function summaryLines(m: MonthlySummary): string[] {
     if (s.avg_asleep_hours !== null) parts.push(`平均 ${fmtNum(s.avg_asleep_hours)} 時間`);
     if (s.avg_bedtime && s.avg_wake_time) parts.push(`${s.avg_bedtime} → ${s.avg_wake_time}`);
     lines.push(`- 睡眠: ${parts.join(" / ")}`);
+  }
+  if (s.missing_dates.length > 0) {
+    lines.push(`- 睡眠の記録が無い日: ${s.missing_dates.map(shortDate).join(", ")}`);
   }
   return lines;
 }

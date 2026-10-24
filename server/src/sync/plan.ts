@@ -81,6 +81,7 @@ export function planNotes(
       summarizeMonth(
         month,
         days.filter((d) => d.date.startsWith(month)),
+        days.find((d) => d.date.slice(0, 7) > month)?.date,
       ),
       root,
     );

@@ -1,4 +1,4 @@
-import { type DailySummary, hasNutritionRecord } from "../domain/daily.js";
+import { type DailySummary, hasNutritionRecord, isSleepPending } from "../domain/daily.js";
 import { round } from "../shared/rounding.js";
 import { fmtDuration, fmtNum, jstHm, monthLabelJa, numOrNull, weekdayJa } from "./format.js";
 import { linkTarget, notePaths } from "./paths.js";
@@ -154,7 +154,7 @@ function summaryLines(day: DailySummary, nav: DailyNav): string[] {
     if (stages.length > 0) parts.push(`内訳 ${stages.join("・")}`);
     lines.push(`- 睡眠: ${parts.join(" / ")}`);
   } else {
-    lines.push(`- 睡眠: ${nav.next ? NO_RECORD : SLEEP_PENDING}`);
+    lines.push(`- 睡眠: ${isSleepPending(nav.next) ? SLEEP_PENDING : NO_RECORD}`);
   }
   const nap = numOrNull(s?.nap_minutes);
   if (nap !== null) lines.push(`- 仮眠: ${fmtDuration(nap)}`);

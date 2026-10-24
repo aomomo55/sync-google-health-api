@@ -118,7 +118,9 @@ describe("NoteSync", () => {
     expect(writer.notes.get("Health/Daily/2026-02-20.md")).toContain("Daily/2026-03-05|翌日");
     expect(r.written).toContain("Health/Daily/2026-02-20.md");
     expect(r.written).toContain("Health/Monthly/2026-03.md");
-    expect(r.unchanged).toContain("Health/Monthly/2026-02.md");
+    // 2/20 は翌日以降のデータが届き「まだ届いていない」から「睡眠の記録が無い日」に変わるので、2月の月次も更新される
+    expect(r.written).toContain("Health/Monthly/2026-02.md");
+    expect(writer.notes.get("Health/Monthly/2026-02.md")).toContain("- 睡眠の記録が無い日: 2/20");
   });
 
   it("データの無い日だけなら何もしない", async () => {
