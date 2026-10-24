@@ -3,9 +3,11 @@ package com.syncgooglehealth.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -18,10 +20,12 @@ import androidx.compose.ui.unit.dp
 class RationaleActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContent {
-            MaterialTheme {
+            AppTheme {
                 Surface(Modifier.fillMaxSize()) {
-                    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
+                    // targetSdk 35 以降は画面の端まで描かれるので、ステータスバーなどの分を空ける
+                    Column(Modifier.safeDrawingPadding().verticalScroll(rememberScrollState()).padding(16.dp)) {
                         Text("読み取るデータと送信先", style = MaterialTheme.typography.headlineSmall)
                         Text(
                             "\nこのアプリはヘルスコネクトから次のデータを読み取ります。\n\n" +
