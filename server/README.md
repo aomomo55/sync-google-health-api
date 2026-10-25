@@ -12,13 +12,12 @@ Android アプリから送られる日次ヘルスデータを受け取るサー
 | `COUCHDB_URL` | はい | - | CouchDB のベース URL（`https:`。`http:` は `localhost` / `127.0.0.1` / `[::1]` と、fly.io のプライベートネットワークのホスト（`.internal` / `.flycast`）のみ可。ユーザー名・パスワードは含めず `COUCHDB_USER` / `COUCHDB_PASSWORD` で指定）。[ADR 0019](../docs/adr/0019-restrict-couchdb-url-to-https.md) |
 | `COUCHDB_USER` | はい | - | CouchDB ユーザー（DB が既にあれば、管理者でなくその DB のメンバーのユーザーでよい） |
 | `COUCHDB_PASSWORD` | はい | - | CouchDB パスワード |
-| `COUCHDB_HEALTH_DB` | いいえ | `health` | データベース名（起動時に無ければ作成する。作るには管理者の権限が要り、作れなければ止まる） |
+| `COUCHDB_HEALTH_DB` | いいえ | `health` | データベース名（英小文字で始まり、英小文字・数字・`_ $ ( ) + / -` だけからなる。起動時に無ければ作成する。作るには管理者の権限が要り、作れなければ止まる） |
 | `OBSIDIAN_MCP_URL` | いいえ | - | obsidian-sync-mcp の `/mcp` URL（`https:`。`http:` は `localhost` / `127.0.0.1` / `[::1]` のみ可。ユーザー名・パスワードを含む URL は不可。`OBSIDIAN_MCP_TOKEN` と両方指定するか両方未設定） |
 | `OBSIDIAN_MCP_TOKEN` | いいえ | - | obsidian-sync-mcp 用 Bearer トークン（16文字以上） |
 | `VAULT_HEALTH_PREFIX` | いいえ | `Health/` | Vault 内で書き込みを許可するフォルダ。ノートもこの下に生成する（文字・数字・空白・`_`・`-` からなるフォルダ名を `/` で区切る。先頭の `/`、`.` / `..`、空のフォルダ名、フォルダ名の前後の空白は不可） |
 | `BACKUP_TOKEN` | いいえ | - | `GET /backup/health` 専用の Bearer トークン（`API_TOKEN` と同じ規則で、`API_TOKEN` とは別の値）。`BACKUP_AGE_RECIPIENT` と両方指定するか両方未設定 |
 | `BACKUP_AGE_RECIPIENT` | いいえ | - | バックアップを暗号化する age の公開鍵（`age1...`）。秘密鍵はサーバーに置かない（[docs/backup.md](../docs/backup.md)） |
-| `NODE_ENV` | いいえ | - | 実行環境 |
 
 ローカル開発では `server/dev.vars`（gitignore 済み）に `KEY=value` 形式で書く。
 

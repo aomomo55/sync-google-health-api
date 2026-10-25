@@ -4,6 +4,9 @@ import { DEFAULT_VAULT_PREFIX } from "./vault/vault-writer.js";
 
 // API_TOKEN の規則。CLI（scripts/cli-guard.ts）の検査でも使う
 export const MIN_API_TOKEN_LENGTH = 32;
+const MIN_OBSIDIAN_MCP_TOKEN_LENGTH = 16;
+// CouchDB の DB 名の規則。サーバーの COUCHDB_HEALTH_DB と、復元の CLI（scripts/restore-backup.ts）の --db で使う
+export const COUCHDB_DB_NAME_PATTERN = /^[a-z][a-z0-9_$()+/-]*$/;
 // Hono の bearerAuth が受け付ける文字（RFC 6750 の b64token）
 export const BEARER_TOKEN_PATTERN = /^[A-Za-z0-9._~+/-]+=*$/;
 // トークンを平文で送ってよい、ローカルでの試験用のホスト
@@ -107,6 +110,13 @@ const vaultPrefix = z
     "文字・数字・空白・_・- からなるフォルダ名を / で区切って指定してください（先頭の / や . / ..、フォルダ名の前後の空白は不可）",
   );
 
+const couchdbDbName = z
+  .string()
+  .regex(
+    COUCHDB_DB_NAME_PATTERN,
+    "英小文字で始まり、英小文字・数字・_ $ ( ) + / - だけからなる DB 名を指定してください",
+  );
+
 // CouchDB への接続情報。サーバーの設定と、復元の CLI（scripts/restore-backup.ts）で同じ検査を使う
 const couchdbConnection = {
   COUCHDB_URL: couchdbUrl,
@@ -120,9 +130,9 @@ const schema = z
     PORT: z.coerce.number().int().min(1).max(65535).default(8080),
     API_TOKEN: bearerToken,
     ...couchdbConnection,
-    COUCHDB_HEALTH_DB: z.string().min(1).default("health"),
+    COUCHDB_HEALTH_DB: couchdbDbName.default("health"),
     OBSIDIAN_MCP_URL: obsidianMcpUrl.optional(),
-    OBSIDIAN_MCP_TOKEN: token(16).optional(),
+    OBSIDIAN_MCP_TOKEN: token(MIN_OBSIDIAN_MCP_TOKEN_LENGTH).optional(),
     VAULT_HEALTH_PREFIX: vaultPrefix.default(DEFAULT_VAULT_PREFIX),
     // バックアップの取得（GET /backup/health）専用。API_TOKEN とは別にし、漏れても書き込みはできないようにする
     BACKUP_TOKEN: bearerToken.optional(),
@@ -131,7 +141,6 @@ const schema = z
       .string()
       .refine(isAgeRecipient, "age の公開鍵（age1...）を指定してください")
       .optional(),
-    NODE_ENV: z.string().optional(),
   })
   .refine((c) => !!c.OBSIDIAN_MCP_URL === !!c.OBSIDIAN_MCP_TOKEN, {
     message: "OBSIDIAN_MCP_URL と OBSIDIAN_MCP_TOKEN は両方設定するか両方未設定にしてください",
