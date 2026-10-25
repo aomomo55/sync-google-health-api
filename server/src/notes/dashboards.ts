@@ -1,3 +1,4 @@
+import { BEDTIME_DAY_BOUNDARY_HOURS } from "../domain/monthly.js";
 import { RECENT_DAYS, RECENT_DAYS_VIEW, RECENT_NIGHTS_VIEW } from "./bases.js";
 import { SLEEP_GOAL_HOURS, STEP_GOAL } from "./daily.js";
 import { GENERATED_NOTICE } from "./format.js";
@@ -19,6 +20,11 @@ const COLORS = {
 // 睡眠ダッシュボードの「直近1週間」の日数と、ステージなどのグラフに並べる夜の数
 const SLEEP_WEEK_DAYS = 7;
 const SLEEP_CHART_NIGHTS = 30;
+
+// 就寝・起床の時刻のグラフの縦軸（時）。翌日の時刻は +24 で表す（20:00〜翌10:00 を 2 時間おき）
+const SLEEP_TIME_AXIS = { minHour: 20, maxHour: 34, stepHours: 2 } as const;
+// 直近1週間の睡眠時間のグラフで、縦軸の上端の目安（時間）
+const SLEEP_HOURS_AXIS_SUGGESTED_MAX = 9;
 
 // 各ブロック共通の前置き。テンプレート内で ${ やバッククォートは使わない
 function prelude(): string {
@@ -187,12 +193,13 @@ export function renderSleepDashboard(root?: string): string {
   const m = /^(\\d{1,2}):(\\d{2})$/.exec(String(s || ""));
   return m ? Number(m[1]) + Number(m[2]) / 60 : null;
 };
-const bed = (s) => { const h = hm(s); return h === null ? null : (h < 12 ? h + 24 : h); };
+const bed = (s) => { const h = hm(s); return h === null ? null : (h < ${BEDTIME_DAY_BOUNDARY_HOURS} ? h + 24 : h); };
 const wake = (s) => { const h = hm(s); return h === null ? null : h + 24; };
 const clock = (v) => { const m = Math.round((((v % 24) + 24) % 24) * 60); return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); };
-const timeAxis = { min: 20, max: 34, title: { display: true, text: "時刻" }, ticks: { stepSize: 2, autoSkip: false, callback: (v) => clock(v) } };`;
+const timeAxis = { min: ${SLEEP_TIME_AXIS.minHour}, max: ${SLEEP_TIME_AXIS.maxHour}, title: { display: true, text: "時刻" }, ticks: { stepSize: ${SLEEP_TIME_AXIS.stepHours}, autoSkip: false, callback: (v) => clock(v) } };`;
   // 起床は翌日扱い（+24）にして、就寝（下）→起床（上）と時間が一方向に進む軸にする。
-  // 軸は 20:00〜翌10:00 に固定。外れる日が出てきたら範囲を広げる
+  // 就寝は月次の平均就寝時刻と同じ境目（BEDTIME_DAY_BOUNDARY_HOURS）より前なら翌日扱いにする。
+  // 軸の範囲は SLEEP_TIME_AXIS で固定。外れる日が出てきたら範囲を広げる
 
   // 直近 SLEEP_WEEK_DAYS 日（暦日）の睡眠時間。記録の無い日も空けて並べ、目標の睡眠時間の目安線を引く
   // 以下のテンプレート内は、ダッシュボードに出力する JavaScript の文字列（この TS のコードではない）
@@ -212,7 +219,7 @@ if (values.every((v) => v === null)) { dv.paragraph("直近${SLEEP_WEEK_DAYS}日
         ${goalLine(`目標 ${SLEEP_GOAL_HOURS}時間`, "labels", SLEEP_GOAL_HOURS)},
       ],
     },
-    options: { scales: { y: { beginAtZero: true, suggestedMax: 9, title: { display: true, text: "時間" } } } },
+    options: { scales: { y: { beginAtZero: true, suggestedMax: ${SLEEP_HOURS_AXIS_SUGGESTED_MAX}, title: { display: true, text: "時間" } } } },
   });
 }`);
 
