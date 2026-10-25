@@ -14,6 +14,7 @@ fly deploy -a <アプリ名> --ha=false
 
 - `--ha=false` を付けると、マシンを 1 台だけ作る（付けないと 2 台作られる）。利用者 1 人の前提なので 1 台で足りる
 - `fly.toml` の `[env]` には秘密でない設定（`COUCHDB_HEALTH_DB`、`VAULT_HEALTH_PREFIX` など）を書く。秘密情報は書かない
+- `fly.toml` を変えたら、main にコミットしてからデプロイする。[GitHub Actions のデプロイ](#github-actions-でデプロイする) は main の `fly.toml` を使うので、手元で書き換えて `fly deploy` しただけだと、次に Actions でデプロイしたときに元に戻る
 - 使われていないときはマシンが止まり、リクエストが来ると起動する（`auto_stop_machines`）
 
 ## 秘密情報を登録する
