@@ -73,7 +73,7 @@
     <string name="sync_start_date_selected_button">開始日: %1$s</string>
     <string name="sync_from_start_date_button">%1$s から今日まで送る</string>
     <string name="sync_from_start_date_unselected_button">開始日を指定して送る</string>
-    <string name="sync_start_date_hint">選べるのは今日から %1$d 日前まで（%2$s 以降）。それより前は Google Takeout を取り直して import:takeout で取り込んでください</string>
+    <string name="sync_start_date_hint">日付は日本時間で数えます。選べるのは今日から %1$d 日前まで（%2$s 以降）。それより前は Google Takeout を取り直して import:takeout で取り込んでください</string>
     <string name="sync_date_picker_confirm">決定</string>
     <string name="sync_running">送信中…</string>
     <string name="sync_rationale_button">読み取るデータと送信先について</string>
