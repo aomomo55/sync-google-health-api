@@ -7,7 +7,10 @@ import { MemoryVaultWriter } from "../src/vault/memory-vault-writer.js";
 
 type Call = { url: string; method: string; headers: Record<string, string>; body: unknown };
 
-function fakeFetch(responses: { status: number; json?: unknown }[]) {
+// text を指定すると、JSON にせずそのまま本文として返す
+type FakeResponse = { status: number; json?: unknown; text?: string };
+
+function fakeFetch(responses: FakeResponse[]) {
   const calls: Call[] = [];
   const fn = (async (url: string | URL | Request, init?: RequestInit) => {
     calls.push({
@@ -18,7 +21,7 @@ function fakeFetch(responses: { status: number; json?: unknown }[]) {
     });
     const r = responses.shift();
     if (!r) throw new Error("unexpected request");
-    return new Response(JSON.stringify(r.json ?? {}), { status: r.status });
+    return new Response(r.text ?? JSON.stringify(r.json ?? {}), { status: r.status });
   }) as typeof fetch;
   return { fn, calls };
 }
@@ -26,7 +29,7 @@ function fakeFetch(responses: { status: number; json?: unknown }[]) {
 const PASSWORD = "s3cret-pw";
 const AUTH = `Basic ${Buffer.from(`admin:${PASSWORD}`).toString("base64")}`;
 
-function make(responses: { status: number; json?: unknown }[]) {
+function make(responses: FakeResponse[]) {
   const f = fakeFetch(responses);
   const store = new CouchStore({
     baseUrl: "http://couch.test:5984/",
@@ -314,6 +317,101 @@ describe("CouchStore (fake fetch)", () => {
     ]);
     await expect(store.upsertDays([{ date: "2026-01-01" }])).rejects.toThrow(/forbidden/);
   });
+
+  it("ensureReady は JSON でない応答を DB があるとみなさず throw する", async () => {
+    const { store, calls } = make([{ status: 200, text: "<html>ok</html>" }]);
+    const err = await store.ensureReady().then(
+      () => null,
+      (e: Error) => e,
+    );
+    expect(err?.message).toBe("CouchDB GET / の応答が JSON ではありません");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("ensureReady はオブジェクトでない JSON の応答を throw する", async () => {
+    const { store } = make([{ status: 200, json: "health" }]);
+    await expect(store.ensureReady()).rejects.toThrow("CouchDB GET / の応答の形が不正です");
+  });
+
+  it("getDays は JSON でない応答を空の結果にせず throw し、本文や認証情報を含まない", async () => {
+    const { store } = make([{ status: 200, text: "<html>secret-body</html>" }]);
+    const err = await store.getDays("2026-01-01", "2026-01-02").then(
+      () => null,
+      (e: Error) => e,
+    );
+    expect(err?.message).toBe("CouchDB GET /_all_docs の応答が JSON ではありません");
+    expect(err?.message).not.toContain("secret-body");
+    expect(err?.message).not.toContain(PASSWORD);
+    expect(err?.message).not.toContain("startkey");
+  });
+
+  it("getDays は rows の無い応答を throw する", async () => {
+    const { store } = make([{ status: 200, json: { total_rows: 0 } }]);
+    await expect(store.getDays("2026-01-01", "2026-01-02")).rejects.toThrow(
+      "CouchDB GET /_all_docs の応答の形が不正です",
+    );
+  });
+
+  it("findAdjacentDate は rows の無い応答を throw する", async () => {
+    const { store } = make([{ status: 200, json: {} }]);
+    await expect(store.findAdjacentDate("2026-01-01", "next")).rejects.toThrow(
+      "CouchDB GET /_all_docs の応答の形が不正です",
+    );
+  });
+
+  it("upsertDays は既存の読み込みで rows の無い応答を throw し、書き込まない", async () => {
+    const { store, calls } = make([{ status: 200, json: { error: "x" } }]);
+    await expect(store.upsertDays([{ date: "2026-01-01" }])).rejects.toThrow(
+      "CouchDB POST /_all_docs の応答の形が不正です",
+    );
+    expect(calls).toHaveLength(1);
+  });
+
+  it("upsertDays は _bulk_docs の応答が JSON でなければ throw する（書き込み 0 件の成功にしない）", async () => {
+    const { store } = make([
+      { status: 200, json: { rows: [] } },
+      { status: 201, text: "<html></html>" },
+    ]);
+    await expect(store.upsertDays([{ date: "2026-01-01" }])).rejects.toThrow(
+      "CouchDB POST /_bulk_docs の応答が JSON ではありません",
+    );
+  });
+
+  it("upsertDays は _bulk_docs の応答が配列でなければ throw する", async () => {
+    const { store } = make([
+      { status: 200, json: { rows: [] } },
+      { status: 201, json: { ok: true } },
+    ]);
+    await expect(store.upsertDays([{ date: "2026-01-01" }])).rejects.toThrow(
+      "CouchDB POST /_bulk_docs の応答の形が不正です",
+    );
+  });
+
+  it.each([
+    ["少ない", [{ ok: true, id: "day:2026-01-01" }]],
+    [
+      "多い",
+      [
+        { ok: true, id: "day:2026-01-01" },
+        { ok: true, id: "day:2026-01-02" },
+        { ok: true, id: "day:2026-01-03" },
+      ],
+    ],
+    ["空", []],
+  ])(
+    "upsertDays は _bulk_docs の結果の件数が送った文書の数より%sと throw する",
+    async (_, results) => {
+      const { store } = make([
+        { status: 200, json: { rows: [] } },
+        { status: 201, json: results },
+      ]);
+      await expect(
+        store.upsertDays([{ date: "2026-01-01" }, { date: "2026-01-02" }]),
+      ).rejects.toThrow(
+        "CouchDB POST /_bulk_docs の応答の件数が送った文書の数と合いません（送信 2 件、応答",
+      );
+    },
+  );
 
   it("HTTP エラーは throw し、パスワードを含まない", async () => {
     const { store } = make([{ status: 500 }]);
