@@ -57,6 +57,14 @@ pnpm build
 - 前後の日のリンクは、範囲で探さず `HealthStore.findAdjacentDate` で求める（データが長く途切れていても正しくつなぐため）
 - obsidian-sync-mcp は LiveSync 1.0.33 以降の「ID キー」に未対応。LiveSync 側の ID キーや Obfuscate Properties の設定を変える提案をしない（[ADR 0007](../docs/adr/0007-write-via-obsidian-sync-mcp.md)）
 
+## Docker
+
+`Dockerfile` だけに関わる約束。イメージの digest での固定と corepack の版のそろえ方は、ルートの AGENTS.md の「CI・Docker・依存の固定」にある。
+
+- 実行用のイメージは `USER node` で動かし、root で動かさない（乗っ取られたときの被害を抑えるため）
+- 実行用のイメージには本番の依存（`pnpm install --prod`）とビルド結果だけを入れ、開発用の依存を入れない（攻撃に使える部品とイメージの大きさを減らすため）
+- pnpm は `corepack enable && corepack install` で入れ、`package.json` の `packageManager` の sha512 を検査させる。`corepack prepare` は検査せずにキャッシュするので使わない（[ADR 0010](../docs/adr/0010-pin-dependencies-and-dependabot.md)）
+
 ## デプロイ
 
 fly.io にデプロイする。手順と秘密情報の登録は [docs/deploy.md](../docs/deploy.md) にある。`fly.toml` のアプリ名はプレースホルダーなので、本番のアプリ名をリポジトリに書かない。

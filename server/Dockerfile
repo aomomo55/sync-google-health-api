@@ -2,6 +2,7 @@
 # pnpm は package.json の packageManager に書いた版を corepack install で入れる。
 # corepack prepare で先に入れるとキャッシュが使われ、sha512 が検査されないため使わない
 # corepack は Node 25 以降に同梱されないため、Node の版に関係なく npm で固定版を入れる（ADR 0014）
+# 版は .github/workflows/ci.yml と audit.yml の「pnpm を有効化」に合わせる
 ARG COREPACK_VERSION=0.36.0
 
 # ビルド用: 依存を全部入れて TypeScript をコンパイルする
