@@ -185,7 +185,7 @@ class SleepAssignerTest {
         val sl = SleepAssigner.assign(listOf(s), TOKYO).values.single()
         assertEquals(420L, sl.inBedMinutes)
         assertEquals(420L, sl.asleepMinutes)
-        assertNull(sl.awakeMinutes)
+        assertEquals(0L, sl.awakeMinutes)
         assertNull(sl.deepMinutes)
         assertNull(sl.lightMinutes)
         assertNull(sl.remMinutes)
@@ -228,6 +228,27 @@ class SleepAssignerTest {
         assertNull(sl.deepMinutes)
         assertNull(sl.lightMinutes)
         assertNull(sl.remMinutes)
+    }
+
+    // サーバーの「ステージが無くても awake_minutes を出す」(takeout-sleep.test.ts) と同じ入力・同じ規則
+    @Test
+    fun sendsAwakeWithoutStages() {
+        val single = SleepSessionInput("app.a", at(2026, 3, 10, 0), at(2026, 3, 10, 7), emptyList())
+        val sl = SleepAssigner.assign(listOf(single), TOKYO).values.single()
+        assertEquals(420L, sl.inBedMinutes)
+        assertEquals(0L, sl.awakeMinutes)
+        assertEquals(420L, sl.asleepMinutes)
+
+        // セッション間の 60 分を中途覚醒に数える
+        val first = SleepSessionInput("app.a", at(2026, 3, 10, 0), at(2026, 3, 10, 2), emptyList())
+        val second = SleepSessionInput("app.a", at(2026, 3, 10, 3), at(2026, 3, 10, 7), emptyList())
+        val merged = SleepAssigner.assign(listOf(first, second), TOKYO).values.single()
+        assertEquals(420L, merged.inBedMinutes)
+        assertEquals(60L, merged.awakeMinutes)
+        assertEquals(360L, merged.asleepMinutes)
+        assertNull(merged.deepMinutes)
+        assertNull(merged.lightMinutes)
+        assertNull(merged.remMinutes)
     }
 
     @Test
@@ -338,7 +359,7 @@ class SleepAssignerTest {
         val sl = SleepAssigner.assign(listOf(first, joined), TOKYO).values.single()
         assertEquals(420L, sl.inBedMinutes)
         assertEquals(300L, sl.asleepMinutes)
-        assertNull(sl.awakeMinutes)
+        assertEquals(120L, sl.awakeMinutes)
         assertNull(sl.napMinutes)
 
         val apart = SleepSessionInput("a", at(2026, 3, 5, 4, 1), at(2026, 3, 5, 7), emptyList())

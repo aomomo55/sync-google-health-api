@@ -84,11 +84,12 @@ object SleepAssigner {
         val napMinutes = if (naps.isEmpty()) null else naps.sumOf { asleepMinutes(it) }
 
         val inBed = minutes(main.span)
-        val hasStages = main.sessions.any { it.stages.isNotEmpty() }
         // 内訳は浅い・深い・REM を含むときだけ出す（睡眠・覚醒だけの夜に 0 分を送らない）。
         // サーバーの Takeout 取り込み (takeout/sleep.ts の nightHasStages) と同じ規則で、同じ入力のテストを両方に置いている
-        val hasBreakdown = main.sessions.any(::hasStagedSleep)
+        val hasDeepLightRem = main.sessions.any(::hasStagedSleep)
         val gap = minutes(gapSeconds(main.sessions))
+        // 中途覚醒はステージの有無にかかわらず常に送る（ステージが無ければセッション間の間隔だけ）。
+        // サーバーの Takeout 取り込み (takeout/sleep.ts の summarizeNight) と同じ規則で、同じ入力のテストを両方に置いている
         val awake = main.sessions.sumOf { stageMinutes(it) { st -> st.type in AWAKE_TYPES } } + gap
         val asleep = (inBed - awake).coerceAtLeast(0)
         fun stages(type: Int) = main.sessions.sumOf { stageMinutes(it) { st -> st.type == type } }
@@ -97,10 +98,10 @@ object SleepAssigner {
             end = fmt(main.end, zone),
             asleepMinutes = asleep,
             inBedMinutes = inBed,
-            awakeMinutes = if (hasStages) awake else null,
-            deepMinutes = if (hasBreakdown) stages(DEEP) else null,
-            lightMinutes = if (hasBreakdown) stages(LIGHT) else null,
-            remMinutes = if (hasBreakdown) stages(REM) else null,
+            awakeMinutes = awake,
+            deepMinutes = if (hasDeepLightRem) stages(DEEP) else null,
+            lightMinutes = if (hasDeepLightRem) stages(LIGHT) else null,
+            remMinutes = if (hasDeepLightRem) stages(REM) else null,
             napMinutes = napMinutes,
         )
     }
