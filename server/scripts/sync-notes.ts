@@ -9,6 +9,7 @@ import {
   REQUEST_TIMEOUT_MS,
   scrubToken,
 } from "./cli-guard.js";
+import { parseSyncResponse } from "./ingest-report.js";
 
 const DEFAULT_CHUNK_DAYS = 120;
 const RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
@@ -96,11 +97,9 @@ for (let start = from, first = true; start <= to; first = false) {
     const res = await postWithRetry(body);
     if (!res.ok)
       throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, MAX_ERROR_BODY_CHARS)}`);
-    const json = (await res.json()) as {
-      written: number;
-      unchanged: number;
-      failed: { path: string; error: string }[];
-    };
+    // 想定外の形の応答は、その区間の失敗として扱う（成功に見せない）
+    const json = parseSyncResponse(await res.json(), token);
+    if (json.kind === "error") throw new Error(json.error);
     chunkTotals.push({ written: json.written, unchanged: json.unchanged });
     failures.push(...json.failed);
     console.log(

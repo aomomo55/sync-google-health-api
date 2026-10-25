@@ -11,6 +11,8 @@ export type IngestNotes =
     }
   | { kind: "error"; error: string };
 
+const UNEXPECTED_SHAPE_MESSAGE = "応答の形が想定外です";
+
 // 想定外の形は同期の失敗として扱う（成功に見せない）
 export function parseIngestNotes(value: unknown, token: string | undefined): IngestNotes {
   if (value === null || value === undefined) return { kind: "none" };
@@ -26,8 +28,18 @@ export function parseIngestNotes(value: unknown, token: string | undefined): Ing
       })),
     };
   }
-  const error = typeof v.error === "string" ? v.error : "応答の形が想定外です";
+  const error = typeof v.error === "string" ? v.error : UNEXPECTED_SHAPE_MESSAGE;
   return { kind: "error", error: scrubToken(error, token) };
+}
+
+// POST /api/notes/sync の応答。形は POST /api/ingest の notes と同じだが、
+// 同期を頼んだ以上 null や欠けた応答は結果が分からないので、同期の失敗として扱う
+export function parseSyncResponse(
+  value: unknown,
+  token: string | undefined,
+): Exclude<IngestNotes, { kind: "none" }> {
+  const notes = parseIngestNotes(value, token);
+  return notes.kind === "none" ? { kind: "error", error: UNEXPECTED_SHAPE_MESSAGE } : notes;
 }
 
 export function formatNotes(n: IngestNotes): string {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { addNotes, formatNotes, parseIngestNotes } from "../scripts/ingest-report.js";
+import {
+  addNotes,
+  formatNotes,
+  parseIngestNotes,
+  parseSyncResponse,
+} from "../scripts/ingest-report.js";
 
 const TOKEN = "abcdefghijklmnopqrstuvwxyz012345";
 
@@ -30,6 +35,35 @@ describe("parseIngestNotes", () => {
     });
     expect(parseIngestNotes({ written: "3" }, TOKEN).kind).toBe("error");
     expect(formatNotes({ kind: "error", error: "x" })).toBe(" ノート: 同期に失敗");
+  });
+});
+
+describe("parseSyncResponse", () => {
+  it("同期結果を読み、失敗の文からトークンを伏せる", () => {
+    const n = parseSyncResponse(
+      {
+        written: 1,
+        unchanged: 9,
+        failed: [{ path: "Health/Daily/2026-03-01.md", error: `x ${TOKEN}` }],
+      },
+      TOKEN,
+    );
+    expect(n.kind).toBe("synced");
+    expect(n.kind === "synced" && n.written).toBe(1);
+    expect(n.kind === "synced" && n.failed[0]!.error).not.toContain(TOKEN);
+  });
+
+  it("null や想定外の形は、同期の失敗として扱う", () => {
+    for (const value of [null, undefined, {}, { written: 1, unchanged: 2 }, { failed: [] }, "ok"]) {
+      expect(parseSyncResponse(value, TOKEN).kind).toBe("error");
+    }
+  });
+
+  it("応答の error はトークンを伏せて返す", () => {
+    expect(parseSyncResponse({ error: `x ${TOKEN}` }, TOKEN)).toEqual({
+      kind: "error",
+      error: "x ***",
+    });
   });
 });
 
