@@ -149,25 +149,27 @@ export function healthRoutes(store: HealthStore, noteSync: NoteSync | null = nul
     },
   );
 
-  r.post(
-    "/notes/sync",
-    bodyLimit({
-      maxSize: MAX_SYNC_BODY_BYTES,
-      onError: (c) => c.json({ error: "Payload Too Large" }, 413),
-    }),
-    async (c) => {
-      if (!noteSync) return c.json({ error: "Vault が設定されていません" }, 503);
-      const raw: unknown = await c.req.json().catch(() => badRequest("JSON が不正です"));
-      const { from, to, includeStatic } = parseWith(SyncNotesSchema, raw, "リクエストが不正です");
-      assertDaySpan(from, to);
-      const report = await noteSync.syncRange(from, to, { includeStatic });
-      return c.json({
-        written: report.written.length,
-        unchanged: report.unchanged.length,
-        failed: report.failed,
-      });
-    },
-  );
+  // Vault が未設定なら経路を作らない（404）。設定が足りないまま動かさないため
+  if (noteSync) {
+    r.post(
+      "/notes/sync",
+      bodyLimit({
+        maxSize: MAX_SYNC_BODY_BYTES,
+        onError: (c) => c.json({ error: "Payload Too Large" }, 413),
+      }),
+      async (c) => {
+        const raw: unknown = await c.req.json().catch(() => badRequest("JSON が不正です"));
+        const { from, to, includeStatic } = parseWith(SyncNotesSchema, raw, "リクエストが不正です");
+        assertDaySpan(from, to);
+        const report = await noteSync.syncRange(from, to, { includeStatic });
+        return c.json({
+          written: report.written.length,
+          unchanged: report.unchanged.length,
+          failed: report.failed,
+        });
+      },
+    );
+  }
 
   r.get("/summary/monthly", async (c) => {
     const from = c.req.query("from");

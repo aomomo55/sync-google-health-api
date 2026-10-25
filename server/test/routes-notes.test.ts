@@ -124,11 +124,16 @@ describe("POST /api/notes/sync", () => {
     expect((await call("/api/notes/sync", {}, false)).status).toBe(401);
   });
 
-  it("Vault 未設定は 503", async () => {
+  it("Vault 未設定なら経路を作らない（404）", async () => {
     app = createApp({ config: { API_TOKEN: TOKEN }, store: new MemoryStore() });
     const res = await call("/api/notes/sync", { from: "2026-01-01", to: "2026-01-02" });
-    expect(res.status).toBe(503);
-    expect(await res.json()).toEqual({ error: "Vault が設定されていません" });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "Not Found" });
+  });
+
+  it("Vault 未設定でも認証なしは 401（経路の有無を明かさない）", async () => {
+    app = createApp({ config: { API_TOKEN: TOKEN }, store: new MemoryStore() });
+    expect((await call("/api/notes/sync", {}, false)).status).toBe(401);
   });
 
   it.each([
