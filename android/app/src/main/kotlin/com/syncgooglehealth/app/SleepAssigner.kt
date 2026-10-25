@@ -85,6 +85,9 @@ object SleepAssigner {
 
         val inBed = minutes(main.span)
         val hasStages = main.sessions.any { it.stages.isNotEmpty() }
+        // 内訳は浅い・深い・REM を含むときだけ出す（睡眠・覚醒だけの夜に 0 分を送らない）。
+        // サーバーの Takeout 取り込み (takeout/sleep.ts の nightHasStages) と同じ規則で、同じ入力のテストを両方に置いている
+        val hasBreakdown = main.sessions.any(::hasStagedSleep)
         val gap = minutes(gapSeconds(main.sessions))
         val awake = main.sessions.sumOf { stageMinutes(it) { st -> st.type in AWAKE_TYPES } } + gap
         val asleep = (inBed - awake).coerceAtLeast(0)
@@ -95,9 +98,9 @@ object SleepAssigner {
             asleepMinutes = asleep,
             inBedMinutes = inBed,
             awakeMinutes = if (hasStages) awake else null,
-            deepMinutes = if (hasStages) stages(DEEP) else null,
-            lightMinutes = if (hasStages) stages(LIGHT) else null,
-            remMinutes = if (hasStages) stages(REM) else null,
+            deepMinutes = if (hasBreakdown) stages(DEEP) else null,
+            lightMinutes = if (hasBreakdown) stages(LIGHT) else null,
+            remMinutes = if (hasBreakdown) stages(REM) else null,
             napMinutes = napMinutes,
         )
     }

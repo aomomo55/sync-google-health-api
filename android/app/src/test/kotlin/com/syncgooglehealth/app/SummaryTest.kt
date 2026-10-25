@@ -213,6 +213,23 @@ class SleepAssignerTest {
         assertEquals(50L, sl.remMinutes)
     }
 
+    // サーバーの「ステージ 4/5/6 が無ければ deep/light/rem を省略する」(takeout-sleep.test.ts) と同じ入力・同じ規則
+    @Test
+    fun omitsBreakdownWhenOnlySleepingAndAwakeStages() {
+        val st = listOf(
+            stage(2, at(2026, 3, 10, 0), at(2026, 3, 10, 1)),          // sleeping 60
+            stage(0, at(2026, 3, 10, 1), at(2026, 3, 10, 1, 30)),      // unknown 30
+            stage(1, at(2026, 3, 10, 1, 30), at(2026, 3, 10, 1, 40)),  // awake 10
+        )
+        val s = SleepSessionInput("app.c", at(2026, 3, 10, 0), at(2026, 3, 10, 1, 40), st)
+        val sl = SleepAssigner.assign(listOf(s), TOKYO).values.single()
+        assertEquals(90L, sl.asleepMinutes)
+        assertEquals(10L, sl.awakeMinutes)
+        assertNull(sl.deepMinutes)
+        assertNull(sl.lightMinutes)
+        assertNull(sl.remMinutes)
+    }
+
     @Test
     fun prefersOriginWithStagesOverLongerOriginWithout() {
         val unstaged = SleepSessionInput("app.a", at(2026, 3, 5, 0), at(2026, 3, 5, 9), emptyList())
