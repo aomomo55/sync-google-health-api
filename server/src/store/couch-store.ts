@@ -101,7 +101,8 @@ export class CouchStore implements HealthStore {
     }
     return res.json().catch((e: unknown) => {
       if (isTimeout(e)) throw timeoutError();
-      throw new Error(`${label} の応答が JSON ではありません`, { cause: e });
+      // 元の SyntaxError は本文の一部を含むことがあるので cause に付けない（ログに健康データを出さない）
+      throw new Error(`${label} の応答が JSON ではありません`);
     });
   }
 
