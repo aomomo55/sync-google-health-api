@@ -19,7 +19,7 @@ const MAX_LISTED_FAILURES = 20;
 // サーバーは Vault が未設定だと /api/notes/sync の経路を作らない（404）。区間を変えても結果は同じなので、すぐ止める
 const NOT_FOUND_STATUS = 404;
 const ROUTE_MISSING_MESSAGE =
-  "サーバーに /api/notes/sync がありません（HTTP 404）。サーバーで Vault（OBSIDIAN_MCP_URL / OBSIDIAN_MCP_TOKEN）が設定されていないか、サーバーが古い版です。設定を確かめるかサーバーを更新してから、やり直してください";
+  "サーバーに /api/notes/sync がありません（HTTP 404）。サーバーで Vault（OBSIDIAN_MCP_URL / OBSIDIAN_MCP_TOKEN）が設定されていないか、サーバーが古い版です。--api-url にパス（/api など）を含めていないかも確かめてください。設定やサーバーの版を直してから、やり直してください";
 
 // pnpm 12 は `pnpm run x -- --opt` の `--` もそのまま渡すので取り除く
 const argv = process.argv.slice(2);

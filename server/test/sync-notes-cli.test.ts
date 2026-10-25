@@ -8,10 +8,11 @@ import { afterEach, describe, expect, it } from "vitest";
 // sync:notes を実際に起動し、手元に立てた偽のサーバーへ向けて確かめる
 const run = promisify(execFile);
 const SERVER_DIR = fileURLToPath(new URL("..", import.meta.url));
-const TSX = fileURLToPath(new URL("../node_modules/.bin/tsx", import.meta.url));
 const TOKEN = "t".repeat(32);
 // tsx の起動を含めて待つ上限
 const CLI_TEST_TIMEOUT_MS = 30_000;
+// 子プロセスを打ち切るまでの時間。テストの上限より短くし、時間切れでも子プロセスを残さない
+const CLI_PROCESS_TIMEOUT_MS = 20_000;
 
 let server: Server | undefined;
 afterEach(() => {
@@ -38,7 +39,10 @@ async function startServer(
 
 async function runCli(apiUrl: string): Promise<{ code: number; stdout: string; stderr: string }> {
   // 10 日を 5 日ずつ、2 区間に分けて送らせる
+  // node_modules/.bin/tsx は Windows では直接起動できないので、Node に tsx を読み込ませて起動する
   const args = [
+    "--import",
+    "tsx",
     "scripts/sync-notes.ts",
     "--from",
     "2026-01-01",
@@ -47,9 +51,13 @@ async function runCli(apiUrl: string): Promise<{ code: number; stdout: string; s
     "--days",
     "5",
   ];
-  const options = { cwd: SERVER_DIR, env: { ...process.env, API_TOKEN: TOKEN } };
+  const options = {
+    cwd: SERVER_DIR,
+    env: { ...process.env, API_TOKEN: TOKEN },
+    timeout: CLI_PROCESS_TIMEOUT_MS,
+  };
   try {
-    const { stdout, stderr } = await run(TSX, [...args, "--api-url", apiUrl], options);
+    const { stdout, stderr } = await run(process.execPath, [...args, "--api-url", apiUrl], options);
     return { code: 0, stdout, stderr };
   } catch (e) {
     const err = e as { code: number; stdout: string; stderr: string };
@@ -64,7 +72,7 @@ describe("sync:notes", () => {
       const srv = await startServer(404, { error: "Not Found" });
       const r = await runCli(srv.url);
       expect(r.code).toBe(1);
-      expect(r.stderr).toMatch(/OBSIDIAN_MCP_URL \/ OBSIDIAN_MCP_TOKEN.*古い版/);
+      expect(r.stderr).toMatch(/OBSIDIAN_MCP_URL \/ OBSIDIAN_MCP_TOKEN.*古い版.*--api-url にパス/);
       // 2 区間あるが、最初の 1 回で止まる
       expect(srv.hits()).toBe(1);
     },
