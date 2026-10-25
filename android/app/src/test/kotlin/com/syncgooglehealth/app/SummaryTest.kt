@@ -272,6 +272,27 @@ class SleepAssignerTest {
         assertEquals(50L + 30L, sl.napMinutes)
     }
 
+    // サーバーの takeout-sleep.test.ts「仮眠の segment の間の隙間は睡眠に数えない」と同じ入力・同じ規則
+    @Test
+    fun napExcludesGapBetweenSessions() {
+        val main = SleepSessionInput(
+            "a", at(2026, 3, 10, 1), at(2026, 3, 10, 7),
+            listOf(stage(4, at(2026, 3, 10, 1), at(2026, 3, 10, 7))),
+        )
+        val nap1 = SleepSessionInput(
+            "a", at(2026, 3, 10, 13), at(2026, 3, 10, 13, 20),
+            listOf(stage(4, at(2026, 3, 10, 13), at(2026, 3, 10, 13, 20))),
+        )
+        val nap2 = SleepSessionInput(
+            "a", at(2026, 3, 10, 14), at(2026, 3, 10, 14, 20),
+            listOf(stage(4, at(2026, 3, 10, 14), at(2026, 3, 10, 14, 20))),
+        )
+        val sl = SleepAssigner.assign(listOf(main, nap1, nap2), TOKYO).values.single()
+        assertEquals(360L, sl.inBedMinutes)
+        // 2 つの仮眠の間の 40 分は数えない
+        assertEquals(40L, sl.napMinutes)
+    }
+
     @Test
     fun assignsDifferentWakeDatesSeparately() {
         val d1 = SleepSessionInput("a", at(2026, 3, 4, 23), at(2026, 3, 5, 6), emptyList())

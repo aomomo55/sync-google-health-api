@@ -210,6 +210,7 @@ describe("buildSleepByDate", () => {
     expect(c.sleep.nap_minutes).toBe(80);
   });
 
+  // Android の SummaryTest.kt の napExcludesGapBetweenSessions と同じ入力・同じ規則
   it("仮眠の segment の間の隙間は睡眠に数えない（本睡眠と同じ式）", () => {
     // 13:00-13:20 と 14:00-14:20（浅い）は 60 分以内なので 1 つのまとまり。仮眠は 40 分（以前は 80 分）
     const c = buildSleepByDate([
