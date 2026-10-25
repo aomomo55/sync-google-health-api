@@ -239,13 +239,13 @@ class SleepAssignerTest {
         assertEquals(0L, sl.awakeMinutes)
         assertEquals(420L, sl.asleepMinutes)
 
-        // セッション間の 60 分を中途覚醒に数える
+        // 2 時間 (MERGE_GAP) 以内の別のセッションを一晩に結合し、間隔の 120 分を中途覚醒に数える
         val first = SleepSessionInput("app.a", at(2026, 3, 10, 0), at(2026, 3, 10, 2), emptyList())
-        val second = SleepSessionInput("app.a", at(2026, 3, 10, 3), at(2026, 3, 10, 7), emptyList())
+        val second = SleepSessionInput("app.a", at(2026, 3, 10, 4), at(2026, 3, 10, 7), emptyList())
         val merged = SleepAssigner.assign(listOf(first, second), TOKYO).values.single()
         assertEquals(420L, merged.inBedMinutes)
-        assertEquals(60L, merged.awakeMinutes)
-        assertEquals(360L, merged.asleepMinutes)
+        assertEquals(120L, merged.awakeMinutes)
+        assertEquals(300L, merged.asleepMinutes)
         assertNull(merged.deepMinutes)
         assertNull(merged.lightMinutes)
         assertNull(merged.remMinutes)

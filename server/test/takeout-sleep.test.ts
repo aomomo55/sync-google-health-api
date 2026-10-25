@@ -151,12 +151,14 @@ describe("buildSleepByDate", () => {
       asleep_minutes: 420,
     });
 
-    // セッション間の 60 分を中途覚醒に数える
-    const merged = buildSleepByDate([seg(A, 0, 120, 2), seg(A, 180, 420, 2)]).get("2026-03-10")!;
+    // 間隔 120 分は SESSION_GAP_MS を超えるので別のセッションになり、一晩に結合して間隔を中途覚醒に数える
+    const segs = [seg(A, 0, 120, 2), seg(A, 240, 420, 2)];
+    expect(sessionize(segs)).toHaveLength(2);
+    const merged = buildSleepByDate(segs).get("2026-03-10")!;
     expect(merged.sleep).toMatchObject({
       in_bed_minutes: 420,
-      awake_minutes: 60,
-      asleep_minutes: 360,
+      awake_minutes: 120,
+      asleep_minutes: 300,
     });
     expect(merged.sleep).not.toHaveProperty("deep_minutes");
     expect(merged.sleep).not.toHaveProperty("light_minutes");
