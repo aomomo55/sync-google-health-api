@@ -5,13 +5,18 @@ import { buildSleepByDate, type ChosenSleep, type Segment } from "./sleep.js";
 
 export { parseDailyCsv } from "./daily-csv.js";
 export {
+  MAX_DATA_POINTS_PER_FILE,
+  type ParseStats,
+  TakeoutLimitError,
+} from "./data-points.js";
+export {
   buildNutritionByDate,
   type ChosenNutrition,
   type NutritionItem,
   nutritionSourceFromFilename,
   parseNutritionJson,
 } from "./nutrition.js";
-export type { ChosenSleep, ParseStats, Segment } from "./sleep.js";
+export type { ChosenSleep, Segment } from "./sleep.js";
 export {
   buildSleepByDate,
   parseSleepJson,
@@ -33,19 +38,19 @@ export function buildDays(
 ): BuildResult {
   const sleepByDate = buildSleepByDate(segments);
   const nutritionByDate = buildNutritionByDate(nutrition);
-  const map = new Map<string, DailySummary>();
-  for (const d of csvDays) map.set(d.date, { ...d });
-  for (const [date, chosen] of sleepByDate) {
-    const day = map.get(date) ?? { date, source: TAKEOUT_SOURCE };
-    day.sleep = chosen.sleep;
-    map.set(date, day);
-  }
-  for (const [date, chosen] of nutritionByDate) {
-    const day = map.get(date) ?? { date, source: TAKEOUT_SOURCE };
-    day.nutrition = chosen.nutrition;
-    map.set(date, day);
-  }
-  const days = [...map.values()]
+  // 同じ日付が CSV に複数あれば後のものを使う
+  const csvByDate = new Map(csvDays.map((d) => [d.date, d]));
+  const dates = new Set([...csvByDate.keys(), ...sleepByDate.keys(), ...nutritionByDate.keys()]);
+  const days = [...dates]
+    .map((date): DailySummary => {
+      const sleep = sleepByDate.get(date)?.sleep;
+      const nutrition = nutritionByDate.get(date)?.nutrition;
+      return {
+        ...(csvByDate.get(date) ?? { date, source: TAKEOUT_SOURCE }),
+        ...(sleep ? { sleep } : {}),
+        ...(nutrition ? { nutrition } : {}),
+      };
+    })
     .filter((d) => (!range.from || d.date >= range.from) && (!range.to || d.date <= range.to))
     .sort((a, b) => a.date.localeCompare(b.date));
   return { days, sleepByDate, nutritionByDate };

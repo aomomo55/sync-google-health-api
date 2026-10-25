@@ -2,8 +2,15 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { TakeoutLimitError } from "../src/takeout/data-points.js";
 import { buildDays } from "../src/takeout/index.js";
-import { DAILY_CSV_PATH, loadTakeout, RAW_DIR } from "../src/takeout/load.js";
+import {
+  DAILY_CSV_PATH,
+  loadTakeout,
+  MAX_TAKEOUT_FILE_BYTES,
+  RAW_DIR,
+  readTextLimited,
+} from "../src/takeout/load.js";
 
 const nanos = (iso: string) => String(Date.parse(iso) * 1e6);
 
@@ -46,10 +53,52 @@ describe("loadTakeout", () => {
 
     const loaded = await loadTakeout(root);
     expect(loaded.dropped).toEqual({ sleep: 1, nutrition: 1 });
+    expect(loaded.malformed).toEqual({ sleep: 0, nutrition: 0 });
     expect(loaded.segments).toHaveLength(1);
     expect(loaded.nutrition).toEqual([]);
     const { days } = buildDays(loaded.csvDays, loaded.segments, {}, loaded.nutrition);
     expect(days.map((d) => d.date)).toEqual(["2026-03-10"]);
     expect(days[0]?.sleep?.in_bed_minutes).toBe(420);
+  });
+
+  it("形の合わない記録を捨てた件数を返し、取り込みは続ける", async () => {
+    root = await mkdtemp(join(tmpdir(), "takeout-"));
+    await mkdir(join(root, DAILY_CSV_PATH[0]!), { recursive: true });
+    await mkdir(join(root, RAW_DIR), { recursive: true });
+    await writeFile(join(root, ...DAILY_CSV_PATH), "日付,歩数\n2026-03-10,1000\n");
+    await writeFile(
+      join(root, RAW_DIR, "raw_com.google.sleep.segment_app.a.json"),
+      JSON.stringify({
+        "Data Points": [
+          null,
+          {
+            fitValue: [{ value: { intVal: 4 } }],
+            startTimeNanos: nanos("2026-03-09T23:00:00+09:00"),
+            endTimeNanos: nanos("2026-03-10T06:00:00+09:00"),
+          },
+        ],
+      }),
+    );
+    await writeFile(
+      join(root, RAW_DIR, "raw_com.google.nutrition_app.b.json"),
+      JSON.stringify({ "Data Points": [null, { startTimeNanos: 1 }, 3] }),
+    );
+
+    const loaded = await loadTakeout(root);
+    expect(loaded.malformed).toEqual({ sleep: 1, nutrition: 2 });
+    // { startTimeNanos: 1 } は形は合うが、時刻が範囲外
+    expect(loaded.dropped).toEqual({ sleep: 0, nutrition: 1 });
+    expect(loaded.segments).toHaveLength(1);
+  });
+
+  it("上限を超えるファイルは読まずに TakeoutLimitError で止める", async () => {
+    root = await mkdtemp(join(tmpdir(), "takeout-"));
+    const path = join(root, "a.json");
+    await writeFile(path, "0123456789");
+    await expect(readTextLimited(path, 10)).resolves.toBe("0123456789");
+    await expect(readTextLimited(path, 9)).rejects.toThrow(TakeoutLimitError);
+    await expect(readTextLimited(path, 9)).rejects.toThrow(/上限 9 バイト/);
+    // 上限は現実の Takeout より十分大きい
+    expect(MAX_TAKEOUT_FILE_BYTES).toBeGreaterThanOrEqual(100 * 1024 * 1024);
   });
 });
