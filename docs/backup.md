@@ -132,10 +132,10 @@ curl -s -o /dev/null -w '%{http_code}\n' https://<アプリ名>.fly.dev/backup/h
 
 ### 0. 準備
 
-- Node 24 以上と、リポジトリの `server/` の依存（`server/` で `pnpm install --frozen-lockfile`。pnpm がグローバルに無ければ `npx --yes pnpm@12.8.1 install --frozen-lockfile`）
+- Node 24 以上と、リポジトリの `server/` の依存（`server/` で `pnpm install --frozen-lockfile`。pnpm がグローバルに無ければ `npx --yes pnpm@<版> install --frozen-lockfile`。`<版>` は `server/package.json` の `packageManager` にある、`pnpm@` と `+sha512` の間の値）
 - Google Drive から落としたバックアップのファイル
 - 秘密鍵を書いたファイル。パスワードマネージャーの中身を、**リポジトリの外**に新しいテキストファイルとして保存する。CLI は、ファイルの中の `AGE-SECRET-KEY-` で始まる行を鍵として読む
-- 以下のコマンドは **`server/` フォルダで** 実行する（ほかのフォルダでは `Command "restore:backup" not found` になる）。pnpm がグローバルに無ければ、`pnpm` を `npx --yes pnpm@12.8.1` に置き換える
+- 以下のコマンドは **`server/` フォルダで** 実行する（ほかのフォルダでは `Command "restore:backup" not found` になる）。pnpm がグローバルに無ければ、`pnpm` を `npx --yes pnpm@<版>` に置き換える（`<版>` は上と同じ）
 
 ### 1. 中身を確かめる（書き込まない）
 
@@ -180,7 +180,7 @@ Remove-Item Env:COUCHDB_PASSWORD
 ### 3. 確かめてから入れ替える
 
 1. 書き戻した DB の件数と期間を確かめる（CouchDB の管理画面、または `--dry-run` の表示と比べる）
-2. `server/fly.toml` の `[env]` にある `COUCHDB_HEALTH_DB = "health"` を、書き戻した DB の名前に変えてデプロイする。元に戻すときは `health` に戻してデプロイする
+2. `server/fly.toml` の `[env]` にある `COUCHDB_HEALTH_DB = "health"` を書き戻した DB の名前に変え、main にコミット（PR をマージ）してから、GitHub Actions でデプロイする（[deploy.md](deploy.md#github-actions-でデプロイする)）。Actions は main の `fly.toml` を使うので、手元で書き換えて `fly deploy` しただけだと、次に Actions でデプロイしたときに元の DB に戻る。元に戻すときも、`health` に戻した変更を main に入れてからデプロイする
 3. `sync:notes` でノートを作り直し、内容を確かめる
 4. バックアップを取った時刻より後のデータは入っていない。Android アプリの「開始日を指定して送る」で、その日以降を送り直す（90 日より前は Takeout から取り込む）
 5. 問題なければ、古い DB は一定期間残してから削除する

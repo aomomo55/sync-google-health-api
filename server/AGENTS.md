@@ -29,7 +29,7 @@
 
 ## コマンド
 
-`server/` で実行する。pnpm 12.8.1 を使う。グローバルに無ければ `npx --yes pnpm@12.8.1 <コマンド>` で実行する。
+`server/` で実行する。pnpm は `package.json` の `packageManager` にある版を使う。グローバルに無ければ `npx --yes pnpm@<版> <コマンド>` で実行する（`<版>` は `packageManager` の `pnpm@` と `+sha512` の間の値）。版はここに書かない（上げるときに `packageManager` と lockfile だけを変えればよいようにするため。[ADR 0010](../docs/adr/0010-pin-dependencies-and-dependabot.md)）。
 
 ```sh
 pnpm install --frozen-lockfile

@@ -5,7 +5,7 @@
 | No. | タイトル | ステータス |
 |---|---|---|
 | [0001](0001-health-connect-as-data-source.md) | 健康データの取得元を Health Connect + 自作 Android アプリにする | 採用 |
-| [0002](0002-deploy-to-flyio.md) | サーバーのデプロイ先を Vercel から fly.io に変更する | 採用 |
+| [0002](0002-deploy-to-flyio.md) | サーバーのデプロイ先を Vercel から fly.io に変更する | 採用（LiveSync CLI と永続ボリュームを使う点を 0007 で更新） |
 | [0003](0003-livesync-cli-for-obsidian-writes.md) | Obsidian への書き込みに公式 Self-hosted LiveSync CLI を使う | 置き換え済み（0007） |
 | [0004](0004-remote-mcp-with-oauth.md) | Claude との接続をリモート MCP サーバー + OAuth にする | 置き換え済み（0007） |
 | [0005](0005-store-health-data-in-couchdb.md) | 健康データを既存 CouchDB の別データベースに保存する | 採用 |
