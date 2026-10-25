@@ -15,6 +15,16 @@ class TokenValidationTest {
     }
 
     @Test
+    fun rejectsSymbolsThatBearerAuthDoesNotAccept() {
+        for (ch in listOf("!", "#", ":", "@", "%", "\"")) assertFalse(ch, isValidToken("$body$ch"))
+    }
+
+    @Test
+    fun rejectsEqualsSignInTheMiddle() {
+        assertFalse(isValidToken("${"x".repeat(16)}=${"x".repeat(16)}"))
+    }
+
+    @Test
     fun rejectsEmpty() {
         assertFalse(isValidToken(""))
     }
@@ -33,13 +43,13 @@ class TokenValidationTest {
 
     @Test
     fun rejectsZeroWidthSpace() {
-        assertFalse(isValidToken("${"s".repeat(16)}​${"s".repeat(16)}"))
+        assertFalse(isValidToken("${"s".repeat(16)}\u200b${"s".repeat(16)}"))
     }
 
     @Test
     fun rejectsFullWidthCharacters() {
-        assertFalse(isValidToken("${body}ａ"))
-        assertFalse(isValidToken("${"s".repeat(16)}　${"s".repeat(16)}"))
+        assertFalse(isValidToken("${body}\uff41"))
+        assertFalse(isValidToken("${"s".repeat(16)}\u3000${"s".repeat(16)}"))
     }
 }
 
@@ -78,7 +88,7 @@ class SettingsValidationTest {
     fun rejectsInvalidToken() {
         assertEquals(
             SettingsValidation.Invalid(R.string.settings_error_token_invalid_chars),
-            validateSettings(input(token = "${token}​")),
+            validateSettings(input(token = "${token}\u200b")),
         )
     }
 

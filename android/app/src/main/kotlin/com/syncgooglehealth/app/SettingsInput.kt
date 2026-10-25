@@ -2,10 +2,13 @@ package com.syncgooglehealth.app
 
 import androidx.annotation.StringRes
 
-// トークンに使える文字。サーバーの API_TOKEN の検査 (server/src/config.ts の token) と同じ規則で、
-// 空白・改行・制御文字・全角文字・ゼロ幅スペースなどを弾く。
-// 制御文字はヘッダーとして不正で、ASCII 以外の文字は送信のたびに OkHttp が例外を投げるため、保存前に弾く
-private val TOKEN_PATTERN = Regex("[\\x21-\\x7e]+")
+// トークンに使える文字。サーバーが API_TOKEN に掛ける文字の規則 (server/src/config.ts の BEARER_TOKEN_PATTERN。
+// Hono の bearerAuth が受け付ける文字) と同じで、英数字と . _ ~ + / -、末尾の = だけを許す。
+// 制御文字・空白・全角文字・ゼロ幅スペースもこれで弾かれる。制御文字や ASCII 以外の文字は送信のたびに
+// OkHttp が例外を投げ、それ以外の記号はサーバーが 400 を返すため、保存前に弾く。
+// 長さ (サーバーの MIN_API_TOKEN_LENGTH) は見ない。短い値はサーバーのトークンと一致しないので、
+// 送信したときに「トークンが正しくありません」と分かる
+private val TOKEN_PATTERN = Regex("[A-Za-z0-9._~+/-]+=*")
 
 fun isValidToken(token: String): Boolean = TOKEN_PATTERN.matches(token)
 

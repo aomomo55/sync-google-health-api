@@ -24,7 +24,7 @@
     <string name="settings_saved_and_sending">設定を保存しました。送信を始めます</string>
     <string name="settings_error_not_sent">%1$s。送信していません</string>
     <string name="settings_error_server_url_scheme">サーバー URL は https:// で始まる必要があります</string>
-    <string name="settings_error_token_invalid_chars">トークンに空白・改行・制御文字・全角文字を含めないでください。貼り付けた値に見えない文字（ゼロ幅スペースなど）が混じっていないか確かめてください</string>
+    <string name="settings_error_token_invalid_chars">トークンに使えるのは英数字と . _ ~ + / -（末尾の = は可）だけです。サーバーの API_TOKEN と同じ値を、空白や見えない文字（ゼロ幅スペースなど）が混じらないように入れ直してください</string>
     <string name="settings_error_sleep_window">通知の時間帯は 0〜24 の時で、開始を終了より前にしてください</string>
 
     <!-- ヘルスコネクトの状態と権限 -->
