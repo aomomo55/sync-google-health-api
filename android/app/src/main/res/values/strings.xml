@@ -98,7 +98,11 @@
     <string name="sync_message_rejected_reasons">" / 理由: %1$s"</string>
     <string name="sync_message_rejected_more_reasons">" ほか"</string>
     <string name="sync_message_notes">" / ノート 更新%1$d・変更なし%2$d"</string>
-    <string name="sync_warning_notes_failed">ノート%1$d件を書き込めませんでした（健康データは保存済みです）。同じ期間をもう一度送るとノートを作り直します。続くときは、サーバーで obsidian-sync-mcp が動いているかを確かめてください</string>
+    <string name="sync_warning_notes_failed">ノート%1$d件（%2$s）を書き込めませんでした: %3$s</string>
+    <string name="sync_warning_notes_failed_no_name">ノート%1$d件を書き込めませんでした: %2$s</string>
+    <string name="sync_warning_notes_more_names">" ほか%1$d件"</string>
+    <string name="sync_warning_notes_other_reasons">ほかにノート%1$d件を別の理由で書き込めませんでした</string>
+    <string name="sync_warning_note_reason_unknown">サーバーが理由を返しませんでした。続くときは、サーバーで obsidian-sync-mcp が動いているかを確かめてください</string>
     <string name="sync_warning_note_errors">ノートの書き込みでエラー: %1$s</string>
     <string name="sync_message_history_skipped">（履歴の権限が無いため、%1$s より前の %2$d 日分は読まずに送っていません）</string>
     <string name="sync_message_permission_missing">ヘルスコネクトの権限が不足しています。「権限を付与」を押してください</string>
@@ -136,7 +140,7 @@
     <string name="notification_sync_failure_sleep_unchecked">送れていない間は、睡眠の未反映の通知も出ません</string>
     <string name="notification_sync_failure_hint_auth">アプリの設定で「API トークン」にサーバーと同じ値を入れ直し、「設定を保存」を押してください。サーバー側でトークンを入れ替えた後なら、新しい値を入れてください</string>
     <string name="notification_sync_failure_hint_retryable">一時的な問題の可能性があり、自動送信が時間をおいて再試行します。続くときは、サーバーが動いているか、端末が通信できるかを確かめてください</string>
-    <string name="notification_sync_failure_hint_notes">健康データはサーバーに保存できていて、ノートだけを書き込めていません。サーバーで obsidian-sync-mcp が動いているかを確かめ、直したら同じ期間をもう一度送ってください</string>
+    <string name="notification_sync_failure_hint_notes">健康データはサーバーに保存できていて、ノートだけを書き込めていません。次にすることは原因の文に書いてあります</string>
     <string name="notification_sync_failure_hint_failed">アプリを開き、画面の「結果」に沿って直してください</string>
 
     <!-- 権限の理由説明の画面 -->

@@ -5,7 +5,7 @@ data class SyncTally(
     val sent: Int = 0,
     val notesWritten: Int = 0,
     val notesUnchanged: Int = 0,
-    val notesFailed: Int = 0,
+    val failedNotes: List<FailedNote> = emptyList(),
     val noteErrors: List<String> = emptyList(),
     val rejected: List<RejectedDay> = emptyList(),
 ) {
@@ -13,7 +13,7 @@ data class SyncTally(
         sent = sent + days,
         notesWritten = notesWritten + (ok.notes?.written ?: 0),
         notesUnchanged = notesUnchanged + (ok.notes?.unchanged ?: 0),
-        notesFailed = notesFailed + (ok.notes?.failed ?: 0),
+        failedNotes = failedNotes + (ok.notes?.failed ?: emptyList()),
         noteErrors = noteErrors + listOfNotNull(ok.notes?.error),
         rejected = rejected + ok.rejected,
     )
@@ -22,6 +22,10 @@ data class SyncTally(
 private const val MAX_REJECTED_DATES = 5
 private const val MAX_REJECTED_REASONS = 2
 private const val MAX_REASON_LENGTH = 40
+// ノートの失敗で、理由ごとの行を何行まで出すか (それより多い理由は件数だけを 1 行にまとめる)
+private const val MAX_NOTE_FAILURE_REASONS = 3
+// 1 行に並べるノートのファイル名の数
+private const val MAX_FAILED_NOTE_NAMES = 3
 
 // 注意の文が複数あるときの区切り。画面ではこれで分けて、1 つずつ「注意:」の行にする
 const val WARNING_LINE_SEPARATOR = "\n"
@@ -40,13 +44,32 @@ fun buildSyncWarning(texts: Texts, tally: SyncTally): String? =
         .joinToString(WARNING_LINE_SEPARATOR)
         .ifEmpty { null }
 
-// ノートの書き込みの失敗の文。件数で返る失敗と、同期そのものが失敗したときのエラーの文を、それぞれ 1 行にする
-fun buildNoteWarnings(texts: Texts, tally: SyncTally): List<String> = listOfNotNull(
-    tally.notesFailed.takeIf { it > 0 }?.let { texts.get(R.string.sync_warning_notes_failed, it) },
-    tally.noteErrors.distinct().takeIf { it.isNotEmpty() }?.let {
-        texts.get(R.string.sync_warning_note_errors, it.joinToString(texts.get(R.string.common_list_separator)))
-    },
-)
+// ノートの書き込みの失敗の文。書き込めなかったノートは理由ごとに 1 行、同期そのものが失敗したときのエラーも 1 行にする。
+// 次にすること (obsidian-sync-mcp を確かめる、ノートのメモ欄のマーカーを戻す、など) は理由によって違い、
+// サーバーの文に書いてあるので、アプリでは案内を足さずにサーバーの文をそのまま出す。
+// アプリがサーバーの文言を見て案内を選ぶと、サーバーの文を変えたときに食い違うため
+fun buildNoteWarnings(texts: Texts, tally: SyncTally): List<String> {
+    val byReason = tally.failedNotes.groupBy { it.error.trim() }.toList()
+    val shown = byReason.take(MAX_NOTE_FAILURE_REASONS).map { (reason, notes) -> failedNotesLine(texts, reason, notes) }
+    val others = byReason.drop(MAX_NOTE_FAILURE_REASONS).sumOf { it.second.size }
+    return shown +
+        listOfNotNull(
+            others.takeIf { it > 0 }?.let { texts.get(R.string.sync_warning_notes_other_reasons, it) },
+            tally.noteErrors.distinct().takeIf { it.isNotEmpty() }?.let {
+                texts.get(R.string.sync_warning_note_errors, it.joinToString(texts.get(R.string.common_list_separator)))
+            },
+        )
+}
+
+// 同じ理由で書き込めなかったノートの 1 行。ノートはファイル名だけを示す (どのノートかが分かれば足り、行を短くするため)
+private fun failedNotesLine(texts: Texts, reason: String, notes: List<FailedNote>): String {
+    val names = notes.map { it.path.substringAfterLast('/').trim() }.filter { it.isNotEmpty() }.distinct()
+    val shownReason = reason.ifEmpty { texts.get(R.string.sync_warning_note_reason_unknown) }
+    if (names.isEmpty()) return texts.get(R.string.sync_warning_notes_failed_no_name, notes.size, shownReason)
+    val shownNames = names.take(MAX_FAILED_NOTE_NAMES).joinToString(texts.get(R.string.common_list_separator)) +
+        if (names.size > MAX_FAILED_NOTE_NAMES) texts.get(R.string.sync_warning_notes_more_names, names.size - MAX_FAILED_NOTE_NAMES) else ""
+    return texts.get(R.string.sync_warning_notes_failed, notes.size, shownNames, shownReason)
+}
 
 // 保存されなかった日の注意の文。日付と理由だけを短く示す (健康データの値は載せない)。
 // 結果の文とは別の行に出すので、理由を短く切っても、この行そのものは切られない。保存されなかった日が無ければ null

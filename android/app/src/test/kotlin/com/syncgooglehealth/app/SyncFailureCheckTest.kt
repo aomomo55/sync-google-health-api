@@ -125,16 +125,51 @@ class SyncFailureCheckTest {
         assertNull(nextFailureStreak(third, attemptSucceeded(SyncStatus.OK, notesFailed = false), at(14)))
     }
 
+    // ノートの失敗の通知を、実際の注意の文 (サーバーの文を含む) から作る
+    private fun noteNotice(tally: SyncTally): FailureNotice {
+        val cause = buildNoteWarnings(TestTexts, tally).joinToString(WARNING_LINE_SEPARATOR)
+        return failureNotice(TestTexts, SyncStatus.OK, cause, "2026/01/10 06:00", sleepUnchecked = true)
+    }
+
+    private fun occurrences(text: String, word: String): Int = text.windowed(word.length).count { it == word }
+
     @Test
-    fun noteFailureNoticeSaysDataIsSavedAndWhatToDo() {
-        val notice = failureNotice(TestTexts, SyncStatus.OK, "ノート2件を書き込めませんでした", "2026/01/10 06:00", sleepUnchecked = true)
+    fun noteFailureNoticeSaysDataIsSavedAndPointsToTheCause() {
+        val tally = SyncTally().add(
+            3,
+            IngestOk(3, NotesResult(0, 0, listOf(FailedNote("Health/Daily/2026-01-05.md", ServerMessages.NOTE_FAILURE)), null)),
+        )
+        val notice = noteNotice(tally)
         assertEquals("ノートを書き込めていません", notice.title)
         assertTrue(notice.text.contains("2026/01/10 06:00"))
-        assertTrue(notice.detail.contains("原因: ノート2件を書き込めませんでした"))
-        assertTrue(notice.detail.contains("健康データはサーバーに保存できていて"))
-        assertTrue(notice.detail.contains("obsidian-sync-mcp"))
-        assertTrue(notice.detail.contains("同じ期間をもう一度送って"))
+        assertTrue(notice.detail, notice.detail.contains("原因: ノート1件（2026-01-05.md）を書き込めませんでした"))
+        assertTrue(notice.detail, notice.detail.contains("ノートだけを書き込めていません"))
+        // 次にすることはサーバーの文の 1 回だけで、アプリの文でくり返さない
+        assertEquals(notice.detail, 1, occurrences(notice.detail, "obsidian-sync-mcp"))
+        assertEquals(notice.detail, 1, occurrences(notice.detail, "作り直"))
         // ノートだけの失敗では睡眠の未反映を判定できているので、睡眠の通知が出ないとは書かない
         assertFalse(notice.detail.contains("睡眠"))
+    }
+
+    @Test
+    fun noteSyncErrorNoticeDoesNotRepeatTheNextStep() {
+        val tally = SyncTally().add(3, IngestOk(3, NotesResult(0, 0, emptyList(), ServerMessages.SYNC_FAILURE)))
+        val notice = noteNotice(tally)
+        assertTrue(notice.detail, notice.detail.contains("原因: ノートの書き込みでエラー: ノートの同期に失敗しました"))
+        assertEquals(notice.detail, 1, occurrences(notice.detail, "obsidian-sync-mcp"))
+        assertEquals(notice.detail, 1, occurrences(notice.detail, "作り直"))
+    }
+
+    @Test
+    fun missingMemoMarkerNoticeDoesNotSuggestCheckingTheServer() {
+        // メモ欄のマーカーが無いのは送り直しでは直らない。サーバーの文にある直し方だけを出す
+        val tally = SyncTally().add(
+            1,
+            IngestOk(1, NotesResult(0, 0, listOf(FailedNote("Health/Daily/2026-01-05.md", ServerMessages.MEMO_MARKER_MISSING)), null)),
+        )
+        val notice = noteNotice(tally)
+        assertTrue(notice.detail, notice.detail.contains("マーカーの行を戻す"))
+        assertFalse(notice.detail, notice.detail.contains("obsidian-sync-mcp"))
+        assertFalse(notice.detail, notice.detail.contains("送り直"))
     }
 }
