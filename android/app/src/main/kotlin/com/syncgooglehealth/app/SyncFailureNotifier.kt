@@ -14,9 +14,9 @@ object SyncFailureNotifier {
     private const val CHANNEL_ID = "sync_failure"
     private const val NOTIFICATION_ID = 1002
 
-    fun notify(context: Context, notice: FailureNotice) {
-        // 通知の権限が無ければ何もしない
-        if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+    // 通知を出したら true。通知の権限が無ければ何もせず false
+    fun notify(context: Context, notice: FailureNotice): Boolean {
+        if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(
             // 音を鳴らさない (寝ている間に起こさないため。ADR 0022 と同じ)
@@ -41,6 +41,7 @@ object SyncFailureNotifier {
             .setAutoCancel(true)
             .build()
         manager.notify(NOTIFICATION_ID, notification)
+        return true
     }
 
     fun cancel(context: Context) {

@@ -9,6 +9,7 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
+import kotlin.coroutines.cancellation.CancellationException
 
 enum class SyncStatus { OK, AUTH_ERROR, RETRYABLE, FAILED }
 
@@ -17,7 +18,8 @@ data class SyncOutcome(
     val message: String,
     // 送った範囲に今日 (起床した日) の睡眠があったか。送信が成功したときだけ意味を持つ
     val hasTodaySleep: Boolean = false,
-    // 成功したが注意が必要なこと。結果の文に埋もれないよう、画面では別の行に WARNING で出す
+    // 成功したが注意が必要なこと。結果の文に埋もれないよう、画面では別の行に WARNING で出す。
+    // 複数あるときは WARNING_LINE_SEPARATOR で区切り、1 つずつ別の行にする
     val warning: String? = null,
 )
 
@@ -34,6 +36,9 @@ object SyncRunner {
         val texts = ContextTexts(context)
         val outcome = try {
             execute(context, texts, store, days, requireBackground, startDate, onProgress)
+        } catch (e: CancellationException) {
+            // ワーカーの停止や画面側の取り消しは失敗ではないので、記録も通知もせずに投げ直す
+            throw e
         } catch (e: SecurityException) {
             SyncOutcome(SyncStatus.FAILED, texts.get(R.string.sync_message_permission_missing))
         } catch (e: Exception) {
@@ -74,8 +79,10 @@ object SyncRunner {
                     lastSuccess = store.syncHistory().lastSuccessMillis?.let { formatTime(context, it) },
                     sleepUnchecked = now.hour in window,
                 )
-                SyncFailureNotifier.notify(context, notice)
-                store.lastSyncFailureNotified = now.toLocalDate()
+                // 通知を出せなかった日は記録しない (権限を許可した後の送信で出せるようにする)
+                if (SyncFailureNotifier.notify(context, notice)) {
+                    store.lastSyncFailureNotified = now.toLocalDate()
+                }
             }
             SyncFailureAction.CANCEL -> SyncFailureNotifier.cancel(context)
             SyncFailureAction.NONE -> Unit
@@ -152,7 +159,7 @@ object SyncRunner {
 
         val message = buildSyncMessage(texts, tally, includeNutrition)
         val note = if (skippedDays > 0) texts.get(R.string.sync_message_history_skipped, readFrom, skippedDays) else ""
-        return SyncOutcome(SyncStatus.OK, message + note, hasTodaySleep, buildRejectedWarning(texts, tally))
+        return SyncOutcome(SyncStatus.OK, message + note, hasTodaySleep, buildSyncWarning(texts, tally))
     }
 
     fun formatTime(context: Context, millis: Long): String =

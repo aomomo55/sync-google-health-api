@@ -608,14 +608,14 @@ class SyncMessageTest {
     @Test
     fun unchangedWhenNothingRejected() {
         val t = SyncTally().add(3, IngestOk(3, notes))
-        assertEquals("3日分を送信しました / ノート 更新2・変更なし1・失敗0", buildSyncMessage(TestTexts, t, includeNutrition = true))
+        assertEquals("3日分を送信しました / ノート 更新2・変更なし1", buildSyncMessage(TestTexts, t, includeNutrition = true))
     }
 
     @Test
-    fun nutritionAndNoteError() {
+    fun noteFailuresAreNotInTheResultLine() {
         val t = SyncTally().add(1, IngestOk(1, NotesResult(0, 0, 1, "boom")))
         assertEquals(
-            "1日分を送信しました（栄養は権限が無いため送っていません） / ノート 更新0・変更なし0・失敗1 / ノートエラー: boom",
+            "1日分を送信しました（栄養は権限が無いため送っていません） / ノート 更新0・変更なし0",
             buildSyncMessage(TestTexts, t, includeNutrition = false),
         )
     }
@@ -623,13 +623,60 @@ class SyncMessageTest {
     @Test
     fun rejectedDaysAreNotInTheResultLine() {
         val t = SyncTally().add(35, IngestOk(34, notes, listOf(RejectedDay("2026-01-05", "歩数が範囲外です"))))
-        assertEquals("35日分を送信しました / ノート 更新2・変更なし1・失敗0", buildSyncMessage(TestTexts, t, includeNutrition = true))
+        assertEquals("35日分を送信しました / ノート 更新2・変更なし1", buildSyncMessage(TestTexts, t, includeNutrition = true))
     }
 
     @Test
     fun noWarningWhenNothingRejected() {
         val t = SyncTally().add(3, IngestOk(3, notes))
         assertNull(buildRejectedWarning(TestTexts, t))
+    }
+
+    @Test
+    fun noSyncWarningWhenEverythingSucceeded() {
+        val t = SyncTally().add(3, IngestOk(3, notes)).add(1, IngestOk(1, null))
+        assertEquals(emptyList<String>(), buildNoteWarnings(TestTexts, t))
+        assertNull(buildSyncWarning(TestTexts, t))
+    }
+
+    @Test
+    fun failedNoteCountGoesToTheWarning() {
+        val t = SyncTally()
+            .add(30, IngestOk(30, NotesResult(28, 0, 2, null)))
+            .add(5, IngestOk(5, NotesResult(4, 0, 1, null)))
+        assertEquals(
+            "ノート3件を書き込めませんでした（健康データは保存済みです）。同じ期間をもう一度送るとノートを作り直します。" +
+                "続くときは、サーバーで obsidian-sync-mcp が動いているかを確かめてください",
+            buildSyncWarning(TestTexts, t),
+        )
+    }
+
+    @Test
+    fun noteErrorGoesToTheWarningOnce() {
+        val t = SyncTally()
+            .add(30, IngestOk(30, NotesResult(0, 0, 0, "ノートの同期に失敗しました")))
+            .add(5, IngestOk(5, NotesResult(0, 0, 0, "ノートの同期に失敗しました")))
+        assertEquals("ノートの書き込みでエラー: ノートの同期に失敗しました", buildSyncWarning(TestTexts, t))
+    }
+
+    @Test
+    fun failedCountAndErrorAreSeparateLines() {
+        val t = SyncTally()
+            .add(30, IngestOk(30, NotesResult(29, 0, 1, null)))
+            .add(5, IngestOk(5, NotesResult(0, 0, 0, "boom")))
+        val lines = buildNoteWarnings(TestTexts, t)
+        assertEquals(2, lines.size)
+        assertTrue(lines[0], lines[0].startsWith("ノート1件を書き込めませんでした"))
+        assertEquals("ノートの書き込みでエラー: boom", lines[1])
+    }
+
+    @Test
+    fun rejectedWarningComesBeforeNoteWarning() {
+        val t = SyncTally().add(2, IngestOk(1, NotesResult(0, 0, 1, null), listOf(RejectedDay("2026-01-05", "歩数が範囲外です"))))
+        val lines = buildSyncWarning(TestTexts, t).orEmpty().split(WARNING_LINE_SEPARATOR)
+        assertEquals(2, lines.size)
+        assertEquals(buildRejectedWarning(TestTexts, t), lines[0])
+        assertTrue(lines[1], lines[1].startsWith("ノート1件を書き込めませんでした"))
     }
 
     @Test

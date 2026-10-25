@@ -96,8 +96,9 @@
     <string name="sync_message_rejected_more_dates">" ほか%1$d日"</string>
     <string name="sync_message_rejected_reasons">" / 理由: %1$s"</string>
     <string name="sync_message_rejected_more_reasons">" ほか"</string>
-    <string name="sync_message_notes">" / ノート 更新%1$d・変更なし%2$d・失敗%3$d"</string>
-    <string name="sync_message_note_errors">" / ノートエラー: %1$s"</string>
+    <string name="sync_message_notes">" / ノート 更新%1$d・変更なし%2$d"</string>
+    <string name="sync_warning_notes_failed">ノート%1$d件を書き込めませんでした（健康データは保存済みです）。同じ期間をもう一度送るとノートを作り直します。続くときは、サーバーで obsidian-sync-mcp が動いているかを確かめてください</string>
+    <string name="sync_warning_note_errors">ノートの書き込みでエラー: %1$s</string>
     <string name="sync_message_history_skipped">（履歴の権限が無いため、%1$s より前の %2$d 日分は読まずに送っていません）</string>
     <string name="sync_message_permission_missing">ヘルスコネクトの権限が不足しています。「権限を付与」を押してください</string>
     <string name="sync_message_unexpected_error">予期しないエラー: %1$s %2$s</string>
