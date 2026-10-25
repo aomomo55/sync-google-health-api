@@ -2,13 +2,9 @@ package com.syncgooglehealth.app
 
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
-import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
-import java.time.ZoneId
-import java.util.Date
-import java.util.Locale
 
 enum class SyncStatus { OK, AUTH_ERROR, RETRYABLE, FAILED }
 
@@ -62,11 +58,10 @@ object SyncRunner {
         nowMillis: Long,
         background: Boolean,
     ) {
-        val zone = ZoneId.systemDefault()
         val window = store.sleepCheckWindow
-        when (syncFailureAction(nowMillis, zone, streak, background, store.lastSyncFailureNotified, window)) {
+        when (syncFailureAction(nowMillis, CALENDAR_ZONE, streak, background, store.lastSyncFailureNotified, window)) {
             SyncFailureAction.NOTIFY -> {
-                val now = Instant.ofEpochMilli(nowMillis).atZone(zone)
+                val now = Instant.ofEpochMilli(nowMillis).atZone(CALENDAR_ZONE)
                 val notice = failureNotice(
                     texts = ContextTexts(context),
                     status = outcome.status,
@@ -83,7 +78,7 @@ object SyncRunner {
     }
 
     private fun updateMissingSleepNotice(context: Context, store: SettingsStore, hasTodaySleep: Boolean, background: Boolean) {
-        val now = LocalDateTime.now(ZoneId.systemDefault())
+        val now = LocalDateTime.now(CALENDAR_ZONE)
         val showing = MissingSleepNotifier.isShowing(context)
         when (missingSleepAction(now, hasTodaySleep, background, store.lastMissingSleepNotified, showing, store.sleepCheckWindow)) {
             MissingSleepAction.NOTIFY -> {
@@ -125,8 +120,7 @@ object SyncRunner {
         }
 
         val includeNutrition = PermissionPolicy.canReadNutrition(granted)
-        val zone = ZoneId.systemDefault()
-        val to = LocalDate.now(zone)
+        val to = LocalDate.now(CALENDAR_ZONE)
         // 開始日の指定があればそれを使い、無ければ直近 days 日
         val from = startDate ?: to.minusDays(days - 1L)
         val readFrom = readableStart(from, to, PermissionPolicy.canReadHistory(granted))
@@ -156,5 +150,5 @@ object SyncRunner {
     }
 
     fun formatTime(context: Context, millis: Long): String =
-        if (millis == 0L) context.getString(R.string.sync_time_never) else SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.JAPAN).format(Date(millis))
+        if (millis == 0L) context.getString(R.string.sync_time_never) else formatCalendarTime(Instant.ofEpochMilli(millis))
 }

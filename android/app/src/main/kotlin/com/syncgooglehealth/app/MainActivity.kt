@@ -475,7 +475,7 @@ fun MainScreen() {
             modifier = Modifier.fillMaxWidth(),
         ) { Text(stringResource(R.string.sync_backfill_button, BACKFILL_SYNC_DAYS)) }
 
-        val today = LocalDate.now()
+        val today = LocalDate.now(CALENDAR_ZONE)
         OutlinedButton(
             onClick = { showDatePicker = true },
             enabled = sdkOk && !running,
