@@ -414,13 +414,6 @@ class IngestResponseTest {
         assertEquals("bad", parseErrorMessage("""{"error":"bad"}"""))
         assertNull(parseErrorMessage("not json"))
     }
-
-    @Test
-    fun validatesControlCharactersInToken() {
-        assertTrue(SettingsStore.isValidToken("abc123-_"))
-        assertFalse(SettingsStore.isValidToken("abc\n"))
-        assertFalse(SettingsStore.isValidToken(""))
-    }
 }
 
 class IngestClassifyTest {

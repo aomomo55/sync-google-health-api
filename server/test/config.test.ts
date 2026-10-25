@@ -157,6 +157,17 @@ describe("API_TOKEN", () => {
     );
   });
 
+  // Android の保存前の検査（SettingsInput.kt の isValidToken）と同じ規則。同じ入力を Android のテストにも置く
+  it("ゼロ幅スペースや全角文字は拒否する", () => {
+    for (const bad of [
+      `${"s".repeat(16)}\u200b${"s".repeat(16)}`,
+      `${"s".repeat(32)}ａ`,
+      `${"s".repeat(16)}\u3000${"s".repeat(16)}`,
+    ]) {
+      expect(() => loadConfig({ ...BASE, API_TOKEN: bad })).toThrow(/API_TOKEN/);
+    }
+  });
+
   it("英数字と . _ ~ + / - と末尾の = は受け付ける", () => {
     const ok = `Ab0._~+/-${"x".repeat(24)}==`;
     expect(loadConfig({ ...BASE, API_TOKEN: ok }).API_TOKEN).toBe(ok);

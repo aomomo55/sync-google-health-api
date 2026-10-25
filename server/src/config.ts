@@ -15,6 +15,7 @@ const FLY_PRIVATE_HOST_SUFFIXES = [".internal", ".flycast"];
 
 // 端末に貼り付けたときに紛れ込む制御文字（ESC など）は HTTP ヘッダーに使えず、
 // 実行時に原因の分かりにくい "fetch failed" になるため起動時に弾く
+// Android の保存前の検査（android/.../SettingsInput.kt の isValidToken）も同じ規則にしている
 const token = (min: number) =>
   z
     .string()

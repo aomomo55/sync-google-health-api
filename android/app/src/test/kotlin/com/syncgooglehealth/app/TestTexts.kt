@@ -31,6 +31,7 @@ object TestTexts : Texts {
     // 円記号 (\n, \', \", \\) は対応する文字にする
     private fun unescape(text: String): String {
         val out = StringBuilder()
+        // 1 文字ずつ読む状態機械。引用の中か外かと、円記号の次の文字を読み飛ばす位置を持つので var にする
         var quoted = false
         var i = 0
         while (i < text.length) {
