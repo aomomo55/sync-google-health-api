@@ -120,6 +120,16 @@ describe("summarizeMonth: 睡眠の記録が無い日", () => {
     expect(m.sleep.missing_dates).toEqual(["2026-01-01"]);
   });
 
+  it("ベッド内時間だけの睡眠は記録ありとして数える（日次ノートと同じ判定）", () => {
+    const m = summarizeMonth("2026-01", [
+      { date: "2026-01-01", activity: { steps: 1 }, sleep: { in_bed_minutes: 450 } },
+      sleepDay("2026-01-02", "2026-01-01T23:00:00+09:00"),
+    ]);
+    expect(m.sleep.missing_dates).toEqual([]);
+    expect(m.sleep.nights).toBe(2);
+    expect(m.sleep.avg_in_bed_hours).toBe(7.5);
+  });
+
   it("日次データそのものが無い日は含めない", () => {
     const m = summarizeMonth("2026-01", [
       { date: "2026-01-01", activity: { steps: null } },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DailySummary } from "../src/domain/daily.js";
-import { summarizeMonth } from "../src/domain/monthly.js";
+import { BEDTIME_DAY_BOUNDARY_HOURS, summarizeMonth } from "../src/domain/monthly.js";
 import { GENERATED_NOTICE } from "../src/notes/format.js";
 import {
   MEMO_MARKER,
@@ -290,6 +290,25 @@ ${MEMO_MARKER}
     expect(latest).toContain("睡眠時間h:\n");
   });
 
+  it("睡眠: ベッド内時間だけの日は「記録なし」にせず、ベッド内時間を出す", () => {
+    const day = { date: "2026-03-15", activity: { steps: 5000 }, sleep: { in_bed_minutes: 450 } };
+    const note = renderDailyNote(day, { prev: "2026-03-14", next: "2026-03-16" });
+    expect(note).toContain("- 睡眠: ベッド内 7時間30分\n");
+    expect(note).not.toContain("- 睡眠: 記録なし");
+    expect(note).toContain("ベッド内時間h: 7.5\n");
+    // 月次の「睡眠の記録が無い日」とも食い違わない
+    expect(summarizeMonth("2026-03", [day], "2026-03-16").sleep.missing_dates).toEqual([]);
+  });
+
+  it("睡眠: 睡眠時間があればベッド内時間は出さない", () => {
+    const note = renderDailyNote(
+      { date: "2026-03-15", sleep: { asleep_minutes: 400, in_bed_minutes: 450 } },
+      {},
+    );
+    expect(note).toContain("- 睡眠: 睡眠 6時間40分\n");
+    expect(note).not.toContain("- 睡眠: ベッド内");
+  });
+
   it("睡眠時刻は入力オフセットによらず JST", () => {
     const note = renderDailyNote(
       {
@@ -512,6 +531,14 @@ describe("静的ノート", () => {
     expect(d).toContain("![[Health/_bases/睡眠ログ.base#直近90夜]]");
     expect(d).toContain("stacked: true");
     expect(d).toContain("h + 24");
+    // 就寝の日の境目は月次の平均就寝時刻と同じ定数から埋め込み、出力は従来どおり 12 時
+    expect(BEDTIME_DAY_BOUNDARY_HOURS).toBe(12);
+    expect(d).toContain("(h < 12 ? h + 24 : h)");
+    expect(d).toContain(
+      'const timeAxis = { min: 20, max: 34, title: { display: true, text: "時刻" }, ticks: { stepSize: 2,',
+    );
+    expect(d).toContain("suggestedMax: 9,");
+    expect(d).toBe(renderSleepDashboard());
     expect(d).toContain("[[Health/ヘルスケアダッシュボード|ヘルスケアダッシュボード]]");
     expect(jsBlocks(d)).toHaveLength(6);
     expect(d).toContain(GENERATED_NOTICE);

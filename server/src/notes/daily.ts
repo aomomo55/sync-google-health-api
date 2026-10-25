@@ -1,4 +1,9 @@
-import { type DailySummary, hasNutritionRecord, isSleepPending } from "../domain/daily.js";
+import {
+  type DailySummary,
+  hasNutritionRecord,
+  hasSleepRecord,
+  isSleepPending,
+} from "../domain/daily.js";
 import { round } from "../shared/rounding.js";
 import { fmtDuration, fmtNum, jstHm, monthLabelJa, numOrNull, weekdayJa } from "./format.js";
 import { linkTarget, notePaths } from "./paths.js";
@@ -138,12 +143,15 @@ function summaryLines(day: DailySummary, nav: DailyNav): string[] {
   const start = jstHm(s?.start);
   const end = jstHm(s?.end);
   const asleep = numOrNull(s?.asleep_minutes);
-  if (start || end || asleep !== null) {
+  const inBed = numOrNull(s?.in_bed_minutes);
+  if (hasSleepRecord(s)) {
     const parts: string[] = [];
     if (start && end) parts.push(`${start} → ${end}`);
     else if (start) parts.push(`就寝 ${start}`);
     else if (end) parts.push(`起床 ${end}`);
+    // 睡眠時間が無い日は、代わりにベッド内時間を出す（ベッド内時間だけが残った日も記録ありとして見せる）
     if (asleep !== null) parts.push(`睡眠 ${fmtDuration(asleep)}`);
+    else if (inBed !== null) parts.push(`ベッド内 ${fmtDuration(inBed)}`);
     const stages: string[] = [];
     const deep = numOrNull(s?.deep_minutes);
     const light = numOrNull(s?.light_minutes);
