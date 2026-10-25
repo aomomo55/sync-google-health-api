@@ -197,6 +197,29 @@ describe("buildSleepByDate", () => {
     expect(c.sleep).not.toHaveProperty("rem_minutes");
   });
 
+  it("ステージが無くても awake_minutes を出す（Android と同じ入力・結果）", () => {
+    // ステージ 4/5/6 を含まない記録だけの夜。1 セッションなら 0 分
+    const single = buildSleepByDate([seg(A, 0, 420, 2)]).get("2026-03-10")!;
+    expect(single.sleep).toMatchObject({
+      in_bed_minutes: 420,
+      awake_minutes: 0,
+      asleep_minutes: 420,
+    });
+
+    // 間隔 120 分は SESSION_GAP_MS を超えるので別のセッションになり、一晩に結合して間隔を中途覚醒に数える
+    const segs = [seg(A, 0, 120, 2), seg(A, 240, 420, 2)];
+    expect(sessionize(segs)).toHaveLength(2);
+    const merged = buildSleepByDate(segs).get("2026-03-10")!;
+    expect(merged.sleep).toMatchObject({
+      in_bed_minutes: 420,
+      awake_minutes: 120,
+      asleep_minutes: 300,
+    });
+    expect(merged.sleep).not.toHaveProperty("deep_minutes");
+    expect(merged.sleep).not.toHaveProperty("light_minutes");
+    expect(merged.sleep).not.toHaveProperty("rem_minutes");
+  });
+
   it("最長セッションを main とし、他は昼寝として asleep 分を合計する", () => {
     const r = buildSleepByDate([
       seg(A, 60, 420, 4), // 6h main
