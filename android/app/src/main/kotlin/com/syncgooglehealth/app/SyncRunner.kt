@@ -21,6 +21,8 @@ data class SyncOutcome(
     // 成功したが注意が必要なこと。結果の文に埋もれないよう、画面では別の行に WARNING で出す。
     // 複数あるときは WARNING_LINE_SEPARATOR で区切り、1 つずつ別の行にする
     val warning: String? = null,
+    // ノートを書き込めなかったときの文 (送信が成功したときだけ)。書き込めていれば null
+    val noteFailure: String? = null,
 )
 
 object SyncRunner {
@@ -48,12 +50,14 @@ object SyncRunner {
             )
         }
         val now = System.currentTimeMillis()
-        val succeeded = outcome.status == SyncStatus.OK
+        val notesFailed = outcome.noteFailure != null
+        val succeeded = attemptSucceeded(outcome.status, notesFailed)
         val streak = nextFailureStreak(store.syncHistory().failureStreak, succeeded, now)
-        store.recordSync(now, outcome.message, succeeded, streak, outcome.warning)
+        store.recordSync(now, outcome.message, succeeded, streak, outcome.warning, notesFailed)
         // 通知は補助なので、失敗しても送信の結果は変えない
         runCatching { updateFailureNotice(context, store, outcome, streak, now, requireBackground) }
-        if (succeeded) {
+        // 睡眠の有無はデータを送れていれば分かるので、ノートの失敗にかかわらず判定する
+        if (outcome.status == SyncStatus.OK) {
             runCatching { updateMissingSleepNotice(context, store, outcome.hasTodaySleep, requireBackground) }
         }
         return outcome
@@ -75,7 +79,7 @@ object SyncRunner {
                 val notice = failureNotice(
                     texts = ContextTexts(context),
                     status = outcome.status,
-                    message = outcome.message,
+                    message = outcome.noteFailure ?: outcome.message,
                     lastSuccess = store.syncHistory().lastSuccessMillis?.let { formatTime(context, it) },
                     sleepUnchecked = now.hour in window,
                 )
@@ -159,7 +163,8 @@ object SyncRunner {
 
         val message = buildSyncMessage(texts, tally, includeNutrition)
         val note = if (skippedDays > 0) texts.get(R.string.sync_message_history_skipped, readFrom, skippedDays) else ""
-        return SyncOutcome(SyncStatus.OK, message + note, hasTodaySleep, buildSyncWarning(texts, tally))
+        val noteFailure = buildNoteWarnings(texts, tally).joinToString(WARNING_LINE_SEPARATOR).ifEmpty { null }
+        return SyncOutcome(SyncStatus.OK, message + note, hasTodaySleep, buildSyncWarning(texts, tally), noteFailure)
     }
 
     fun formatTime(context: Context, millis: Long): String =

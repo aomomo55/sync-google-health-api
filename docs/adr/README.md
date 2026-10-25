@@ -29,10 +29,11 @@
 | [0023](0023-dependabot-docker-daily.md) | Docker のベースイメージの更新だけ Dependabot で毎日確かめる | 採用 |
 | [0024](0024-ux-review-in-docs-review.md) | UI・UX 観点のレビューの材料は docs/review/ に置き、REVIEW.md から参照する | 採用 |
 | [0025](0025-permission-status-on-main-screen.md) | 画面の権限の表示を、足りないものに合わせて出し分ける | 採用 |
-| [0026](0026-notify-sync-failures.md) | 自動送信の失敗が続いたら通知し、最後に成功した時刻を分けて出す | 採用 |
+| [0026](0026-notify-sync-failures.md) | 自動送信の失敗が続いたら通知し、最後に成功した時刻を分けて出す | 採用（ノートの書き込みの失敗の扱いを 0030 で更新） |
 | [0027](0027-recheck-missing-sleep-in-window.md) | 睡眠の未反映は時間帯の中の送信のたびに確かめ直し、「1 日 1 回」を利用者が消すまでにする | 採用 |
 | [0028](0028-show-missing-sleep-and-nutrition-in-notes.md) | 日次ノートで、睡眠と食事のデータが無いことを明示する | 採用 |
 | [0029](0029-deploy-from-actions-on-demand.md) | サーバーのデプロイを、手で起動する GitHub Actions でも行えるようにする | 採用 |
+| [0030](0030-count-note-write-failures-as-sync-failures.md) | ノートの書き込みの失敗も送信の失敗に数え、続いたら同じ仕組みで通知する | 採用 |
 
 ## 書き方
 

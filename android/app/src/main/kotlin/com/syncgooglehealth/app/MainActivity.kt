@@ -145,7 +145,11 @@ private fun SyncHistoryText(history: SyncHistory) {
     val successText = success?.let { SyncRunner.formatTime(context, it) } ?: stringResource(R.string.sync_history_no_record)
     Text(stringResource(R.string.sync_history_last_success, successText))
     if (attempt != null && attempt != success) {
-        val failedSuffix = if (history.lastFailed) stringResource(R.string.sync_history_failed_suffix) else ""
+        val failedSuffix = when {
+            history.lastFailed -> stringResource(R.string.sync_history_failed_suffix)
+            history.lastNotesFailed -> stringResource(R.string.sync_history_notes_failed_suffix)
+            else -> ""
+        }
         Text(stringResource(R.string.sync_history_last_attempt, SyncRunner.formatTime(context, attempt), failedSuffix))
     }
     history.lastResult?.let { result ->

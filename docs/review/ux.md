@@ -35,7 +35,7 @@
 | 通知の権限が無い・拒否済み | 通知が出ないことに気づけるか。OS がダイアログを出さなくなったあとの手段が示されるか | `MissingSleepNotifier.kt`、`MainActivity.kt` |
 | サーバーが落ちている・5xx | 自動で再試行されることが分かるか。落ち続けたときに気づけるか | `IngestClient.kt`、`SyncWorker.kt`、`SyncFailureCheck.kt` |
 | ネットワークにつながらない | 自動送信が静かに止まったときに気づけるか | `SyncWorker.kt` の実行条件 |
-| データは保存できたが、ノートの書き込みに失敗した | 送信が成功扱いになったときに、ノートが古いことに気づけるか。どのノートが、次に何をすれば直るかが分かるか | `server/src/routes/health.ts`、`server/src/sync/note-sync.ts`、`SyncMessage.kt` |
+| データは保存できたが、ノートの書き込みに失敗した | 送信が成功扱いになったときに、ノートが古いことに気づけるか。どのノートが、次に何をすれば直るかが分かるか | `server/src/routes/health.ts`、`server/src/sync/note-sync.ts`、`SyncMessage.kt`、`SyncRunner.kt`、`SyncFailureCheck.kt` |
 | 範囲外の値の日が保存されなかった | 長い結果の文に埋もれずに気づけるか | `server/src/routes/health.ts`、`SyncMessage.kt` |
 | 応答が遅い（自動停止からの起動、ノートの書き込みのやり直し） | 保存できているのに失敗に見えることがないか | `IngestClient.kt` のタイムアウト、`server/src/vault/` のやり直し |
 

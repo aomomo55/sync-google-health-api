@@ -119,17 +119,26 @@ class SettingsStore(context: Context) {
         lastSuccessMillis = prefs.getLong(KEY_LAST_SUCCESS, 0L).takeIf { it != 0L },
         lastResult = prefs.getString(KEY_LAST_RESULT, null)?.ifEmpty { null },
         lastWarning = prefs.getString(KEY_LAST_WARNING, null)?.ifEmpty { null },
+        lastNotesFailed = prefs.getBoolean(KEY_LAST_NOTES_FAILED, false),
         failureStreak = prefs.getInt(KEY_FAILURE_COUNT, 0).takeIf { it > 0 }?.let {
             FailureStreak(prefs.getLong(KEY_FAILURE_SINCE, 0L), it)
         },
     )
 
-    // 送信を試した結果を保存する。成功した時刻は、成功したときだけ更新する
-    fun recordSync(nowMillis: Long, message: String, succeeded: Boolean, streak: FailureStreak?, warning: String? = null) {
+    // 送信を試した結果を保存する。成功した時刻は、成功したとき (ノートも書き込めたとき) だけ更新する
+    fun recordSync(
+        nowMillis: Long,
+        message: String,
+        succeeded: Boolean,
+        streak: FailureStreak?,
+        warning: String?,
+        notesFailed: Boolean,
+    ) {
         val edit = prefs.edit()
             .putLong(KEY_LAST_TIME, nowMillis)
             .putString(KEY_LAST_RESULT, message)
             .putString(KEY_LAST_WARNING, warning)
+            .putBoolean(KEY_LAST_NOTES_FAILED, notesFailed)
             .putLong(KEY_FAILURE_SINCE, streak?.sinceMillis ?: 0L)
             .putInt(KEY_FAILURE_COUNT, streak?.count ?: 0)
         if (succeeded) edit.putLong(KEY_LAST_SUCCESS, nowMillis)
@@ -188,6 +197,7 @@ class SettingsStore(context: Context) {
         private const val KEY_SLEEP_CHECK_END = "sleep_check_end_hour"
         private const val KEY_LAST_RESULT = "last_result"
         private const val KEY_LAST_WARNING = "last_warning"
+        private const val KEY_LAST_NOTES_FAILED = "last_notes_failed"
         private const val KEY_NOTIFICATION_REQUESTED = "notification_permission_requested"
         private const val KEY_ALIAS = "api_token_key"
         private const val TRANSFORM = "AES/GCM/NoPadding"

@@ -97,4 +97,44 @@ class SyncFailureCheckTest {
         assertFalse(SyncHistory(at(9), at(9), "ok", null).lastFailed)
         assertTrue(SyncHistory(at(10), at(9), "ng", FailureStreak(at(10), 1)).lastFailed)
     }
+
+    @Test
+    fun historyTellsNoteFailureApartFromSendFailure() {
+        val history = SyncHistory(at(10), at(9), "ok", FailureStreak(at(10), 1), lastNotesFailed = true)
+        assertFalse(history.lastFailed)
+        assertTrue(history.lastNotesFailed)
+    }
+
+    @Test
+    fun noteFailureIsNotASuccess() {
+        assertTrue(attemptSucceeded(SyncStatus.OK, notesFailed = false))
+        assertFalse(attemptSucceeded(SyncStatus.OK, notesFailed = true))
+        assertFalse(attemptSucceeded(SyncStatus.RETRYABLE, notesFailed = false))
+        assertFalse(attemptSucceeded(SyncStatus.AUTH_ERROR, notesFailed = false))
+    }
+
+    @Test
+    fun noteFailuresCountTowardTheSameStreakAndNotify() {
+        // ノートの失敗と送信の失敗は同じ連続回数に数え、同じ条件で通知する
+        val first = nextFailureStreak(null, attemptSucceeded(SyncStatus.OK, notesFailed = true), at(10))
+        val second = nextFailureStreak(first, attemptSucceeded(SyncStatus.RETRYABLE, notesFailed = false), at(11))
+        val third = nextFailureStreak(second, attemptSucceeded(SyncStatus.OK, notesFailed = true), at(13))
+        assertEquals(FailureStreak(at(10), 3), third)
+        assertEquals(SyncFailureAction.NOTIFY, action(at(13), third))
+        assertEquals(SyncFailureAction.NONE, action(at(10), first))
+        assertNull(nextFailureStreak(third, attemptSucceeded(SyncStatus.OK, notesFailed = false), at(14)))
+    }
+
+    @Test
+    fun noteFailureNoticeSaysDataIsSavedAndWhatToDo() {
+        val notice = failureNotice(TestTexts, SyncStatus.OK, "ノート2件を書き込めませんでした", "2026/01/10 06:00", sleepUnchecked = true)
+        assertEquals("ノートを書き込めていません", notice.title)
+        assertTrue(notice.text.contains("2026/01/10 06:00"))
+        assertTrue(notice.detail.contains("原因: ノート2件を書き込めませんでした"))
+        assertTrue(notice.detail.contains("健康データはサーバーに保存できていて"))
+        assertTrue(notice.detail.contains("obsidian-sync-mcp"))
+        assertTrue(notice.detail.contains("同じ期間をもう一度送って"))
+        // ノートだけの失敗では睡眠の未反映を判定できているので、睡眠の通知が出ないとは書かない
+        assertFalse(notice.detail.contains("睡眠"))
+    }
 }
