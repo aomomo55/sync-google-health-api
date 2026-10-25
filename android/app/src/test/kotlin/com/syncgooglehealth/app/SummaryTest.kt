@@ -185,7 +185,7 @@ class SleepAssignerTest {
         val sl = SleepAssigner.assign(listOf(s), TOKYO).values.single()
         assertEquals(420L, sl.inBedMinutes)
         assertEquals(420L, sl.asleepMinutes)
-        assertNull(sl.awakeMinutes)
+        assertEquals(0L, sl.awakeMinutes)
         assertNull(sl.deepMinutes)
         assertNull(sl.lightMinutes)
         assertNull(sl.remMinutes)
@@ -211,6 +211,44 @@ class SleepAssignerTest {
         assertEquals(60L, sl.deepMinutes)
         assertEquals(120L, sl.lightMinutes)
         assertEquals(50L, sl.remMinutes)
+    }
+
+    // サーバーの「ステージ 4/5/6 が無ければ deep/light/rem を省略する」(takeout-sleep.test.ts) と同じ入力・同じ規則
+    @Test
+    fun omitsBreakdownWhenOnlySleepingAndAwakeStages() {
+        val st = listOf(
+            stage(2, at(2026, 3, 10, 0), at(2026, 3, 10, 1)),          // sleeping 60
+            stage(0, at(2026, 3, 10, 1), at(2026, 3, 10, 1, 30)),      // unknown 30
+            stage(1, at(2026, 3, 10, 1, 30), at(2026, 3, 10, 1, 40)),  // awake 10
+        )
+        val s = SleepSessionInput("app.c", at(2026, 3, 10, 0), at(2026, 3, 10, 1, 40), st)
+        val sl = SleepAssigner.assign(listOf(s), TOKYO).values.single()
+        assertEquals(90L, sl.asleepMinutes)
+        assertEquals(10L, sl.awakeMinutes)
+        assertNull(sl.deepMinutes)
+        assertNull(sl.lightMinutes)
+        assertNull(sl.remMinutes)
+    }
+
+    // サーバーの「ステージが無くても awake_minutes を出す」(takeout-sleep.test.ts) と同じ入力・同じ規則
+    @Test
+    fun sendsAwakeWithoutStages() {
+        val single = SleepSessionInput("app.a", at(2026, 3, 10, 0), at(2026, 3, 10, 7), emptyList())
+        val sl = SleepAssigner.assign(listOf(single), TOKYO).values.single()
+        assertEquals(420L, sl.inBedMinutes)
+        assertEquals(0L, sl.awakeMinutes)
+        assertEquals(420L, sl.asleepMinutes)
+
+        // 2 時間 (MERGE_GAP) 以内の別のセッションを一晩に結合し、間隔の 120 分を中途覚醒に数える
+        val first = SleepSessionInput("app.a", at(2026, 3, 10, 0), at(2026, 3, 10, 2), emptyList())
+        val second = SleepSessionInput("app.a", at(2026, 3, 10, 4), at(2026, 3, 10, 7), emptyList())
+        val merged = SleepAssigner.assign(listOf(first, second), TOKYO).values.single()
+        assertEquals(420L, merged.inBedMinutes)
+        assertEquals(120L, merged.awakeMinutes)
+        assertEquals(300L, merged.asleepMinutes)
+        assertNull(merged.deepMinutes)
+        assertNull(merged.lightMinutes)
+        assertNull(merged.remMinutes)
     }
 
     @Test
@@ -342,7 +380,7 @@ class SleepAssignerTest {
         val sl = SleepAssigner.assign(listOf(first, joined), TOKYO).values.single()
         assertEquals(420L, sl.inBedMinutes)
         assertEquals(300L, sl.asleepMinutes)
-        assertNull(sl.awakeMinutes)
+        assertEquals(120L, sl.awakeMinutes)
         assertNull(sl.napMinutes)
 
         val apart = SleepSessionInput("a", at(2026, 3, 5, 4, 1), at(2026, 3, 5, 7), emptyList())
@@ -375,7 +413,8 @@ class SleepAssignerTest {
         val sl = SleepAssigner.assign(listOf(s), TOKYO).values.single()
         val day = DayAggregator.build(LocalDate.of(2026, 3, 5), TOKYO, RawDay(), sl)
         val keys = encode(day)["sleep"]!!.jsonObject.keys
-        assertEquals(setOf("start", "end", "asleep_minutes", "in_bed_minutes"), keys)
+        // 中途覚醒はステージが無くても送る（サーバーの Takeout 取り込みと同じ規則）
+        assertEquals(setOf("start", "end", "asleep_minutes", "in_bed_minutes", "awake_minutes"), keys)
     }
 }
 

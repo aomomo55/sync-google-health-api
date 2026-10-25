@@ -1,8 +1,7 @@
 import { isRealDate, monthKeyRange } from "../domain/dates.js";
 import { MemoMarkerMissingError } from "../notes/index.js";
 import type { HealthStore } from "../store/health-store.js";
-import type { VaultWriter } from "../vault/vault-writer.js";
-import { noteRootFromPrefix, VaultPathError } from "../vault/vault-writer.js";
+import type { VaultPathError, VaultWriter } from "../vault/vault-writer.js";
 import { type PlanItem, planNotes, splitValidDays } from "./plan.js";
 
 const INVALID_DATE_MESSAGE =
@@ -14,10 +13,17 @@ const DEFAULT_CONCURRENCY = 3;
 export const NOTE_FAILURE_MESSAGE =
   "Vault への書き込みに失敗しました。健康データは保存済みで、次の送信で送った日のノートは作り直されます。続くときは、obsidian-sync-mcp が動いているかとサーバーのログを確かめてください";
 
+// VaultWriter が、書き込み先のパスが許可範囲の外のときに投げるエラーの名前。
+// 型で VaultPathError の name と結び付け、綴りが食い違えば型検査で気付けるようにする
+const VAULT_PATH_ERROR_NAME: VaultPathError["name"] = "VaultPathError";
+
+const isVaultPathError = (e: unknown): e is VaultPathError =>
+  e instanceof Error && e.name === VAULT_PATH_ERROR_NAME;
+
 // 応答に載せるエラー文。利用者が対処できる既知のエラーだけ文面を返し、
 // それ以外（内部の通信エラーなど）は固定の文にする
 export function publicErrorMessage(e: unknown): string {
-  if (e instanceof MemoMarkerMissingError || e instanceof VaultPathError) return e.message;
+  if (e instanceof MemoMarkerMissingError || isVaultPathError(e)) return e.message;
   return NOTE_FAILURE_MESSAGE;
 }
 
@@ -165,18 +171,4 @@ async function mapLimit<T>(
     while (next < items.length) await fn(items[next++]!);
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-}
-
-// 書き込みを許可したフォルダ（VAULT_HEALTH_PREFIX）の下にノートを生成する NoteSync を作る。
-// 検証と生成で別のフォルダを使うと、すべての書き込みが拒否される
-export function createNoteSync(deps: {
-  store: HealthStore;
-  writer: VaultWriter;
-  prefix: string;
-}): NoteSync {
-  return new NoteSync({
-    store: deps.store,
-    writer: deps.writer,
-    root: noteRootFromPrefix(deps.prefix),
-  });
 }

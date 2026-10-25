@@ -289,3 +289,19 @@ describe("VAULT_HEALTH_PREFIX", () => {
     }
   });
 });
+
+describe("COUCHDB_HEALTH_DB", () => {
+  it("英小文字で始まり、英小文字・数字・_ $ ( ) + / - からなる名前は受け付ける", () => {
+    for (const db of ["h", "health_restore", "health2", "a$b(c)+d/e-f"]) {
+      expect(loadConfig({ ...BASE, COUCHDB_HEALTH_DB: db }).COUCHDB_HEALTH_DB).toBe(db);
+    }
+  });
+
+  it("空・大文字・英小文字以外で始まる名前・使えない文字を含む名前は、値を出さずに拒否する", () => {
+    for (const db of ["", "Health", "1health", "_users", "health db", "health.db", "health\n"]) {
+      const message = errorOf({ ...BASE, COUCHDB_HEALTH_DB: db });
+      expect(message).toMatch(/COUCHDB_HEALTH_DB: 英小文字で始まり/);
+      if (db !== "") expect(message).not.toContain(db);
+    }
+  });
+});

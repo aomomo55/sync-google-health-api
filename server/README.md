@@ -12,13 +12,12 @@ Android アプリから送られる日次ヘルスデータを受け取るサー
 | `COUCHDB_URL` | はい | - | CouchDB のベース URL（`https:`。`http:` は `localhost` / `127.0.0.1` / `[::1]` と、fly.io のプライベートネットワークのホスト（`.internal` / `.flycast`）のみ可。ユーザー名・パスワードは含めず `COUCHDB_USER` / `COUCHDB_PASSWORD` で指定）。[ADR 0019](../docs/adr/0019-restrict-couchdb-url-to-https.md) |
 | `COUCHDB_USER` | はい | - | CouchDB ユーザー（DB が既にあれば、管理者でなくその DB のメンバーのユーザーでよい） |
 | `COUCHDB_PASSWORD` | はい | - | CouchDB パスワード |
-| `COUCHDB_HEALTH_DB` | いいえ | `health` | データベース名（起動時に無ければ作成する。作るには管理者の権限が要り、作れなければ止まる） |
+| `COUCHDB_HEALTH_DB` | いいえ | `health` | データベース名（英小文字で始まり、英小文字・数字・`_ $ ( ) + / -` だけからなる。起動時に無ければ作成する。作るには管理者の権限が要り、作れなければ止まる） |
 | `OBSIDIAN_MCP_URL` | いいえ | - | obsidian-sync-mcp の `/mcp` URL（`https:`。`http:` は `localhost` / `127.0.0.1` / `[::1]` のみ可。ユーザー名・パスワードを含む URL は不可。`OBSIDIAN_MCP_TOKEN` と両方指定するか両方未設定） |
 | `OBSIDIAN_MCP_TOKEN` | いいえ | - | obsidian-sync-mcp 用 Bearer トークン（16文字以上） |
 | `VAULT_HEALTH_PREFIX` | いいえ | `Health/` | Vault 内で書き込みを許可するフォルダ。ノートもこの下に生成する（文字・数字・空白・`_`・`-` からなるフォルダ名を `/` で区切る。先頭の `/`、`.` / `..`、空のフォルダ名、フォルダ名の前後の空白は不可） |
 | `BACKUP_TOKEN` | いいえ | - | `GET /backup/health` 専用の Bearer トークン（`API_TOKEN` と同じ規則で、`API_TOKEN` とは別の値）。`BACKUP_AGE_RECIPIENT` と両方指定するか両方未設定 |
 | `BACKUP_AGE_RECIPIENT` | いいえ | - | バックアップを暗号化する age の公開鍵（`age1...`）。秘密鍵はサーバーに置かない（[docs/backup.md](../docs/backup.md)） |
-| `NODE_ENV` | いいえ | - | 実行環境 |
 
 ローカル開発では `server/dev.vars`（gitignore 済み）に `KEY=value` 形式で書く。
 
@@ -66,7 +65,7 @@ CLI（`pnpm import:takeout` / `pnpm sync:notes` / `pnpm restore:backup`）は下
   - 範囲の誤り（数値の上限超え、小数の歩数、睡眠の `end` が `start` より前）はその日だけを拒否し、他の日は通常どおり保存・同期する。拒否した日は `rejected` に日付と、項目名を挙げた日本語のエラー文で載る（値は載らない）。`rejected` は常にあり、無ければ空配列。全日が拒否されても 200 で `written:0`
   - 睡眠の `start <= end` は受け取ったデータの中だけで確かめる。片方だけを送ると、保存済みの値とマージした後の前後関係は保証されないので、クライアントは両方を一緒に送る
   - `failed[].error` と `notes.error` は、メモ欄のマーカー欠落と Vault パスの違反以外は固定の文で、詳細はサーバーのログに出る
-- `POST /api/notes/sync` — `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","includeStatic":bool?}`（最大400日。本文は 16 KB まで、超えると 413）。範囲内のノートを再生成し、内容が同じものは書き込まない。`{"written":n,"unchanged":n,"failed":[...]}`。Vault 未設定は 503
+- `POST /api/notes/sync` — `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","includeStatic":bool?}`（最大400日。本文は 16 KB まで、超えると 413）。範囲内のノートを再生成し、内容が同じものは書き込まない。`{"written":n,"unchanged":n,"failed":[...]}`。`OBSIDIAN_MCP_URL` と `OBSIDIAN_MCP_TOKEN` が未設定なら経路を作らない（404）
 - `GET /api/summary?date=YYYY-MM-DD` または `?from=&to=`（最大400日）— `{"days":[...]}`。`types=activity,heart_rate,body,sleep,nutrition` で絞り込み
 - `GET /api/summary/monthly?from=YYYY-MM&to=YYYY-MM`（最大120か月）— 月次集計 `{"months":[...]}`（データのある月のみ）。`sleep.missing_dates` は、日次データはあるが睡眠の記録が無い日（`YYYY-MM-DD`、昇順）。翌日以降のデータがまだ無い最新の日は「まだ届いていない」ので含めない（[ADR 0028](../docs/adr/0028-show-missing-sleep-and-nutrition-in-notes.md)）。月次ノートでは frontmatter の `睡眠なしの日` と、本文の「睡眠の記録が無い日」になる
 - `GET /backup/health` — `Authorization: Bearer <BACKUP_TOKEN>` 必須（`API_TOKEN` では取れない）。全期間の日次データを JSON → gzip → age で暗号化して返す（`application/octet-stream`、`X-Backup-Days` に日数）。`BACKUP_TOKEN` と `BACKUP_AGE_RECIPIENT` が未設定なら 404。復元は `pnpm restore:backup`（[docs/backup.md](../docs/backup.md)）
@@ -120,6 +119,7 @@ pnpm sync:notes --from 2022-01-01 --to 2026-09-30 --api-url http://localhost:808
 - `--from` / `--to`（YYYY-MM-DD）と `--api-url` は必須
 - `--include-static` は最初のチャンクでダッシュボードと Bases も書く
 - `--days` で 1 回に同期する日数を変えられる（1〜400、既定 120）。応答が遅いときは小さくする
+- サーバーが 404 を返したら（Vault が未設定、サーバーが古い版、`--api-url` にパスを含めている、のいずれか）、やり直さずにその場で止まり、終了コード 1
 - 通信エラーと 5xx は、5 秒・15 秒・30 秒あけて最大 3 回やり直す（同期は何度やっても同じ結果になるため）。タイムアウト（下記）はやり直さず、その区間を失敗として次の区間へ進む
 - チャンクごとの件数と合計を表示し、失敗があれば終了コード 1
 - 日次ノートのメモ欄（マーカー以降）は保持される。マーカーの行が無い既存の日次ノートは上書きせず失敗として表示する（マーカーを戻すかノートを削除すると、次の同期で再生成される）

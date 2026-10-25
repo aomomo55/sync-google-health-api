@@ -9,12 +9,17 @@ import {
   REQUEST_TIMEOUT_MS,
   scrubToken,
 } from "./cli-guard.js";
+import { parseSyncResponse } from "./ingest-report.js";
 
 const DEFAULT_CHUNK_DAYS = 120;
 const RETRY_DELAYS_MS = [5_000, 15_000, 30_000];
 // エラーの応答本文と、最後に一覧で表示する失敗の上限
 const MAX_ERROR_BODY_CHARS = 200;
 const MAX_LISTED_FAILURES = 20;
+// サーバーは Vault が未設定だと /api/notes/sync の経路を作らない（404）。区間を変えても結果は同じなので、すぐ止める
+const NOT_FOUND_STATUS = 404;
+const ROUTE_MISSING_MESSAGE =
+  "サーバーに /api/notes/sync がありません（HTTP 404）。サーバーで Vault（OBSIDIAN_MCP_URL / OBSIDIAN_MCP_TOKEN）が設定されていないか、サーバーが古い版です。--api-url にパス（/api など）を含めていないかも確かめてください。設定やサーバーの版を直してから、やり直してください";
 
 // pnpm 12 は `pnpm run x -- --opt` の `--` もそのまま渡すので取り除く
 const argv = process.argv.slice(2);
@@ -94,13 +99,12 @@ for (let start = from, first = true; start <= to; first = false) {
   };
   try {
     const res = await postWithRetry(body);
+    if (res.status === NOT_FOUND_STATUS) fail(ROUTE_MISSING_MESSAGE);
     if (!res.ok)
       throw new Error(`HTTP ${res.status} ${(await res.text()).slice(0, MAX_ERROR_BODY_CHARS)}`);
-    const json = (await res.json()) as {
-      written: number;
-      unchanged: number;
-      failed: { path: string; error: string }[];
-    };
+    // 想定外の形の応答は、その区間の失敗として扱う（成功に見せない）
+    const json = parseSyncResponse(await res.json(), token);
+    if (json.kind === "error") throw new Error(json.error);
     chunkTotals.push({ written: json.written, unchanged: json.unchanged });
     failures.push(...json.failed);
     console.log(
