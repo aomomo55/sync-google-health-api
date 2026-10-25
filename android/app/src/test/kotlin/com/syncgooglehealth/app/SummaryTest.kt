@@ -392,7 +392,8 @@ class SleepAssignerTest {
         val sl = SleepAssigner.assign(listOf(s), TOKYO).values.single()
         val day = DayAggregator.build(LocalDate.of(2026, 3, 5), TOKYO, RawDay(), sl)
         val keys = encode(day)["sleep"]!!.jsonObject.keys
-        assertEquals(setOf("start", "end", "asleep_minutes", "in_bed_minutes"), keys)
+        // 中途覚醒はステージが無くても送る（サーバーの Takeout 取り込みと同じ規則）
+        assertEquals(setOf("start", "end", "asleep_minutes", "in_bed_minutes", "awake_minutes"), keys)
     }
 }
 
