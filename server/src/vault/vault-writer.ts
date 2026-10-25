@@ -12,12 +12,10 @@ export class VaultWriteError extends Error {
   }
 }
 
-// 書き込み先のパスが許可範囲の外（設定の見直しが必要）
+// 書き込み先のパスが許可範囲の外（設定の見直しが必要）。
+// sync は vault の実装を import しないので、instanceof ではなく name で見分ける
 export class VaultPathError extends VaultWriteError {
-  constructor(message: string) {
-    super(message);
-    this.name = "VaultPathError";
-  }
+  override readonly name = "VaultPathError";
 }
 
 export const DEFAULT_VAULT_PREFIX = "Health/";

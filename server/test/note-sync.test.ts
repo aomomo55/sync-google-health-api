@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
+import { createNoteSync } from "../src/app.js";
 import { MemoryStore } from "../src/store/memory-store.js";
-import { createNoteSync, NOTE_FAILURE_MESSAGE, NoteSync } from "../src/sync/note-sync.js";
+import { NOTE_FAILURE_MESSAGE, NoteSync, publicErrorMessage } from "../src/sync/note-sync.js";
 import { MemoryVaultWriter } from "../src/vault/memory-vault-writer.js";
 import {
   assertVaultPath,
   DEFAULT_VAULT_PREFIX,
   noteRootFromPrefix,
+  VaultPathError,
   VaultWriteError,
 } from "../src/vault/vault-writer.js";
 
@@ -206,6 +208,11 @@ describe("NoteSync", () => {
     const r = await sync.syncDates(["2026-02-01"]);
     expect(r.failed).toHaveLength(2);
     for (const f of r.failed) expect(f.error).toMatch(/不正な Vault パスです/);
+  });
+
+  it("publicErrorMessage は VaultPathError だけ文面を返し、ほかの VaultWriteError は固定の文にする", () => {
+    expect(publicErrorMessage(new VaultPathError("パスのエラー"))).toBe("パスのエラー");
+    expect(publicErrorMessage(new VaultWriteError("内部のエラー"))).toBe(NOTE_FAILURE_MESSAGE);
   });
 
   it("DB に不正な日付があれば、その日はノートを作らず failed に載せ、前後のリンクは正しい日をつなぐ", async () => {
