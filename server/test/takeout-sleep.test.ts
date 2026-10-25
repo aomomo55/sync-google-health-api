@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DailySummarySchema } from "../src/domain/daily.js";
+import { MAX_DATA_POINTS_PER_FILE, TakeoutLimitError } from "../src/takeout/data-points.js";
 import { buildDays } from "../src/takeout/index.js";
 import {
   buildSleepByDate,
@@ -61,10 +62,11 @@ describe("parseSleepJson / sourceFromFilename", () => {
         p("x", "y"),
       ],
     };
-    const stats = { invalidTime: 0 };
+    const stats = { invalidTime: 0, invalidShape: 0 };
     const segs = parseSleepJson(json, "s", stats);
     expect(segs).toEqual([{ source: "s", start: T0, end: T0 + 10 * MIN, stage: 4 }]);
     expect(stats.invalidTime).toBe(5);
+    expect(stats.invalidShape).toBe(0);
     expect(() => buildSleepByDate(segs)).not.toThrow();
     // 範囲の内側ぎりぎりは受け付ける
     const edge = parseSleepJson(
@@ -76,6 +78,59 @@ describe("parseSleepJson / sourceFromFilename", () => {
       "s",
     );
     expect(edge).toHaveLength(1);
+  });
+
+  it("形の合わない要素は捨てて数え、例外を出さない", () => {
+    const ok = {
+      fitValue: [{ value: { intVal: 4 } }],
+      startTimeNanos: String(T0 * 1e6),
+      endTimeNanos: String((T0 + 10 * MIN) * 1e6),
+    };
+    const json = {
+      "Data Points": [
+        null,
+        1,
+        "x",
+        [],
+        {},
+        { ...ok, startTimeNanos: undefined },
+        { ...ok, endTimeNanos: { n: 1 } },
+        { ...ok, fitValue: "x" },
+        { ...ok, fitValue: [null] },
+        { ...ok, fitValue: [{ value: { intVal: "4" } }] },
+        { ...ok, fitValue: [{ value: { intVal: 4.5 } }] },
+        // 数値の時刻と、余分な項目は受け付ける
+        {
+          ...ok,
+          startTimeNanos: T0 * 1e6,
+          endTimeNanos: (T0 + 20 * MIN) * 1e6,
+          dataTypeName: "com.google.sleep.segment",
+        },
+        // fitValue が無ければステージ 0
+        { startTimeNanos: ok.startTimeNanos, endTimeNanos: ok.endTimeNanos },
+        ok,
+      ],
+    };
+    const stats = { invalidTime: 0, invalidShape: 0 };
+    expect(parseSleepJson(json, "s", stats)).toEqual([
+      { source: "s", start: T0, end: T0 + 20 * MIN, stage: 4 },
+      { source: "s", start: T0, end: T0 + 10 * MIN, stage: 0 },
+      { source: "s", start: T0, end: T0 + 10 * MIN, stage: 4 },
+    ]);
+    expect(stats).toEqual({ invalidTime: 0, invalidShape: 11 });
+    expect(parseSleepJson({ "Data Points": [null] }, "s")).toEqual([]);
+    expect(parseSleepJson(null, "s")).toEqual([]);
+    expect(parseSleepJson({ "Data Points": "x" }, "s")).toEqual([]);
+  });
+
+  it("Data Points が上限を超えたら TakeoutLimitError で止める", () => {
+    const json = { "Data Points": new Array(MAX_DATA_POINTS_PER_FILE + 1).fill(null) };
+    expect(() => parseSleepJson(json, "s")).toThrow(TakeoutLimitError);
+    // 上限ちょうどは受け付ける（形の合わない要素は捨てる）
+    const stats = { invalidTime: 0, invalidShape: 0 };
+    const atLimit = { "Data Points": new Array(MAX_DATA_POINTS_PER_FILE).fill(null) };
+    expect(parseSleepJson(atLimit, "s", stats)).toEqual([]);
+    expect(stats.invalidShape).toBe(MAX_DATA_POINTS_PER_FILE);
   });
 
   it("ファイル名からソースを取り出す（空白入り可、derived は対象外）", () => {
@@ -153,6 +208,31 @@ describe("buildSleepByDate", () => {
     expect(c.sleep.in_bed_minutes).toBe(360);
     // 850-860 の awake は 860 までに収まる: 60 - 10 = 50
     expect(c.sleep.nap_minutes).toBe(80);
+  });
+
+  // Android の SummaryTest.kt の napExcludesGapBetweenSessions と同じ入力・同じ規則
+  it("仮眠の segment の間の隙間は睡眠に数えない（本睡眠と同じ式）", () => {
+    // 13:00-13:20 と 14:00-14:20（浅い）は 60 分以内なので 1 つのまとまり。仮眠は 40 分（以前は 80 分）
+    const c = buildSleepByDate([
+      seg(A, 60, 420, 4),
+      seg(A, 13 * 60, 13 * 60 + 20, 4),
+      seg(A, 14 * 60, 14 * 60 + 20, 4),
+    ]).get("2026-03-10")!;
+    expect(c.sleep.in_bed_minutes).toBe(360);
+    expect(c.sleep.nap_minutes).toBe(40);
+  });
+
+  it("仮眠のまとまりが複数なら、それぞれ覚醒と隙間を引いて合計する", () => {
+    const c = buildSleepByDate([
+      seg(A, 60, 420, 4), // main 6h
+      // 12:00-12:30 と 12:50-13:00（覚醒 5 分を含む）: ベッド内 60 −（隙間 20 + 覚醒 5）= 35
+      seg(A, 12 * 60, 12 * 60 + 30, 4),
+      seg(A, 12 * 60 + 50, 13 * 60, 2),
+      seg(A, 12 * 60 + 55, 13 * 60, 1),
+      // 16:00-16:30 は 1 つの segment → 30
+      seg(A, 16 * 60, 16 * 60 + 30, 4),
+    ]).get("2026-03-10")!;
+    expect(c.sleep.nap_minutes).toBe(65);
   });
 
   it("昼寝が無ければ nap_minutes を付けない", () => {

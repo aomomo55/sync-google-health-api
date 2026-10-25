@@ -1,5 +1,7 @@
+import { z } from "zod";
 import type { DailySummary } from "../domain/daily.js";
 import { JST_OFFSET, JST_OFFSET_MS, MS_PER_MINUTE } from "../domain/dates.js";
+import { NanosSchema, nanosToMs, type ParseStats, validDataPoints } from "./data-points.js";
 
 export type Segment = {
   source: string;
@@ -49,9 +51,6 @@ export function isSaneTime(ms: number): boolean {
   return Number.isFinite(ms) && ms >= MIN_TIME_MS && ms < MAX_TIME_MS;
 }
 
-// 解析中に捨てた記録の件数（取り込み結果に表示する）
-export type ParseStats = { invalidTime: number };
-
 // raw_com.google.sleep.segment_<source>.json → <source>
 export function sourceFromFilename(name: string): string | undefined {
   const m = /^raw_com\.google\.sleep\.segment_(.+)\.json$/.exec(name);
@@ -67,29 +66,41 @@ export function jstIso(ms: number): string {
   return `${new Date(sec + JST_OFFSET_MS).toISOString().slice(0, 19)}${JST_OFFSET}`;
 }
 
-// Takeout の raw sleep segment JSON を Segment[] にする。時刻が不正な記録は捨てて stats に数える
+// sleep segment の Data Points の 1 件。Takeout は他の項目（dataTypeName など）も含むので、余分な項目は許す
+const SleepPointSchema = z.object({
+  startTimeNanos: NanosSchema,
+  endTimeNanos: NanosSchema,
+  fitValue: z
+    .array(z.object({ value: z.object({ intVal: z.number().int().optional() }).optional() }))
+    .optional(),
+});
+
+// Takeout の raw sleep segment JSON を Segment[] にする。形や時刻が不正な記録は捨てて stats に数える
 export function parseSleepJson(json: unknown, source: string, stats?: ParseStats): Segment[] {
-  const points = (json as { "Data Points"?: unknown } | null)?.["Data Points"];
-  if (!Array.isArray(points)) return [];
-  const out: Segment[] = [];
-  for (const p of points as Record<string, unknown>[]) {
-    const s = Number(p.startTimeNanos) / 1e6;
-    const e = Number(p.endTimeNanos) / 1e6;
-    const fv = p.fitValue as { value?: { intVal?: unknown } }[] | undefined;
-    const stage = Number(fv?.[0]?.value?.intVal ?? 0);
-    if (!isSaneTime(s) || !isSaneTime(e) || e <= s) {
-      if (stats) stats.invalidTime++;
-      continue;
-    }
-    out.push({ source, start: Math.round(s), end: Math.round(e), stage });
-  }
-  return out;
+  const candidates = validDataPoints(json, SleepPointSchema, stats).map((p) => ({
+    start: nanosToMs(p.startTimeNanos),
+    end: nanosToMs(p.endTimeNanos),
+    stage: p.fitValue?.[0]?.value?.intVal ?? 0,
+  }));
+  const valid = candidates.filter(
+    (c) => isSaneTime(c.start) && isSaneTime(c.end) && c.end > c.start,
+  );
+  // 呼び出し側が複数ファイル分を合計するので、渡された stats に足し込む
+  if (stats) stats.invalidTime += candidates.length - valid.length;
+  return valid.map((c) => ({
+    source,
+    start: Math.round(c.start),
+    end: Math.round(c.end),
+    stage: c.stage,
+  }));
 }
 
 // 1 ソース分の segment を、間隔が SESSION_GAP_MS 以内で連続するものを 1 セッションにまとめる
 export function sessionize(segments: Segment[]): Session[] {
   const sorted = [...segments].sort((a, b) => a.start - b.start || a.end - b.end);
   const sessions: Session[] = [];
+  // 末尾のセッションを延ばしながら走査する（状態を持ち回る処理）。件数が多いので配列を作り直さず、
+  // この関数で作ったセッションだけを書き換える
   for (const seg of sorted) {
     const cur = sessions.at(-1);
     if (cur && seg.start - cur.end <= SESSION_GAP_MS) {
@@ -111,6 +122,7 @@ export function sessionize(segments: Segment[]): Session[] {
 export function mergeNights(sessions: Session[]): Night[] {
   const sorted = [...sessions].sort((a, b) => a.start - b.start || a.end - b.end);
   const nights: Night[] = [];
+  // sessionize と同じく、末尾のまとまりを延ばしながら走査する
   for (const s of sorted) {
     const cur = nights.at(-1);
     if (cur && s.start - cur.end <= NIGHT_MERGE_GAP_MS) {
@@ -136,8 +148,6 @@ function stageMs(s: Session, pred: (stage: number) => boolean): number {
   return s.segments.filter((g) => pred(g.stage)).reduce((t, g) => t + g.end - g.start, 0);
 }
 
-const asleepMs = (s: Session) => s.end - s.start - stageMs(s, isAwake);
-
 const nightStageMs = (n: Night, pred: (stage: number) => boolean) =>
   n.sessions.reduce((t, s) => t + stageMs(s, pred), 0);
 
@@ -154,28 +164,34 @@ function gapMs(n: Night): number {
   return total;
 }
 
-// segment の間の隙間は中途覚醒に数える（Android でセッション間の間隔を数えるのと揃える）
+// 覚醒のステージと、segment の間の隙間の合計。隙間は中途覚醒に数える
+// （Android でセッション間の間隔を数えるのと揃える）
+const nightAwakeMs = (n: Night) => nightStageMs(n, isAwake) + gapMs(n);
+
+// まとまりの睡眠時間 = ベッド内時間 −（覚醒 + 隙間）。本睡眠と仮眠で同じ式を使う
+const nightAsleepMs = (n: Night) => Math.max(0, n.end - n.start - nightAwakeMs(n));
+
 export function summarizeNight(n: Night): {
   sleep: SleepFields;
   hasStages: boolean;
 } {
-  const inBed = n.end - n.start;
-  const awake = nightStageMs(n, isAwake) + gapMs(n);
   const hasStages = nightHasStages(n);
+  const minutesOf = (stage: number) =>
+    Math.round(nightStageMs(n, (x) => x === stage) / MS_PER_MINUTE);
   const sleep: SleepFields = {
     start: jstIso(n.start),
     end: jstIso(n.end),
-    in_bed_minutes: Math.round(inBed / MS_PER_MINUTE),
-    awake_minutes: Math.round(awake / MS_PER_MINUTE),
-    asleep_minutes: Math.round(Math.max(0, inBed - awake) / MS_PER_MINUTE),
+    in_bed_minutes: Math.round((n.end - n.start) / MS_PER_MINUTE),
+    awake_minutes: Math.round(nightAwakeMs(n) / MS_PER_MINUTE),
+    asleep_minutes: Math.round(nightAsleepMs(n) / MS_PER_MINUTE),
+    ...(hasStages
+      ? {
+          deep_minutes: minutesOf(SLEEP_STAGE.deep),
+          light_minutes: minutesOf(SLEEP_STAGE.light),
+          rem_minutes: minutesOf(SLEEP_STAGE.rem),
+        }
+      : {}),
   };
-  if (hasStages) {
-    const minutesOf = (stage: number) =>
-      Math.round(nightStageMs(n, (x) => x === stage) / MS_PER_MINUTE);
-    sleep.deep_minutes = minutesOf(SLEEP_STAGE.deep);
-    sleep.light_minutes = minutesOf(SLEEP_STAGE.light);
-    sleep.rem_minutes = minutesOf(SLEEP_STAGE.rem);
-  }
   return { sleep, hasStages };
 }
 
@@ -194,8 +210,21 @@ function pickSource(sources: Map<string, Night[]>): [string, Night[]] {
   )[0]!;
 }
 
+// 1 日分のまとまりから採用する睡眠を作る。最長のまとまりを main に（同長なら先に起きた方）、残りは仮眠
+function chooseSleep(sources: Map<string, Night[]>): ChosenSleep {
+  const [source, nights] = pickSource(sources);
+  const main = nights.reduce((best, n) => (n.end - n.start > best.end - best.start ? n : best));
+  const { sleep, hasStages } = summarizeNight(main);
+  // 仮眠もまとまりごとに数え、まとまりの中の隙間は睡眠に入れない
+  const naps = nights.filter((n) => n !== main);
+  if (naps.length === 0) return { source, sleep, hasStages };
+  const napMinutes = Math.round(naps.reduce((t, n) => t + nightAsleepMs(n), 0) / MS_PER_MINUTE);
+  return { source, sleep: { ...sleep, nap_minutes: napMinutes }, hasStages };
+}
+
 // 全ソースの segment から、起床日(JST)ごとに採用する睡眠を決める
 export function buildSleepByDate(segments: Segment[]): Map<string, ChosenSleep> {
+  // ソース・日付への振り分けは Map に足していく（lib が ES2023 で Map.groupBy を使えないため）
   const bySource = new Map<string, Segment[]>();
   for (const seg of segments) {
     const list = bySource.get(seg.source);
@@ -216,17 +245,5 @@ export function buildSleepByDate(segments: Segment[]): Map<string, ChosenSleep> 
     }
   }
 
-  const result = new Map<string, ChosenSleep>();
-  for (const [date, sources] of byDate) {
-    const [source, nights] = pickSource(sources);
-    // 最長のまとまりを main に（同長なら先に起きた方）、残りは仮眠
-    const main = nights.reduce((best, n) => (n.end - n.start > best.end - best.start ? n : best));
-    const { sleep, hasStages } = summarizeNight(main);
-    const naps = nights.filter((n) => n !== main).flatMap((n) => n.sessions);
-    if (naps.length > 0) {
-      sleep.nap_minutes = Math.round(naps.reduce((t, s) => t + asleepMs(s), 0) / MS_PER_MINUTE);
-    }
-    result.set(date, { source, sleep, hasStages });
-  }
-  return result;
+  return new Map([...byDate].map(([date, sources]) => [date, chooseSleep(sources)]));
 }
