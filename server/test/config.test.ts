@@ -139,6 +139,8 @@ describe("loadCouchdbConnection", () => {
 });
 
 describe("API_TOKEN", () => {
+  // 文字の検査は Android の保存前の検査（SettingsInput.kt の isValidToken）と同じ規則。
+  // 同じ入力を Android のテスト（SettingsInputTest.kt）にも置く
   it("bearerAuth が受け付けない文字（! # : @ など）を含むと拒否し、値を出さない", () => {
     for (const ch of ["!", "#", ":", "@", "%", '"']) {
       const bad = `${"k".repeat(32)}${ch}`;
@@ -155,6 +157,16 @@ describe("API_TOKEN", () => {
     expect(() => loadConfig({ ...BASE, API_TOKEN: `${"s".repeat(16)} ${"s".repeat(16)}` })).toThrow(
       /API_TOKEN/,
     );
+  });
+
+  it("ゼロ幅スペースや全角文字は拒否する", () => {
+    for (const bad of [
+      `${"s".repeat(16)}\u200b${"s".repeat(16)}`,
+      `${"s".repeat(32)}\uff41`,
+      `${"s".repeat(16)}\u3000${"s".repeat(16)}`,
+    ]) {
+      expect(() => loadConfig({ ...BASE, API_TOKEN: bad })).toThrow(/API_TOKEN/);
+    }
   });
 
   it("英数字と . _ ~ + / - と末尾の = は受け付ける", () => {

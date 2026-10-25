@@ -24,7 +24,7 @@
     <string name="settings_saved_and_sending">設定を保存しました。送信を始めます</string>
     <string name="settings_error_not_sent">%1$s。送信していません</string>
     <string name="settings_error_server_url_scheme">サーバー URL は https:// で始まる必要があります</string>
-    <string name="settings_error_token_invalid_chars">トークンに使えない文字が含まれています</string>
+    <string name="settings_error_token_invalid_chars">トークンに使えるのは英数字と . _ ~ + / -（末尾の = は可）だけです。サーバーの API_TOKEN と同じ値を、空白や見えない文字（ゼロ幅スペースなど）が混じらないように入れ直してください</string>
     <string name="settings_error_sleep_window">通知の時間帯は 0〜24 の時で、開始を終了より前にしてください</string>
 
     <!-- ヘルスコネクトの状態と権限 -->
@@ -101,7 +101,7 @@
     <string name="sync_message_history_skipped">（履歴の権限が無いため、%1$s より前の %2$d 日分は読まずに送っていません）</string>
     <string name="sync_message_permission_missing">ヘルスコネクトの権限が不足しています。「権限を付与」を押してください</string>
     <string name="sync_message_unexpected_error">予期しないエラー: %1$s %2$s</string>
-    <string name="sync_message_token_none">API トークンが設定されていません。設定画面で入力し直してください</string>
+    <string name="sync_message_token_none">API トークンが設定されていません。アプリの「API トークン」に入力して「設定を保存」を押してください</string>
     <string name="sync_message_token_unavailable">API トークンを一時的に読み出せませんでした。時間をおいて「今すぐ送信」を押してください（自動送信も時間をおいて再試行します）。続くときは、設定の「API トークン」に入れ直して「設定を保存」を押してください</string>
     <string name="sync_message_token_invalid">トークンが正しくありません。設定の「API トークン」にサーバーと同じ値を入れて「設定を保存」を押してください。サーバー側でトークンを入れ替えた後なら、新しい値を入れてください</string>
     <string name="sync_message_health_connect_unavailable">ヘルスコネクトが利用できません。Google Play でヘルスコネクトを更新してから、もう一度送信してください</string>
@@ -137,5 +137,5 @@
 
     <!-- 権限の理由説明の画面 -->
     <string name="rationale_title">読み取るデータと送信先</string>
-    <string name="rationale_body">"\nこのアプリはヘルスコネクトから次のデータを読み取ります。\n\n・歩数、移動距離、消費カロリー\n・運動セッション (運動時間の算出に使用)\n・心拍数、安静時心拍数\n・体重、体脂肪率\n・睡眠セッション\n・栄養（摂取カロリー・たんぱく質・脂質・炭水化物）\n\n読み取ったデータは日ごとに集計し、あなた自身が設定したサーバー へ HTTPS で送信します。それ以外の第三者には送信せず、広告や解析にも使いません。\n\n「バックグラウンドでのデータ読み取り」は、アプリを開いていなくても %1$d 時間ごとに直近 %2$d 日分を自動送信するために使います。\n\nAPI トークンは端末の Keystore で暗号化して保存します。権限はヘルスコネクトの設定からいつでも取り消せます。"</string>
+    <string name="rationale_body">"\nこのアプリはヘルスコネクトから次のデータを読み取ります。\n\n・歩数、移動距離、消費カロリー\n・運動セッション (運動時間の算出に使用)\n・心拍数、安静時心拍数\n・体重、体脂肪率\n・睡眠セッション\n・栄養（摂取カロリー・たんぱく質・脂質・炭水化物）\n\n読み取ったデータは日ごとに集計し、あなた自身が設定したサーバーへ HTTPS で送信します。それ以外の第三者には送信せず、広告や解析にも使いません。\n\n「バックグラウンドでのデータ読み取り」は、アプリを開いていなくても %1$d 時間ごとに直近 %2$d 日分を自動送信するために使います。\n\nAPI トークンは端末の Keystore で暗号化して保存します。権限はヘルスコネクトの設定からいつでも取り消せます。"</string>
 </resources>
