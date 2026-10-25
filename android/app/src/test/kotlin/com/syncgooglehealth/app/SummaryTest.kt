@@ -455,7 +455,25 @@ class IngestResponseTest {
     fun withNotes() {
         val ok = parseIngestResponse("""{"written":3,"notes":{"written":2,"unchanged":1,"failed":[{"path":"a","error":"x"}]}}""")
         assertEquals(3, ok.written)
-        assertEquals(NotesResult(2, 1, 1, null), ok.notes)
+        assertEquals(NotesResult(2, 1, listOf(FailedNote("a", "x")), null), ok.notes)
+    }
+
+    @Test
+    fun keepsMalformedFailedNotesAsEmptyEntries() {
+        // 形が不正な要素も、書き込めなかった件数には数える (中身は空にする)
+        val ok = parseIngestResponse(
+            """{"written":1,"notes":{"written":0,"unchanged":0,"failed":[1,{"path":2,"error":null},{"path":"b.md"},{"path":"c.md","error":"y","extra":true}]}}""",
+        )
+        assertEquals(
+            listOf(FailedNote("", ""), FailedNote("", ""), FailedNote("b.md", ""), FailedNote("c.md", "y")),
+            ok.notes!!.failed,
+        )
+    }
+
+    @Test
+    fun noFailedNotesWhenMissingOrNotAnArray() {
+        assertEquals(emptyList<FailedNote>(), parseIngestResponse("""{"written":1,"notes":{"written":1}}""").notes!!.failed)
+        assertEquals(emptyList<FailedNote>(), parseIngestResponse("""{"written":1,"notes":{"failed":3}}""").notes!!.failed)
     }
 
     @Test
@@ -656,19 +674,21 @@ class IngestRejectedTest {
 }
 
 class SyncMessageTest {
-    private val notes = NotesResult(written = 2, unchanged = 1, failed = 0, error = null)
+    private val notes = NotesResult(written = 2, unchanged = 1, failed = emptyList(), error = null)
+
+    private fun failedNotes(vararg failed: FailedNote) = NotesResult(0, 0, failed.toList(), null)
 
     @Test
     fun unchangedWhenNothingRejected() {
         val t = SyncTally().add(3, IngestOk(3, notes))
-        assertEquals("3日分を送信しました / ノート 更新2・変更なし1・失敗0", buildSyncMessage(TestTexts, t, includeNutrition = true))
+        assertEquals("3日分を送信しました / ノート 更新2・変更なし1", buildSyncMessage(TestTexts, t, includeNutrition = true))
     }
 
     @Test
-    fun nutritionAndNoteError() {
-        val t = SyncTally().add(1, IngestOk(1, NotesResult(0, 0, 1, "boom")))
+    fun noteFailuresAreNotInTheResultLine() {
+        val t = SyncTally().add(1, IngestOk(1, NotesResult(0, 0, listOf(FailedNote("Health/Daily/2026-01-05.md", "x")), "boom")))
         assertEquals(
-            "1日分を送信しました（栄養は権限が無いため送っていません） / ノート 更新0・変更なし0・失敗1 / ノートエラー: boom",
+            "1日分を送信しました（栄養は権限が無いため送っていません） / ノート 更新0・変更なし0",
             buildSyncMessage(TestTexts, t, includeNutrition = false),
         )
     }
@@ -676,13 +696,106 @@ class SyncMessageTest {
     @Test
     fun rejectedDaysAreNotInTheResultLine() {
         val t = SyncTally().add(35, IngestOk(34, notes, listOf(RejectedDay("2026-01-05", "歩数が範囲外です"))))
-        assertEquals("35日分を送信しました / ノート 更新2・変更なし1・失敗0", buildSyncMessage(TestTexts, t, includeNutrition = true))
+        assertEquals("35日分を送信しました / ノート 更新2・変更なし1", buildSyncMessage(TestTexts, t, includeNutrition = true))
     }
 
     @Test
     fun noWarningWhenNothingRejected() {
         val t = SyncTally().add(3, IngestOk(3, notes))
         assertNull(buildRejectedWarning(TestTexts, t))
+    }
+
+    @Test
+    fun noSyncWarningWhenEverythingSucceeded() {
+        val t = SyncTally().add(3, IngestOk(3, notes)).add(1, IngestOk(1, null))
+        assertEquals(emptyList<String>(), buildNoteWarnings(TestTexts, t))
+        assertNull(buildSyncWarning(TestTexts, t))
+    }
+
+    @Test
+    fun failedNotesShowFileNamesAndTheServerReasonAcrossChunks() {
+        val t = SyncTally()
+            .add(30, IngestOk(30, failedNotes(FailedNote("Health/Daily/2026-01-05.md", ServerMessages.NOTE_FAILURE))))
+            .add(5, IngestOk(5, failedNotes(FailedNote("Health/Monthly/2026-01.md", ServerMessages.NOTE_FAILURE))))
+        assertEquals(
+            "ノート2件（2026-01-05.md、2026-01.md）を書き込めませんでした: " + ServerMessages.NOTE_FAILURE,
+            buildSyncWarning(TestTexts, t),
+        )
+    }
+
+    @Test
+    fun differentReasonsGoToSeparateLinesWithTheirOwnNextStep() {
+        // メモ欄のマーカーが無いのは送り直しでは直らないので、obsidian-sync-mcp の案内を足さない
+        val t = SyncTally().add(
+            3,
+            IngestOk(
+                3,
+                failedNotes(
+                    FailedNote("Health/Daily/2026-01-03.md", ServerMessages.MEMO_MARKER_MISSING),
+                    FailedNote("Health/Daily/2026-01-04.md", ServerMessages.NOTE_FAILURE),
+                ),
+            ),
+        )
+        val lines = buildNoteWarnings(TestTexts, t)
+        assertEquals(
+            listOf(
+                "ノート1件（2026-01-03.md）を書き込めませんでした: " + ServerMessages.MEMO_MARKER_MISSING,
+                "ノート1件（2026-01-04.md）を書き込めませんでした: " + ServerMessages.NOTE_FAILURE,
+            ),
+            lines,
+        )
+        assertFalse(lines[0], lines[0].contains("obsidian-sync-mcp"))
+    }
+
+    @Test
+    fun manyNamesAndReasonsAreSummarized() {
+        val sameReason = (1..5).map { FailedNote("Health/Daily/2026-01-0$it.md", "r1") }
+        val otherReasons = (2..5).map { FailedNote("Health/Daily/2026-02-0$it.md", "r$it") }
+        val t = SyncTally().add(9, IngestOk(9, NotesResult(0, 0, sameReason + otherReasons, null)))
+        val lines = buildNoteWarnings(TestTexts, t)
+        assertEquals("ノート5件（2026-01-01.md、2026-01-02.md、2026-01-03.md ほか2件）を書き込めませんでした: r1", lines[0])
+        assertEquals(4, lines.size)
+        assertEquals("ほかにノート2件を別の理由で書き込めませんでした", lines[3])
+    }
+
+    @Test
+    fun malformedFailedNotesStillShowAWarning() {
+        val t = SyncTally().add(1, IngestOk(1, failedNotes(FailedNote("", ""), FailedNote("", ""))))
+        assertEquals(
+            "ノート2件を書き込めませんでした: サーバーが理由を返しませんでした。続くときは、サーバーで obsidian-sync-mcp が動いているかを確かめてください",
+            buildSyncWarning(TestTexts, t),
+        )
+    }
+
+    @Test
+    fun noteErrorGoesToTheWarningOnce() {
+        val t = SyncTally()
+            .add(30, IngestOk(30, NotesResult(0, 0, emptyList(), ServerMessages.SYNC_FAILURE)))
+            .add(5, IngestOk(5, NotesResult(0, 0, emptyList(), ServerMessages.SYNC_FAILURE)))
+        assertEquals("ノートの書き込みでエラー: " + ServerMessages.SYNC_FAILURE, buildSyncWarning(TestTexts, t))
+    }
+
+    @Test
+    fun failedNotesAndErrorAreSeparateLines() {
+        val t = SyncTally()
+            .add(30, IngestOk(30, failedNotes(FailedNote("Health/Daily/2026-01-05.md", "x"))))
+            .add(5, IngestOk(5, NotesResult(0, 0, emptyList(), "boom")))
+        assertEquals(
+            listOf("ノート1件（2026-01-05.md）を書き込めませんでした: x", "ノートの書き込みでエラー: boom"),
+            buildNoteWarnings(TestTexts, t),
+        )
+    }
+
+    @Test
+    fun rejectedWarningComesBeforeNoteWarning() {
+        val t = SyncTally().add(
+            2,
+            IngestOk(1, failedNotes(FailedNote("Health/Daily/2026-01-06.md", "x")), listOf(RejectedDay("2026-01-05", "歩数が範囲外です"))),
+        )
+        val lines = buildSyncWarning(TestTexts, t).orEmpty().split(WARNING_LINE_SEPARATOR)
+        assertEquals(2, lines.size)
+        assertEquals(buildRejectedWarning(TestTexts, t), lines[0])
+        assertTrue(lines[1], lines[1].startsWith("ノート1件（2026-01-06.md）を書き込めませんでした"))
     }
 
     @Test

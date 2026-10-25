@@ -145,13 +145,17 @@ private fun SyncHistoryText(history: SyncHistory) {
     val successText = success?.let { SyncRunner.formatTime(context, it) } ?: stringResource(R.string.sync_history_no_record)
     Text(stringResource(R.string.sync_history_last_success, successText))
     if (attempt != null && attempt != success) {
-        val failedSuffix = if (history.lastFailed) stringResource(R.string.sync_history_failed_suffix) else ""
+        val failedSuffix = when {
+            history.lastFailed -> stringResource(R.string.sync_history_failed_suffix)
+            history.lastNotesFailed -> stringResource(R.string.sync_history_notes_failed_suffix)
+            else -> ""
+        }
         Text(stringResource(R.string.sync_history_last_attempt, SyncRunner.formatTime(context, attempt), failedSuffix))
     }
     history.lastResult?.let { result ->
         if (history.lastFailed) MessageLine(MessageKind.ERROR, result) else Text(stringResource(R.string.sync_history_result, result))
     }
-    history.lastWarning?.let { MessageLine(MessageKind.WARNING, it) }
+    history.lastWarning?.split(WARNING_LINE_SEPARATOR)?.forEach { MessageLine(MessageKind.WARNING, it) }
     if (isSuccessStale(System.currentTimeMillis(), success)) {
         MessageText(ScreenMessage(R.string.sync_history_stale, MessageKind.WARNING, listOf(STALE_SUCCESS_WARNING_HOURS)))
     }

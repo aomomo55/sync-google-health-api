@@ -84,6 +84,7 @@
     <string name="sync_history_no_record">記録なし</string>
     <string name="sync_history_last_attempt">最後に試した: %1$s%2$s</string>
     <string name="sync_history_failed_suffix">（失敗）</string>
+    <string name="sync_history_notes_failed_suffix">（データは保存、ノートの書き込みに失敗）</string>
     <string name="sync_history_result">結果: %1$s</string>
     <string name="sync_history_stale">%1$d時間以上、送信に成功していません。自動送信が止まっているか、失敗が続いています。「今すぐ送信」で結果を確かめてください</string>
     <string name="sync_time_never">未実行</string>
@@ -96,8 +97,13 @@
     <string name="sync_message_rejected_more_dates">" ほか%1$d日"</string>
     <string name="sync_message_rejected_reasons">" / 理由: %1$s"</string>
     <string name="sync_message_rejected_more_reasons">" ほか"</string>
-    <string name="sync_message_notes">" / ノート 更新%1$d・変更なし%2$d・失敗%3$d"</string>
-    <string name="sync_message_note_errors">" / ノートエラー: %1$s"</string>
+    <string name="sync_message_notes">" / ノート 更新%1$d・変更なし%2$d"</string>
+    <string name="sync_warning_notes_failed">ノート%1$d件（%2$s）を書き込めませんでした: %3$s</string>
+    <string name="sync_warning_notes_failed_no_name">ノート%1$d件を書き込めませんでした: %2$s</string>
+    <string name="sync_warning_notes_more_names">" ほか%1$d件"</string>
+    <string name="sync_warning_notes_other_reasons">ほかにノート%1$d件を別の理由で書き込めませんでした</string>
+    <string name="sync_warning_note_reason_unknown">サーバーが理由を返しませんでした。続くときは、サーバーで obsidian-sync-mcp が動いているかを確かめてください</string>
+    <string name="sync_warning_note_errors">ノートの書き込みでエラー: %1$s</string>
     <string name="sync_message_history_skipped">（履歴の権限が無いため、%1$s より前の %2$d 日分は読まずに送っていません）</string>
     <string name="sync_message_permission_missing">ヘルスコネクトの権限が不足しています。「権限を付与」を押してください</string>
     <string name="sync_message_unexpected_error">予期しないエラー: %1$s %2$s</string>
@@ -125,6 +131,7 @@
     <!-- 通知: 送信の失敗 -->
     <string name="notification_channel_sync_failure_name">送信の失敗</string>
     <string name="notification_sync_failure_title">健康データを送れていません</string>
+    <string name="notification_sync_failure_notes_title">ノートを書き込めていません</string>
     <string name="notification_sync_failure_text">%1$s。アプリを開いて確かめてください</string>
     <string name="notification_sync_failure_since_success">最後に成功したのは %1$s です</string>
     <string name="notification_sync_failure_no_success">成功した記録がありません</string>
@@ -133,6 +140,7 @@
     <string name="notification_sync_failure_sleep_unchecked">送れていない間は、睡眠の未反映の通知も出ません</string>
     <string name="notification_sync_failure_hint_auth">アプリの設定で「API トークン」にサーバーと同じ値を入れ直し、「設定を保存」を押してください。サーバー側でトークンを入れ替えた後なら、新しい値を入れてください</string>
     <string name="notification_sync_failure_hint_retryable">一時的な問題の可能性があり、自動送信が時間をおいて再試行します。続くときは、サーバーが動いているか、端末が通信できるかを確かめてください</string>
+    <string name="notification_sync_failure_hint_notes">健康データはサーバーに保存できていて、ノートだけを書き込めていません。次にすることは原因の文に書いてあります</string>
     <string name="notification_sync_failure_hint_failed">アプリを開き、画面の「結果」に沿って直してください</string>
 
     <!-- 権限の理由説明の画面 -->

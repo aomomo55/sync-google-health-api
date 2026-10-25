@@ -20,7 +20,11 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-data class NotesResult(val written: Int, val unchanged: Int, val failed: Int, val error: String?)
+// 書き込めなかったノート。path は Vault の中のパス (日付が不正なときは「日付 "…"」のような表示用の文)、
+// error はサーバーが返す利用者向けの文 (次にすることを含む)。応答の形が不正な要素は、どちらも空にする
+data class FailedNote(val path: String, val error: String)
+
+data class NotesResult(val written: Int, val unchanged: Int, val failed: List<FailedNote>, val error: String?)
 
 // 値が範囲外などで保存されなかった日 (同じリクエストの他の日は保存されている)
 data class RejectedDay(val date: String, val error: String)
@@ -45,12 +49,21 @@ fun parseIngestResponse(body: String): IngestOk {
         NotesResult(
             written = n["written"]?.jsonPrimitive?.intOrNull ?: 0,
             unchanged = n["unchanged"]?.jsonPrimitive?.intOrNull ?: 0,
-            failed = (n["failed"] as? JsonArray)?.size ?: 0,
+            failed = (n["failed"] as? JsonArray)?.map(::parseFailedNote) ?: emptyList(),
             error = err,
         )
     }
     return IngestOk(written, notes, parseRejected(obj["rejected"]))
 }
+
+// 形が不正な要素も、書き込めなかったことは数えたいので捨てずに空の項目にする (理由は「不明」として出す)
+private fun parseFailedNote(el: JsonElement): FailedNote {
+    val o = el as? JsonObject
+    return FailedNote(path = stringField(o, "path"), error = stringField(o, "error"))
+}
+
+private fun stringField(o: JsonObject?, key: String): String =
+    (o?.get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
 
 // rejected が無いのは古いサーバー (拒否される日が無い) なので空とみなす。
 // あるのに解釈できないときは、保存されなかった日を見落とさないよう例外にする

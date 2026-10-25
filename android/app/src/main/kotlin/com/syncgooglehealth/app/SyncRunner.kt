@@ -5,6 +5,7 @@ import androidx.health.connect.client.HealthConnectClient
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import kotlin.coroutines.cancellation.CancellationException
 
 enum class SyncStatus { OK, AUTH_ERROR, RETRYABLE, FAILED }
 
@@ -13,8 +14,11 @@ data class SyncOutcome(
     val message: String,
     // 送った範囲に今日 (起床した日) の睡眠があったか。送信が成功したときだけ意味を持つ
     val hasTodaySleep: Boolean = false,
-    // 成功したが注意が必要なこと。結果の文に埋もれないよう、画面では別の行に WARNING で出す
+    // 成功したが注意が必要なこと。結果の文に埋もれないよう、画面では別の行に WARNING で出す。
+    // 複数あるときは WARNING_LINE_SEPARATOR で区切り、1 つずつ別の行にする
     val warning: String? = null,
+    // ノートを書き込めなかったときの文 (送信が成功したときだけ)。書き込めていれば null
+    val noteFailure: String? = null,
 )
 
 object SyncRunner {
@@ -30,6 +34,9 @@ object SyncRunner {
         val texts = ContextTexts(context)
         val outcome = try {
             execute(context, texts, store, days, requireBackground, startDate, onProgress)
+        } catch (e: CancellationException) {
+            // ワーカーの停止や画面側の取り消しは失敗ではないので、記録も通知もせずに投げ直す
+            throw e
         } catch (e: SecurityException) {
             SyncOutcome(SyncStatus.FAILED, texts.get(R.string.sync_message_permission_missing))
         } catch (e: Exception) {
@@ -39,12 +46,14 @@ object SyncRunner {
             )
         }
         val now = System.currentTimeMillis()
-        val succeeded = outcome.status == SyncStatus.OK
+        val notesFailed = outcome.noteFailure != null
+        val succeeded = attemptSucceeded(outcome.status, notesFailed)
         val streak = nextFailureStreak(store.syncHistory().failureStreak, succeeded, now)
-        store.recordSync(now, outcome.message, succeeded, streak, outcome.warning)
+        store.recordSync(now, outcome.message, succeeded, streak, outcome.warning, notesFailed)
         // 通知は補助なので、失敗しても送信の結果は変えない
         runCatching { updateFailureNotice(context, store, outcome, streak, now, requireBackground) }
-        if (succeeded) {
+        // 睡眠の有無はデータを送れていれば分かるので、ノートの失敗にかかわらず判定する
+        if (outcome.status == SyncStatus.OK) {
             runCatching { updateMissingSleepNotice(context, store, outcome.hasTodaySleep, requireBackground) }
         }
         return outcome
@@ -65,12 +74,14 @@ object SyncRunner {
                 val notice = failureNotice(
                     texts = ContextTexts(context),
                     status = outcome.status,
-                    message = outcome.message,
+                    message = outcome.noteFailure ?: outcome.message,
                     lastSuccess = store.syncHistory().lastSuccessMillis?.let { formatTime(context, it) },
                     sleepUnchecked = now.hour in window,
                 )
-                SyncFailureNotifier.notify(context, notice)
-                store.lastSyncFailureNotified = now.toLocalDate()
+                // 通知を出せなかった日は記録しない (権限を許可した後の送信で出せるようにする)
+                if (SyncFailureNotifier.notify(context, notice)) {
+                    store.lastSyncFailureNotified = now.toLocalDate()
+                }
             }
             SyncFailureAction.CANCEL -> SyncFailureNotifier.cancel(context)
             SyncFailureAction.NONE -> Unit
@@ -146,7 +157,8 @@ object SyncRunner {
 
         val message = buildSyncMessage(texts, tally, includeNutrition)
         val note = if (skippedDays > 0) texts.get(R.string.sync_message_history_skipped, readFrom, skippedDays) else ""
-        return SyncOutcome(SyncStatus.OK, message + note, hasTodaySleep, buildRejectedWarning(texts, tally))
+        val noteFailure = buildNoteWarnings(texts, tally).joinToString(WARNING_LINE_SEPARATOR).ifEmpty { null }
+        return SyncOutcome(SyncStatus.OK, message + note, hasTodaySleep, buildSyncWarning(texts, tally), noteFailure)
     }
 
     fun formatTime(context: Context, millis: Long): String =
