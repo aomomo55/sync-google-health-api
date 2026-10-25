@@ -10,7 +10,3 @@ export function createVaultWriter(opts: {
   if (!opts.url || !opts.token) return null;
   return new McpVaultWriter({ url: opts.url, token: opts.token, prefix: opts.prefix });
 }
-
-export { McpVaultWriter } from "./mcp-vault-writer.js";
-export { MemoryVaultWriter } from "./memory-vault-writer.js";
-export * from "./vault-writer.js";

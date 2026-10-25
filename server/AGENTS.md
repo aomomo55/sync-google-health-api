@@ -22,7 +22,7 @@
 - `shared` → なし（他の層を import しない）。どの層からも使ってよい（以下の一覧では省略する）
 - `domain` → なし（外部ライブラリは zod のみ）
 - `notes` / `store` / `takeout` / `backup` → `domain`
-- `sync` → `domain` / `notes` と、`store` / `vault` のインターフェース（`HealthStore` / `VaultWriter`）
+- `sync` → `domain` / `notes` と、`store` のインターフェース（`HealthStore`）と、`vault` のインターフェース（`VaultWriter` と、それが投げるエラーの型。型としてだけ import する）
 - `routes` → `domain` / `sync` / `backup` と、`store` のインターフェース
 - `vault` → なし（設定の `Config` も知らない。必要な値は引数で受け取る）
 - `index.ts` / `app.ts` / `config.ts` / `scripts/` → 何でもよい（設定を読み、実装を組み立てる場所）

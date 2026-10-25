@@ -1,7 +1,11 @@
 import { readFileSync, statSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { BackupTooLargeError, decryptBackup, MAX_BACKUP_JSON_BYTES } from "../src/backup/backup.js";
-import { type CouchdbConnection, loadCouchdbConnection } from "../src/config.js";
+import {
+  COUCHDB_DB_NAME_PATTERN,
+  type CouchdbConnection,
+  loadCouchdbConnection,
+} from "../src/config.js";
 import { CouchStore } from "../src/store/couch-store.js";
 
 // バックアップ（health-YYYY-MM-DD.json.gz.age）を復号し、空の CouchDB の DB に書き戻す。
@@ -89,8 +93,7 @@ for (const i of backup.invalid) {
 if (values["dry-run"]) process.exit(backup.invalid.length > 0 ? 1 : 0);
 
 const db = values.db;
-// CouchDB の DB 名の規則
-if (!db || !/^[a-z][a-z0-9_$()+/-]*$/.test(db)) {
+if (!db || !COUCHDB_DB_NAME_PATTERN.test(db)) {
   fail("--db に書き戻し先の DB 名（英小文字で始まる。例: health_restore）を指定してください");
 }
 // サーバーと同じ規則で検査する（http: で資格情報を外へ流さない、URL に資格情報を含めない）。

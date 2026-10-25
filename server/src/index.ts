@@ -1,8 +1,7 @@
 import { serve } from "@hono/node-server";
-import { createApp } from "./app.js";
+import { createApp, createNoteSync } from "./app.js";
 import { loadConfig } from "./config.js";
 import { CouchStore } from "./store/couch-store.js";
-import { createNoteSync } from "./sync/note-sync.js";
 import { createVaultWriter } from "./vault/index.js";
 
 // 終了の合図から、閉じきれない接続を待たずに終了するまでの時間

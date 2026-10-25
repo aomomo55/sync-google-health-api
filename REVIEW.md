@@ -20,6 +20,7 @@ CI が成功していることは前提で、ここに挙げるのは **CI で�
 - [ ] `shared` の新しいファイルの名前が中身を表しているか（`utils` / `helpers` / `common` / `misc` / `lib` ではないか）。既存のファイルに別のテーマを足していないか。再エクスポートだけのファイル（バレル）を作っていないか
 - [ ] `shared` を初めて作る PR なら、禁止した名前と `shared` からの import を確かめるテストも足しているか
 - [ ] 外側の実装（`CouchStore`、`McpVaultWriter` など）に直接依存せず、インターフェース（`HealthStore`、`VaultWriter`）を通しているか。実装の組み立ては外側（`index.ts` など）で行っているか
+- [ ] server の `sync` から `vault` への import が、`VaultWriter` とそれが投げるエラーの型だけを `import type` で使う形になっているか（`noteRootFromPrefix` などの値やクラスの実体を import していないか）
 - [ ] 純粋な処理（`domain` / `notes`、Android の `DayAggregator` / `SleepAssigner` / `Chunking`）に、I/O、現在時刻、乱数、環境変数、Android の API（`android.*` / `androidx.*`）が入り込んでいないか
 - [ ] 新しいディレクトリや層を作ったら、server/AGENTS.md の依存の向きに書き足しているか。新しいトップレベルのディレクトリなら、そのディレクトリの AGENTS.md を作り、ルートの AGENTS.md の表に足しているか
 
