@@ -4,7 +4,8 @@ import { parseArgs } from "node:util";
 import { checkDayRanges, type DailySummary, DailySummaryShapeSchema } from "../src/domain/daily.js";
 import { isRealDate } from "../src/domain/dates.js";
 import { MAX_INGEST_DAYS } from "../src/routes/health.js";
-import { buildDays } from "../src/takeout/index.js";
+import { issuePath } from "../src/shared/issue-path.js";
+import { buildDays, TakeoutLimitError } from "../src/takeout/index.js";
 import { loadTakeout } from "../src/takeout/load.js";
 import {
   checkApiToken,
@@ -64,9 +65,12 @@ if (values.post) {
   if (error) fail(error);
 }
 
-const { csvDays, segments, nutrition, files, nutritionFiles, dropped } = await loadTakeout(
-  values.takeout,
-);
+const { csvDays, segments, nutrition, files, nutritionFiles, dropped, malformed } =
+  await loadTakeout(values.takeout).catch((e: unknown) => {
+    // 上限を超えたファイルは、スタックトレースではなく理由だけを出して止める
+    if (e instanceof TakeoutLimitError) return fail(e.message);
+    throw e;
+  });
 const { days: built, sleepByDate } = buildDays(
   csvDays,
   segments,
@@ -82,7 +86,8 @@ const days: DailySummary[] = [];
 for (const d of built) {
   const r = DailySummaryShapeSchema.safeParse(d);
   if (!r.success) {
-    invalid.push(`${d.date}: ${r.error.issues[0]?.path.join(".")} ${r.error.issues[0]?.message}`);
+    const issue = r.error.issues[0];
+    invalid.push(`${d.date}: ${issue ? `${issuePath(issue)} ${issue.message}` : ""}`);
     continue;
   }
   const error = checkDayRanges(d);
@@ -131,6 +136,11 @@ console.log(
 if (dropped.sleep > 0 || dropped.nutrition > 0) {
   console.log(
     `dropped (invalid time): sleep segments=${dropped.sleep} nutrition items=${dropped.nutrition}`,
+  );
+}
+if (malformed.sleep > 0 || malformed.nutrition > 0) {
+  console.log(
+    `dropped (malformed): sleep segments=${malformed.sleep} nutrition items=${malformed.nutrition}`,
   );
 }
 console.log(

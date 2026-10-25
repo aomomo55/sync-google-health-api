@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DailySummarySchema } from "../src/domain/daily.js";
+import { MAX_DATA_POINTS_PER_FILE, TakeoutLimitError } from "../src/takeout/data-points.js";
 import { buildDays } from "../src/takeout/index.js";
 import {
   buildNutritionByDate,
@@ -94,11 +95,58 @@ describe("parseNutritionJson", () => {
         at(String(Date.UTC(2100, 0, 2) * 1e6)),
       ],
     };
-    const stats = { invalidTime: 0 };
+    const stats = { invalidTime: 0, invalidShape: 0 };
     const items = parseNutritionJson(json, "app.a", stats);
     expect(items).toHaveLength(1);
     expect(stats.invalidTime).toBe(3);
+    expect(stats.invalidShape).toBe(0);
     expect(() => buildNutritionByDate(items)).not.toThrow();
+  });
+});
+
+describe("parseNutritionJson の形の検証", () => {
+  it("形の合わない要素は捨てて数え、例外を出さない", () => {
+    const ok = point("2026-03-10T12:00:00+09:00", { calories: 300 });
+    const mapVal = (entries: unknown) => ({ ...ok, fitValue: [{ value: { mapVal: entries } }] });
+    const json = {
+      "Data Points": [
+        null,
+        "x",
+        {},
+        { ...ok, startTimeNanos: null },
+        { ...ok, fitValue: {} },
+        mapVal("x"),
+        mapVal([null]),
+        mapVal([{ key: 1, value: { fpVal: 1 } }]),
+        mapVal([{ key: "calories", value: { fpVal: "300" } }]),
+        // 数値の時刻と、fpVal の無い要素（intVal など）は受け付ける
+        {
+          ...mapVal([
+            { key: "meal_type", value: { intVal: 1 } },
+            { key: "protein", value: { fpVal: 12 } },
+          ]),
+          startTimeNanos: Date.parse("2026-03-10T13:00:00+09:00") * 1e6,
+        },
+        ok,
+      ],
+    };
+    const stats = { invalidTime: 0, invalidShape: 0 };
+    expect(parseNutritionJson(json, "app.a", stats)).toEqual([
+      { source: "app.a", time: Date.parse("2026-03-10T13:00:00+09:00"), protein: 12 },
+      { source: "app.a", time: Date.parse("2026-03-10T12:00:00+09:00"), energy: 300 },
+    ]);
+    expect(stats).toEqual({ invalidTime: 0, invalidShape: 9 });
+    expect(parseNutritionJson({ "Data Points": [null] }, "app.a")).toEqual([]);
+  });
+
+  it("mapVal のキーに Object の組み込みの名前があっても項目にしない", () => {
+    const json = { "Data Points": [point("2026-03-10T12:00:00+09:00", { toString: 1 })] };
+    expect(parseNutritionJson(json, "app.a")).toEqual([]);
+  });
+
+  it("Data Points が上限を超えたら TakeoutLimitError で止める", () => {
+    const json = { "Data Points": new Array(MAX_DATA_POINTS_PER_FILE + 1).fill(null) };
+    expect(() => parseNutritionJson(json, "app.a")).toThrow(TakeoutLimitError);
   });
 });
 

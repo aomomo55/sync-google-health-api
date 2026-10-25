@@ -51,10 +51,22 @@
 - 経路は認証の掛かったグループに置く。`/api/*` は `API_TOKEN`、`/backup/*` は `BACKUP_TOKEN` で、互いの経路を使えないよう分けている（バックアップ用のトークンが漏れても書き込めず、書き込み用のトークンでは全データを取れないようにするため）。認証なしの経路はデータや設定を返さない
 - 設定が足りないときは、認証を外して動かさず、経路を作らないか起動を止める
 - 外から来る値（リクエスト、Takeout、復元するバックアップ、Vault から読んだノート、外部サービスの応答）は zod などで検証してから使う。件数・サイズ・期間には上限を設ける
+  - オブジェクトは `z.strictObject` で余分な項目を弾く。例外は Google が形を決める外部ファイル（Takeout）で、余分な項目を許す `z.object` にし、使う項目だけを検証する（Google が項目を足しても取り込みを止めないため）
 - ノートやクエリに埋め込む値はエスケープする。YAML は `notes/yaml.ts` を使い、Vault のパスは `assertVaultPath` を通す
 - トークンを送る先は `https:` に限る（試験用の `http://localhost` を除く）。CouchDB だけは、fly.io のプライベートネットワーク（`.internal` / `.flycast`）への `http:` も許す（[ADR 0019](docs/adr/0019-restrict-couchdb-url-to-https.md)）。この例外をほかの送り先に広げない。外部への通信にはタイムアウトを付ける
 - 応答にスタックトレースや内部のエラー文を含めない。ログに健康データの中身を出さない
 - バックアップの秘密鍵はサーバーに置かない。暗号化前のデータをディスクに残さない
+
+## CI・Docker・依存の固定
+
+CI（`.github/`）とビルド（`server/Dockerfile`）に入るものを、レビューした版に限るための約束。タグは上流で付け替えられるので、乗っ取られるとこちらが何も変えなくても別のコードが入る。Dockerfile だけに関わる約束は [server/AGENTS.md](server/AGENTS.md#docker) にある。レビューで確認することは REVIEW.md の「GAS・CI・Docker」と「依存の更新」にある。
+
+- アクションは 40 文字のコミット SHA で固定し、行末に `# vX.Y.Z` を書く。`actions/checkout` は `persist-credentials: false` にする（[ADR 0010](docs/adr/0010-pin-dependencies-and-dependabot.md)）
+- Docker イメージは、Dockerfile の `FROM` もワークフローの `services` も、マルチアーキテクチャのインデックスの digest（`<名前>:<タグ>@sha256:…`）で固定する（[ADR 0010](docs/adr/0010-pin-dependencies-and-dependabot.md)）。Dependabot が更新するのは `server/Dockerfile` だけで、ワークフローの `services` のイメージは更新しない。そのため、Dependabot の docker の PR を取り込むときに、あわせて Docker Hub の `services` のイメージ（`couchdb:3`）の digest を確かめ、変わっていれば書き換える。手で更新するものには、その旨をコメントで書く（[ADR 0031](docs/adr/0031-pin-ci-service-images.md)）
+- 更新は Dependabot が提案する。Docker のベースイメージは毎日、ほかは月に一度（[ADR 0023](docs/adr/0023-dependabot-docker-daily.md)）
+- corepack は Node の同梱版を使わず `npm install -g corepack@<版>` で入れる。版は Dependabot で上がらないので、`server/Dockerfile` の `ARG COREPACK_VERSION`、`.github/workflows/ci.yml`・`audit.yml` の「pnpm を有効化」の 3 か所を手でそろえる（[ADR 0014](docs/adr/0014-node-24-and-corepack-from-npm.md)）
+- `.github/workflows/deploy.yml` の flyctl も Dependabot で上がらない。版を上げるときは公開から 3 日以上たった版にし、`FLYCTL_SHA256` をリリースの checksums.txt の値に書き換える（[ADR 0029](docs/adr/0029-deploy-from-actions-on-demand.md)）
+- ワークフローの `permissions` は必要な分だけにする（既定は `contents: read`）。`pull_request_target` は使わず、PR のタイトルやブランチ名など外から来る値は `run:` に `${{ }}` で直接埋め込まず `env:` を通して渡す。公開リポジトリなので、fork からの PR に書き込みの権限や secrets を渡したり、シェルにコードを差し込まれたりしないようにするため
 
 ## 秘密情報の扱い
 

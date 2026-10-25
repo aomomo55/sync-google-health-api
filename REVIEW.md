@@ -86,7 +86,7 @@ done
 
 ### 外部入力
 
-- [ ] 外から来る値（リクエストの本文・クエリ・ヘッダー、Takeout のファイル、復元するバックアップ、Vault から読んだノート、obsidian-sync-mcp や CouchDB の応答）を、型を決めつけて使わず、zod などで検証しているか。オブジェクトは `z.strictObject` で余分な項目を弾いているか
+- [ ] 外から来る値（リクエストの本文・クエリ・ヘッダー、Takeout のファイル、復元するバックアップ、Vault から読んだノート、obsidian-sync-mcp や CouchDB の応答）を、型を決めつけて使わず、zod などで検証しているか。オブジェクトは `z.strictObject` で余分な項目を弾いているか（Takeout は例外で、`z.object` で使う項目だけを検証しているか）
 - [ ] 件数・サイズ・期間に上限があるか（`bodyLimit`、配列の `.max()`、期間の日数、解凍後のサイズなど）。上限が名前を付けた定数になっているか
 - [ ] 検証に失敗したときに、その値を使う処理へ進まないか（ログに出すだけで続けていないか）
 
@@ -122,6 +122,8 @@ done
 
 ### GAS・CI・Docker
 
+規則と理由は [gas/AGENTS.md](gas/AGENTS.md)、ルートの AGENTS.md の「CI・Docker・依存の固定」、server/AGENTS.md の「Docker」。
+
 - [ ] GAS のトークンやフォルダ ID がスクリプト プロパティにあり、コードやログ、通知のメールに出ていないか
 - [ ] GAS の `appsscript.json` の `oauthScopes` が、使う機能の分だけか（より狭いスコープで足りるものを広いスコープで要求していないか）
 - [ ] `gas/` を変えた PR なら、`runBackup` を手で 1 度実行して確かめたことと、利用者が GAS のエディタにコピーし直す必要があることが PR に書かれているか（GAS はテストも自動の配置も無い）
@@ -130,14 +132,15 @@ done
 
 ## 依存の更新（Dependabot など）
 
-Dependabot の脆弱性アラートとセキュリティ更新は、リポジトリの設定（Settings → Advanced Security）で有効にしている（`dependabot.yml` には現れない）。月次の更新とは別に来るセキュリティ更新の PR と、毎日確かめている Docker のベースイメージの PR（[ADR 0023](docs/adr/0023-dependabot-docker-daily.md)）も、この観点で見る。
+Dependabot の脆弱性アラートとセキュリティ更新は、リポジトリの設定（Settings → Advanced Security）で有効にしている（`dependabot.yml` には現れない）。月次の更新とは別に来るセキュリティ更新の PR と、毎日確かめている Docker のベースイメージの PR（[ADR 0023](docs/adr/0023-dependabot-docker-daily.md)）も、この観点で見る。固定と更新の規則と理由は、ルートの AGENTS.md の「CI・Docker・依存の固定」にある。
 
 - [ ] CI が成功していても、CI の外で壊れないか（本番の実行環境、Node のメジャー更新と corepack の同梱の有無など）
 - [ ] lockfile で、本体以外の依存がどれだけ変わっているか
 - [ ] server の依存を変える PR なら、Audit のワークフロー（`.github/workflows/audit.yml`、`pnpm audit --prod --audit-level=high`）が成功しているか
 - [ ] リリースノートの破壊的変更や挙動の変更が、このプロジェクトで使っている API に当たらないか
 - [ ] CI でスキップされる結合テスト（obsidian-sync-mcp）に関わる変更なら、デプロイ後に手で確かめる方法が決まっているか
-- [ ] アクションはコミット SHA、Docker イメージは digest で固定されているか。corepack の版が `server/Dockerfile` と `.github/workflows/ci.yml`・`audit.yml` でそろっているか
+- [ ] アクションはコミット SHA、Docker イメージ（ワークフローの `services` を含む）は digest で固定されているか。corepack の版が `server/Dockerfile` と `.github/workflows/ci.yml`・`audit.yml` でそろっているか
+- [ ] Dependabot の docker の PR なら、Docker Hub の `couchdb:3` の digest も確かめ、変わっていれば `.github/workflows/ci.yml` の `services` を書き換えたか
 - [ ] `.github/workflows/deploy.yml` の flyctl の版を変えるなら、公開から 3 日以上たった版か。`FLYCTL_SHA256` をリリースの checksums.txt の値に書き換えているか
 
 ## 利用者の体験（UI・UX）

@@ -29,7 +29,7 @@
 
 ## コマンド
 
-`server/` で実行する。pnpm 12.8.1 を使う。グローバルに無ければ `npx --yes pnpm@12.8.1 <コマンド>` で実行する。
+`server/` で実行する。pnpm は `package.json` の `packageManager` にある版を使う。グローバルに無ければ `npx --yes pnpm@<版> <コマンド>` で実行する（`<版>` は `packageManager` の `pnpm@` と `+sha512` の間の値）。版はここに書かない（上げるときに `packageManager` と lockfile だけを変えればよいようにするため。[ADR 0010](../docs/adr/0010-pin-dependencies-and-dependabot.md)）。
 
 ```sh
 pnpm install --frozen-lockfile
@@ -56,6 +56,14 @@ pnpm build
 - Vault への書き込みは `VAULT_HEALTH_PREFIX`（既定 `Health/`）配下の `.md` / `.base` に限る
 - 前後の日のリンクは、範囲で探さず `HealthStore.findAdjacentDate` で求める（データが長く途切れていても正しくつなぐため）
 - obsidian-sync-mcp は LiveSync 1.0.33 以降の「ID キー」に未対応。LiveSync 側の ID キーや Obfuscate Properties の設定を変える提案をしない（[ADR 0007](../docs/adr/0007-write-via-obsidian-sync-mcp.md)）
+
+## Docker
+
+`Dockerfile` だけに関わる約束。イメージの digest での固定と corepack の版のそろえ方は、ルートの AGENTS.md の「CI・Docker・依存の固定」にある。
+
+- 実行用のイメージは `USER node` で動かし、root で動かさない（乗っ取られたときの被害を抑えるため）
+- 実行用のイメージには本番の依存（`pnpm install --prod`）とビルド結果だけを入れ、開発用の依存を入れない（攻撃に使える部品とイメージの大きさを減らすため）
+- pnpm は `corepack enable && corepack install` で入れ、`package.json` の `packageManager` の sha512 を検査させる。`corepack prepare` は検査せずにキャッシュするので使わない（[ADR 0010](../docs/adr/0010-pin-dependencies-and-dependabot.md)）
 
 ## デプロイ
 

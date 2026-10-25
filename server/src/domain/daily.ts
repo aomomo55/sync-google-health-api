@@ -131,6 +131,15 @@ export function hasNutritionRecord(n: DailySummary["nutrition"]): boolean {
   return n !== undefined && Object.values(n).some((v) => typeof v === "number" && v > 0);
 }
 
+// 睡眠の記録があるか。就寝・起床の時刻、睡眠時間、ベッド内時間のどれかがあれば記録ありとする。
+// 日次ノートの表示と月次の記録日数・「睡眠の記録が無い日」で同じ判定を使う（ADR 0028）
+export function hasSleepRecord(s: DailySummary["sleep"]): boolean {
+  return (
+    !!s &&
+    (s.asleep_minutes != null || s.in_bed_minutes != null || s.start != null || s.end != null)
+  );
+}
+
 // 睡眠が無い日を「まだ届いていない」とみなすか（ADR 0028）。翌日以降のデータが無い最新の日だけが該当する。
 // 日次ノートの表示と月次の「睡眠の記録が無い日」で同じ判定を使う
 export function isSleepPending(nextDate: string | undefined): boolean {

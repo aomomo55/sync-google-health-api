@@ -5,7 +5,7 @@
 | No. | タイトル | ステータス |
 |---|---|---|
 | [0001](0001-health-connect-as-data-source.md) | 健康データの取得元を Health Connect + 自作 Android アプリにする | 採用 |
-| [0002](0002-deploy-to-flyio.md) | サーバーのデプロイ先を Vercel から fly.io に変更する | 採用 |
+| [0002](0002-deploy-to-flyio.md) | サーバーのデプロイ先を Vercel から fly.io に変更する | 採用（LiveSync CLI と永続ボリュームを使う点を 0007 で更新） |
 | [0003](0003-livesync-cli-for-obsidian-writes.md) | Obsidian への書き込みに公式 Self-hosted LiveSync CLI を使う | 置き換え済み（0007） |
 | [0004](0004-remote-mcp-with-oauth.md) | Claude との接続をリモート MCP サーバー + OAuth にする | 置き換え済み（0007） |
 | [0005](0005-store-health-data-in-couchdb.md) | 健康データを既存 CouchDB の別データベースに保存する | 採用 |
@@ -13,7 +13,7 @@
 | [0007](0007-write-via-obsidian-sync-mcp.md) | Vault への書き込みと Claude との接続を obsidian-sync-mcp に任せる | 採用 |
 | [0008](0008-android-app-health-connect-mapping.md) | Android アプリの送信方式と Health Connect の項目の対応 | 採用（送信の間隔を 0021 で更新） |
 | [0009](0009-protect-daily-note-memo.md) | 日次ノートのメモ欄を消さないよう、不在の判定とマーカーの無いノートの扱いを厳しくする | 採用 |
-| [0010](0010-pin-dependencies-and-dependabot.md) | CI・ビルドの依存を固定し、Dependabot で月に一度更新する | 採用（一部を 0014・0023 で更新） |
+| [0010](0010-pin-dependencies-and-dependabot.md) | CI・ビルドの依存を固定し、Dependabot で月に一度更新する | 採用（一部を 0014・0023・0031 で更新） |
 | [0011](0011-android-release-signing.md) | Android アプリのリリース署名は仕組みだけを用意し、鍵は利用者が管理する | 採用 |
 | [0012](0012-input-validation-and-error-exposure.md) | 受信データの上限と、応答に載せるエラー文の範囲を決める | 採用 |
 | [0013](0013-merge-split-sleep-sessions.md) | 間隔が 2 時間以内の睡眠セッションを一晩の睡眠に結合する | 採用 |
@@ -34,6 +34,7 @@
 | [0028](0028-show-missing-sleep-and-nutrition-in-notes.md) | 日次ノートで、睡眠と食事のデータが無いことを明示する | 採用 |
 | [0029](0029-deploy-from-actions-on-demand.md) | サーバーのデプロイを、手で起動する GitHub Actions でも行えるようにする | 採用 |
 | [0030](0030-count-note-write-failures-as-sync-failures.md) | ノートの書き込みの失敗も送信の失敗に数え、続いたら同じ仕組みで通知する | 採用 |
+| [0031](0031-pin-ci-service-images.md) | CI の services のイメージも digest で固定し、Dependabot の docker の PR を取り込むときに手で更新する | 採用 |
 
 ## 書き方
 

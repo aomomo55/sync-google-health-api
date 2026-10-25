@@ -302,21 +302,19 @@ fun MainScreen() {
     // 設定アプリやヘルスコネクトで権限を変えて戻ってきたときにも反映する
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { scope.launch { refresh() } }
 
-    // 入力内容を検証して保存する。誤りがあれば、その箇所までで止めて誤りの文を返す
+    // 入力をすべて検証し、誤りが無いときだけまとめて保存する。誤りがあれば何も保存せずに誤りの文を返す
     fun saveSettings(): Int? {
-        val u = url.trim()
-        if (!u.startsWith("https://")) return R.string.settings_error_server_url_scheme
-        val t = token.trim()
-        if (t.isNotEmpty()) {
-            if (!SettingsStore.isValidToken(t)) return R.string.settings_error_token_invalid_chars
-            store.saveToken(t)
+        val settings = when (val result = validateSettings(SettingsInput(url, token, checkStart, checkEnd))) {
+            is SettingsValidation.Invalid -> return result.error
+            is SettingsValidation.Valid -> result.settings
+        }
+        settings.token?.let {
+            store.saveToken(it)
             tokenSaved = true
             token = ""
         }
-        val window = SleepCheckWindow.parse(checkStart, checkEnd)
-            ?: return R.string.settings_error_sleep_window
-        store.sleepCheckWindow = window
-        store.serverUrl = u
+        store.sleepCheckWindow = settings.sleepCheckWindow
+        store.serverUrl = settings.serverUrl
         if (granted && store.hasToken()) SyncWorker.schedule(context)
         return null
     }

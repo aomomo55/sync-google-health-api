@@ -206,8 +206,5 @@ class SettingsStore(context: Context) {
 
         // 保存と「読んだ暗号文のままなら消す」を排他にする (SettingsStore は画面とワーカーで別々に作られる)
         private val LOCK = Any()
-
-        // 制御文字を含むトークンはヘッダーとして不正なので保存前に弾く
-        fun isValidToken(t: String): Boolean = t.isNotEmpty() && t.none { it.code < 0x20 || it.code == 0x7f }
     }
 }

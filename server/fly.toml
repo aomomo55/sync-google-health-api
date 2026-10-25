@@ -1,4 +1,5 @@
-# fly.io の設定。アプリ名は自分のものに書き換えるか、`fly deploy -a <アプリ名>` で指定する
+# fly.io の設定。アプリ名はプレースホルダーのままにし、本番のアプリ名はコミットしない
+# 手元からは `fly deploy -a <アプリ名>` で、GitHub Actions では secrets の FLY_APP で指定する（docs/deploy.md）
 app = "your-app-name"
 primary_region = "nrt"
 

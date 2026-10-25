@@ -36,7 +36,7 @@ COUCHDB_PASSWORD=ここにパスワード
 
 ## コマンド
 
-pnpm は `package.json` の `packageManager` にある 12.8.1 を使う。グローバルに無ければ `pnpm` を `npx --yes pnpm@12.8.1` に置き換える。
+pnpm は `package.json` の `packageManager` にある版を使う。グローバルに無ければ `pnpm` を `npx --yes pnpm@<版>` に置き換える。`<版>` は `packageManager` の `pnpm@` と `+sha512` の間の値。
 
 ```sh
 pnpm install --frozen-lockfile

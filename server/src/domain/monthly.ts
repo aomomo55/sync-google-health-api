@@ -1,5 +1,5 @@
 import { round } from "../shared/rounding.js";
-import { type DailySummary, hasNutritionRecord, isSleepPending } from "./daily.js";
+import { type DailySummary, hasNutritionRecord, hasSleepRecord, isSleepPending } from "./daily.js";
 import { formatHm, jstMinutesOfDay, MINUTES_PER_DAY } from "./dates.js";
 
 export interface MonthlySummary {
@@ -36,8 +36,10 @@ export interface MonthlySummary {
   };
 }
 
-// 平均就寝時刻の境目。これより前の就寝は翌日（日付が変わってから寝た）とみなす
-const BEDTIME_DAY_BOUNDARY_MINUTES = 12 * 60;
+// 就寝時刻の日の境目（時）。これより前の就寝は翌日（日付が変わってから寝た）とみなす。
+// 月次の平均就寝時刻と、睡眠ダッシュボードの就寝時刻のグラフで同じ境目を使う
+export const BEDTIME_DAY_BOUNDARY_HOURS = 12;
+const BEDTIME_DAY_BOUNDARY_MINUTES = BEDTIME_DAY_BOUNDARY_HOURS * 60;
 
 function vals(xs: (number | null | undefined)[]): number[] {
   return xs.filter((x): x is number => typeof x === "number");
@@ -59,13 +61,6 @@ function avgBedtime(xs: number[]): string | null {
   // 12:00 より前は翌日扱いにして平均し、24h で巻き戻す
   const a = avg(xs.map((m) => (m < BEDTIME_DAY_BOUNDARY_MINUTES ? m + MINUTES_PER_DAY : m)));
   return a === null ? null : formatHm(a);
-}
-
-function hasSleepRecord(s: DailySummary["sleep"]): boolean {
-  return (
-    !!s &&
-    (s.asleep_minutes != null || s.in_bed_minutes != null || s.start != null || s.end != null)
-  );
 }
 
 function hasData(d: DailySummary): boolean {

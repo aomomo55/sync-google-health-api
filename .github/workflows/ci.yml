@@ -22,9 +22,13 @@ jobs:
       run:
         working-directory: server
     # 結合テスト用の CouchDB 3
+    # digest で固定する。Dependabot はワークフローの services のイメージを更新しないので手で更新する
+    # (docker の更新の対象は server/Dockerfile だけ。github-actions の更新は uses: だけが対象)
+    # Dependabot の docker の PR を取り込むときに Docker Hub の couchdb:3 の digest を確かめ、
+    # 変わっていれば書き換える（理由は docs/adr/0031-pin-ci-service-images.md）
     services:
       couchdb:
-        image: couchdb:3
+        image: couchdb:3@sha256:4e8e0a366208a87d5059b0f4fcbefff13c32401a655d4629c19be6288ea77675
         env:
           COUCHDB_USER: admin
           COUCHDB_PASSWORD: password

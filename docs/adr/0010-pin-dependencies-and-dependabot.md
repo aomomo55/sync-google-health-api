@@ -1,6 +1,6 @@
 # 0010: CI・ビルドの依存を固定し、Dependabot で月に一度更新する
 
-- ステータス: 採用（Node の版と corepack の入れ方は [0014](0014-node-24-and-corepack-from-npm.md)、Docker の更新の頻度は [0023](0023-dependabot-docker-daily.md) で更新）
+- ステータス: 採用（Node の版と corepack の入れ方は [0014](0014-node-24-and-corepack-from-npm.md)、Docker の更新の頻度は [0023](0023-dependabot-docker-daily.md)、CI の services のイメージは [0031](0031-pin-ci-service-images.md) で更新）
 - 日付: 2026-10-05
 
 ## 背景

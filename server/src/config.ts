@@ -20,7 +20,8 @@ const token = (min: number) =>
     .string()
     .min(min, `${min}文字以上が必要です`)
     .regex(/^[\x21-\x7e]+$/, "空白・改行・制御文字・全角文字を含めないでください");
-// bearerAuth が受け付ける文字に限る。それ以外の文字を含むと起動はできても全リクエストが 400 になる
+// bearerAuth が受け付ける文字に限る。それ以外の文字を含むと起動はできても全リクエストが 400 になる。
+// Android の保存前の検査（android/.../SettingsInput.kt の isValidToken）も、この文字の規則にそろえている
 const bearerToken = token(MIN_API_TOKEN_LENGTH).regex(
   BEARER_TOKEN_PATTERN,
   "英数字と . _ ~ + / - （末尾の = は可）だけで指定してください",
