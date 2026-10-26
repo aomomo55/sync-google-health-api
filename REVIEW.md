@@ -133,11 +133,11 @@ done
 
 ## 依存の更新（Dependabot など）
 
-Dependabot の脆弱性アラートとセキュリティ更新は、リポジトリの設定（Settings → Advanced Security）で有効にしている（`dependabot.yml` には現れない）。月次の更新とは別に来るセキュリティ更新の PR と、毎日確かめている Docker のベースイメージの PR（[ADR 0023](docs/adr/0023-dependabot-docker-daily.md)）も、この観点で見る。固定と更新の規則と理由は、ルートの AGENTS.md の「CI・Docker・依存の固定」にある。
+Dependabot の脆弱性アラートとセキュリティ更新は、リポジトリの設定（Settings → Advanced Security）で有効にしている（`dependabot.yml` には現れない）。ただし `server/` の npm の依存は、lockfile が pnpm 12 の 2 文書形式で依存グラフに載らないため、アラートもセキュリティ更新も来ない。代わりに週次の Audit が失敗すると Issue が立つ（[ADR 0032](docs/adr/0032-issue-on-audit-failure.md)）。月次の更新とは別に来るセキュリティ更新の PR と、毎日確かめている Docker のベースイメージの PR（[ADR 0023](docs/adr/0023-dependabot-docker-daily.md)）も、この観点で見る。固定と更新の規則と理由は、ルートの AGENTS.md の「CI・Docker・依存の固定」にある。
 
 - [ ] CI が成功していても、CI の外で壊れないか（本番の実行環境、Node のメジャー更新と corepack の同梱の有無など）
 - [ ] lockfile で、本体以外の依存がどれだけ変わっているか
-- [ ] server の依存を変える PR なら、Audit のワークフロー（`.github/workflows/audit.yml`、`pnpm audit --prod --audit-level=high`）が成功しているか
+- [ ] server の依存を変える PR なら、Audit のワークフロー（`.github/workflows/audit.yml`、`pnpm audit --prod --audit-level=high`）が成功しているか。週次・手動の実行で失敗すると Issue が立つ（[ADR 0032](docs/adr/0032-issue-on-audit-failure.md)）
 - [ ] リリースノートの破壊的変更や挙動の変更が、このプロジェクトで使っている API に当たらないか
 - [ ] CI でスキップされる結合テスト（obsidian-sync-mcp）に関わる変更なら、デプロイ後に手で確かめる方法が決まっているか
 - [ ] アクションはコミット SHA、Docker イメージ（ワークフローの `services` を含む）は digest で固定されているか。corepack の版が `server/Dockerfile` と `.github/workflows/ci.yml`・`audit.yml` でそろっているか

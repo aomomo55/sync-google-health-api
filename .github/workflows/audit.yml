@@ -1,7 +1,9 @@
 name: Audit
 
 # server の本番の依存に、既知の脆弱性（high 以上）が無いかを確かめる。
-# 依存を変えていなくても脆弱性は後から公開されるので、週に一度も実行する
+# 依存を変えていなくても脆弱性は後から公開されるので、週に一度も実行する。
+# 定期実行と手動の実行で失敗したら Issue を立てる（ADR 0032）。GitHub の依存グラフは
+# pnpm 12 の lockfile（2 文書形式）を読めず Dependabot alerts が出ないため、この Issue が唯一の通知になる
 on:
   schedule:
     # 毎週月曜 21:17（UTC。日本時間では火曜 6:17）
@@ -20,6 +22,9 @@ jobs:
   server:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # 失敗したときに notify ジョブが Issue へ載せる、pnpm audit の出力の先頭
+    outputs:
+      summary: ${{ steps.audit.outputs.summary }}
     defaults:
       run:
         working-directory: server
@@ -43,4 +48,62 @@ jobs:
           pnpm --version
 
       # pnpm audit は pnpm-lock.yaml を読むので、依存のインストールは要らない
-      - run: pnpm audit --prod --audit-level=high
+      # 出力は Issue に載せるため、ファイルにも残す。終了コードはそのまま返してジョブを失敗させる
+      - name: pnpm audit
+        id: audit
+        run: |
+          set +e
+          pnpm audit --prod --audit-level=high 2>&1 | tee "$RUNNER_TEMP/audit.txt"
+          status=${PIPESTATUS[0]}
+          delimiter="EOF_$(openssl rand -hex 16)"
+          {
+            echo "summary<<$delimiter"
+            # バイト数で切ると UTF-8 の文字（表の罫線など）が途中で切れるので、壊れた文字を落とす
+            head -c 3000 "$RUNNER_TEMP/audit.txt" | iconv -c -f UTF-8 -t UTF-8
+            echo
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+  # 定期実行・手動の実行で audit が失敗したときだけ Issue を立てる（PR では立てない）。
+  # 書き込みの権限は、このジョブにだけ与える
+  notify:
+    needs: server
+    if: ${{ always() && needs.server.result == 'failure' && github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      SUMMARY: ${{ needs.server.outputs.summary }}
+    steps:
+      # 同じタイトルの Issue が開いていれば、新しく立てずにコメントを足す（毎週の重複を防ぐ）。
+      # 公開リポジトリなので、第三者が同じタイトルで立てた Issue に流れないよう、github-actions が立てたものに限る
+      - name: Issue を立てる、または開いている Issue にコメントする
+        run: |
+          title="脆弱性の監査（Audit）が失敗した"
+          body_file="$RUNNER_TEMP/body.md"
+          {
+            echo "失敗した実行: $RUN_URL"
+            echo
+            echo "pnpm audit の出力（先頭 3000 バイト。無いときは audit の前の手順で失敗している）:"
+            echo
+            echo "~~~~"
+            echo "$SUMMARY"
+            echo "~~~~"
+            echo
+            echo "対応: 該当の依存を上げる。直るまでは、この Issue を開いたままにする（毎週、ここにコメントが付く）。"
+          } > "$body_file"
+
+          number=$(gh issue list --state open --limit 200 --json number,title,author \
+            | jq -r --arg title "$title" \
+              'map(select(.title == $title and .author.login == "app/github-actions")) | .[0].number // empty')
+
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body-file "$body_file"
+          else
+            gh issue create --title "$title" --body-file "$body_file"
+          fi
