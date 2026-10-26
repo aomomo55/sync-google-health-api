@@ -34,14 +34,14 @@
 
 ## 結果
 
-- 脆弱性が見つかると、週に一度 Issue が立つ（または既存の Issue にコメントが付く）。Issue は通知先として GitHub の通知メールに乗る
+- 脆弱性が見つかると、週に一度 Issue が立つ（または既存の Issue にコメントが付く）。Actions の失敗通知と違い、直すまで Issue として残る
 - Issue は自動では閉じない。直したら手で閉じる
 - 依存グラフと Dependabot alerts は引き続き使えない。GitHub が pnpm 12 の 2 文書形式を読めるようになったら、この ADR を見直す。そのときは alerts と Issue が二重にならないか確かめる
 - audit が失敗した理由が脆弱性とは限らない（レジストリの障害など）。本文の出力が空のときは、run の URL から確かめる
-- 公開リポジトリでは、60 日間リポジトリに動きが無いと定期実行のワークフローが自動で止まる（[schedule の注記](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)）。この Issue が `server/` の脆弱性の唯一の通知なので、止まったという通知が来たら Actions の画面で有効に戻す
+- 公開リポジトリでは、60 日間リポジトリに動きが無いと定期実行のワークフローが自動で止まる（[schedule の注記](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)）。この Issue が `server/` の脆弱性の唯一の通知なので、止まっていないかを Actions の画面で時々確かめ、止まっていたら有効に戻す（[有効・無効の切り替え](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)。止まったときに通知が来るとは書かれていない）
 - 通知メールが届くかは、リポジトリの Watch の設定しだい。「All Activity」なら新しい Issue も既存の Issue へのコメントも届く。それ以外の設定では届かないことがあるので、最初の Issue が立ったら、その Issue を購読しておく
-- 既存の Issue は、タイトルが一致し、作成者が `app/github-actions` のものだけを探す（公開リポジトリで、第三者が同じタイトルの Issue を立ててもそちらへ流れないようにするため）。作成者の名前の形は最初の実行で確かめる
-- 失敗したジョブの job outputs が後続のジョブに渡ることは、ドキュメントに明記が無い。導入時に、脆弱な依存が残るブランチで `workflow_dispatch` を実行し、本文に出力が載ることを確かめる
+- 既存の Issue は、タイトルが一致し、作成者が `app/github-actions` のものだけを探す（公開リポジトリで、第三者が同じタイトルの Issue を立ててもそちらへ流れないようにするため）
+- 失敗したジョブの job outputs が後続のジョブに渡ることは、ドキュメントに明記が無い。2026-10-26 に、脆弱な依存（body-parser 2.3.0）が残るこのブランチで `workflow_dispatch` を実行し（[run 40299413410](https://github.com/aomomo55/sync-google-health-api/actions/runs/40299413410)）、#114 が立って本文に audit の出力が載ること、作成者が `app/github-actions` になることを確かめた（#114 は確認用なので閉じた）
 
 ## 参考
 
