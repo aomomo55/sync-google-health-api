@@ -35,6 +35,7 @@
 | [0029](0029-deploy-from-actions-on-demand.md) | サーバーのデプロイを、手で起動する GitHub Actions でも行えるようにする | 採用 |
 | [0030](0030-count-note-write-failures-as-sync-failures.md) | ノートの書き込みの失敗も送信の失敗に数え、続いたら同じ仕組みで通知する | 採用 |
 | [0031](0031-pin-ci-service-images.md) | CI の services のイメージも digest で固定し、Dependabot の docker の PR を取り込むときに手で更新する | 採用 |
+| [0032](0032-issue-on-audit-failure.md) | 週次の脆弱性監査が失敗したら Issue を立てる（依存グラフが pnpm 12 の lockfile を読めないため） | 採用 |
 
 ## 書き方
 
