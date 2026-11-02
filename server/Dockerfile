@@ -6,7 +6,7 @@
 ARG COREPACK_VERSION=0.36.0
 
 # ビルド用: 依存を全部入れて TypeScript をコンパイルする
-FROM node:24-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205 AS build
+FROM node:24-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c AS build
 ARG COREPACK_VERSION
 WORKDIR /app
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
@@ -19,7 +19,7 @@ COPY src ./src
 RUN pnpm run build
 
 # 実行用: 本番の依存とビルド結果だけを持つ
-FROM node:24-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205
+FROM node:24-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c
 ARG COREPACK_VERSION
 WORKDIR /app
 ENV NODE_ENV=production
