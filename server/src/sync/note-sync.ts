@@ -1,6 +1,9 @@
-import { isRealDate, monthKeyRange } from "../domain/dates.js";
+import type { DailySummary } from "../domain/daily.js";
+import { addDays, isRealDate, monthKeyRange } from "../domain/dates.js";
+import { type NightClimate, summarizeNights } from "../domain/room.js";
 import { MemoMarkerMissingError } from "../notes/index.js";
 import type { HealthStore } from "../store/health-store.js";
+import type { RoomStore } from "../store/room-store.js";
 import type { VaultPathError, VaultWriter } from "../vault/vault-writer.js";
 import { type PlanItem, planNotes, splitValidDays } from "./plan.js";
 
@@ -40,6 +43,8 @@ export interface SyncReport {
 
 export interface NoteSyncDeps {
   store: HealthStore;
+  // 寝室の温湿度。無ければ日次ノートの温湿度は空になる
+  room?: RoomStore | null;
   writer: VaultWriter;
   root?: string;
   concurrency?: number;
@@ -50,12 +55,14 @@ const maxDate = (a: string, b: string) => (a > b ? a : b);
 
 export class NoteSync {
   private readonly store: HealthStore;
+  private readonly room: RoomStore | null;
   private readonly writer: VaultWriter;
   private readonly root?: string;
   private readonly concurrency: number;
 
   constructor(deps: NoteSyncDeps) {
     this.store = deps.store;
+    this.room = deps.room ?? null;
     this.writer = deps.writer;
     this.root = deps.root;
     this.concurrency = Math.max(1, deps.concurrency ?? DEFAULT_CONCURRENCY);
@@ -107,8 +114,22 @@ export class NoteSync {
 
     const targetDates =
       targets ?? days.filter((d) => d.date >= from && d.date <= to).map((d) => d.date);
-    const items = planNotes(days, targetDates, this.root, { includeStatic });
+    const climate = await this.nightClimate(days, targetDates);
+    const items = planNotes(days, targetDates, this.root, { includeStatic, climate });
     return this.apply(items, failed);
+  }
+
+  // 対象の日と前後の日（ノートを作り直す日）の夜の温湿度。就寝は起床日の前日に始まるので、前日から読む
+  private async nightClimate(
+    days: DailySummary[],
+    targetDates: string[],
+  ): Promise<Map<string, NightClimate>> {
+    const first = days[0]?.date;
+    const last = days.at(-1)?.date;
+    if (!this.room || targetDates.length === 0 || !first || !last) return new Map();
+    const nights = days.map((d) => ({ date: d.date, start: d.sleep?.start, end: d.sleep?.end }));
+    const readings = await this.room.getReadings(addDays(first, -1), last);
+    return summarizeNights(nights, readings);
   }
 
   // 前後の日を、不正な日付を読み飛ばして求める

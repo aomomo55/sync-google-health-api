@@ -19,7 +19,7 @@ fly deploy -a <アプリ名> --ha=false
 
 ## 秘密情報を登録する
 
-`API_TOKEN`、`COUCHDB_*`、`OBSIDIAN_MCP_*`、`BACKUP_TOKEN` などの秘密情報は fly.io の secrets に登録する。リポジトリやログには出さない。値の規則は [server/README.md](../server/README.md#環境変数) にある。
+`API_TOKEN`、`COUCHDB_*`、`OBSIDIAN_MCP_*`、`BACKUP_TOKEN`、`ROOM_TOKEN` などの秘密情報は fly.io の secrets に登録する。リポジトリやログには出さない。値の規則は [server/README.md](../server/README.md#環境変数) にある。
 
 値がシェルの履歴に残らないよう、標準入力から渡す。
 

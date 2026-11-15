@@ -370,3 +370,71 @@ describe("VAULT_HEALTH_PREFIX に合わせたルート", () => {
     expect([...b.notes.entries()]).toEqual([...a.notes.entries()]);
   });
 });
+
+describe("NoteSync の寝室の温湿度", () => {
+  const NOTE_PATH = "Health/Daily/2026-03-15.md";
+  const sleepDay = {
+    date: "2026-03-15",
+    sleep: {
+      start: "2026-03-14T23:00:00+09:00",
+      end: "2026-03-15T07:00:00+09:00",
+      asleep_minutes: 450,
+    },
+  };
+  // 就寝から起床まで 1 時間おき（9 件）。気温は 18〜22℃
+  const nightReadings = Array.from({ length: 9 }, (_, i) => ({
+    time: new Date(Date.parse("2026-03-14T14:00:00Z") + i * 3_600_000).toISOString(),
+    temperature_c: 18 + (i % 5),
+    humidity_pct: 40 + i,
+  }));
+  const frontmatterValue = (note: string, key: string) =>
+    new RegExp(`^${key}:(.*)$`, "m").exec(note)?.[1]?.trim();
+
+  function setupRoom() {
+    const store = new MemoryStore();
+    const writer = new MemoryVaultWriter();
+    return { store, writer, sync: new NoteSync({ store, room: store, writer }) };
+  }
+
+  it("睡眠の時間帯の読み取り値から、日次ノートに夜の温湿度を書く", async () => {
+    const { store, writer, sync } = setupRoom();
+    await store.upsertDays([sleepDay]);
+    await store.upsertReadings(nightReadings);
+    await sync.syncDates(["2026-03-15"]);
+    const note = writer.notes.get(NOTE_PATH)!;
+    expect(frontmatterValue(note, "夜平均室温")).toBe("19.8");
+    expect(frontmatterValue(note, "夜最低室温")).toBe("18");
+    expect(frontmatterValue(note, "夜最高室温")).toBe("22");
+    expect(frontmatterValue(note, "夜平均湿度")).toBe("44");
+    expect(note).toContain("- 寝室（睡眠中）: 平均 19.8℃（18〜22℃）/ 湿度 44%");
+  });
+
+  it("読み取り値が無ければ温湿度のキーは空で、サマリーの行も出さない", async () => {
+    const { store, writer, sync } = setupRoom();
+    await store.upsertDays([sleepDay]);
+    await sync.syncDates(["2026-03-15"]);
+    const note = writer.notes.get(NOTE_PATH)!;
+    for (const k of ["夜平均室温", "夜最低室温", "夜最高室温", "夜平均湿度"]) {
+      expect(frontmatterValue(note, k)).toBe("");
+    }
+    expect(note).not.toContain("寝室（睡眠中）");
+  });
+
+  it("room を渡さなければ温湿度は書かない", async () => {
+    const { store, writer, sync } = setup();
+    await store.upsertDays([sleepDay]);
+    await store.upsertReadings(nightReadings);
+    await sync.syncDates(["2026-03-15"]);
+    expect(frontmatterValue(writer.notes.get(NOTE_PATH)!, "夜平均室温")).toBe("");
+  });
+
+  it("温湿度が後から届いたら、次の同期でノートを更新する", async () => {
+    const { store, writer, sync } = setupRoom();
+    await store.upsertDays([sleepDay]);
+    await sync.syncDates(["2026-03-15"]);
+    await store.upsertReadings(nightReadings);
+    const r = await sync.syncDates(["2026-03-15"]);
+    expect(r.written).toContain(NOTE_PATH);
+    expect(frontmatterValue(writer.notes.get(NOTE_PATH)!, "夜平均室温")).toBe("19.8");
+  });
+});

@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { type DailySummary, isSameDay, mergeDay } from "../domain/daily.js";
+import {
+  fromJstSlot,
+  groupByJstDate,
+  mergeSlots,
+  type RoomReading,
+  type RoomSlot,
+  sortSlots,
+} from "../domain/room.js";
 import type { HealthStore } from "./health-store.js";
+import type { RoomStore } from "./room-store.js";
 
 export interface CouchStoreOptions {
   baseUrl: string;
@@ -44,7 +53,28 @@ const MAX_CONFLICT_RETRIES = 3;
 const DAY_ID_PREFIX = "day:";
 const DAY_ID_END = `${DAY_ID_PREFIX}\uffff`;
 const dayId = (date: string) => `${DAY_ID_PREFIX}${date}`;
+// 温湿度の文書の _id は "room:YYYY-MM-DD"（Asia/Tokyo の日付）。day: の範囲には入らない
+const ROOM_ID_PREFIX = "room:";
+const roomId = (date: string) => `${ROOM_ID_PREFIX}${date}`;
 const queryKey = (s: string) => encodeURIComponent(JSON.stringify(s));
+
+type RoomDoc = {
+  _id: string;
+  _rev?: string;
+  type: "room";
+  date: string;
+  readings: RoomSlot[];
+  updated_at: string;
+};
+
+// 文書の中身も外から来る値（手で直された文書など）として検証する。値の範囲は受信時に確かめている
+const roomSlotsSchema = z.array(
+  z.object({
+    time: z.string().regex(/^\d{2}:\d{2}$/),
+    temperature_c: z.number(),
+    humidity_pct: z.number(),
+  }),
+);
 const DEFAULT_TIMEOUT_MS = 10_000;
 
 const isTimeout = (e: unknown) =>
@@ -60,7 +90,7 @@ function parseResponse<T>(schema: z.ZodType<T>, json: unknown, label: string): T
   return parsed.data;
 }
 
-export class CouchStore implements HealthStore {
+export class CouchStore implements HealthStore, RoomStore {
   private readonly base: string;
   private readonly auth: string;
   private readonly db: string;
@@ -178,6 +208,89 @@ export class CouchStore implements HealthStore {
     const { rows } = parseResponse(allDocsIdsSchema, json, requestLabel("GET", path));
     const hit = rows.find((r) => r.id !== dayId(date));
     return hit ? hit.id.slice(DAY_ID_PREFIX.length) : null;
+  }
+
+  async getReadings(from: string, to: string): Promise<RoomReading[]> {
+    const path = `/_all_docs?include_docs=true&startkey=${queryKey(roomId(from))}&endkey=${queryKey(roomId(to))}`;
+    const json = await this.request("GET", path);
+    const label = requestLabel("GET", path);
+    return CouchStore.docsOf(json, label)
+      .map((d) => d as unknown as RoomDoc)
+      .sort((a, b) => a._id.localeCompare(b._id))
+      .flatMap((doc) => {
+        // 日付の正は _id（day: の文書と同じ）。中身の形は確かめてから使う
+        const parsed = roomSlotsSchema.safeParse(doc.readings);
+        if (!parsed.success) throw new Error(`${label} の温湿度の文書の形が不正です（${doc._id}）`);
+        const date = doc._id.slice(ROOM_ID_PREFIX.length);
+        return sortSlots(parsed.data).map((s) => fromJstSlot(date, s));
+      });
+  }
+
+  async upsertReadings(readings: RoomReading[]): Promise<{ written: number; unchanged: number }> {
+    const grouped = groupByJstDate(readings);
+    // 競合した日だけを再送するリトライの制御なので let にする
+    let pending = [...grouped.keys()];
+    let written = 0;
+    let unchanged = 0;
+    const allDocsPath = "/_all_docs?include_docs=true";
+    const bulkDocsPath = "/_bulk_docs";
+    const bulkLabel = requestLabel("POST", bulkDocsPath);
+
+    for (let attempt = 0; pending.length > 0; attempt++) {
+      if (attempt > MAX_CONFLICT_RETRIES) {
+        throw new Error("CouchDB への書き込みが競合し続けました");
+      }
+      const existingJson = await this.request("POST", allDocsPath, { keys: pending.map(roomId) });
+      const existing = new Map(
+        CouchStore.docsOf(existingJson, requestLabel("POST", allDocsPath)).map((d) => [
+          d._id,
+          d as unknown as RoomDoc,
+        ]),
+      );
+      const now = new Date().toISOString();
+      const planned = pending.map((date) => {
+        const incoming = grouped.get(date)!;
+        const old = existing.get(roomId(date));
+        const oldSlots = old ? roomSlotsSchema.safeParse(old.readings) : undefined;
+        if (oldSlots && !oldSlots.success) {
+          throw new Error(`CouchDB の温湿度の文書の形が不正です（${roomId(date)}）`);
+        }
+        const { slots, changed } = mergeSlots(oldSlots?.data ?? [], incoming);
+        const doc: RoomDoc = {
+          _id: roomId(date),
+          type: "room",
+          date,
+          readings: slots,
+          updated_at: now,
+          ...(old?._rev ? { _rev: old._rev } : {}),
+        };
+        return { date, doc, changed, total: incoming.length };
+      });
+      // 変わらない日は書き込まない（送り直しのたびに版を増やさないため）
+      const toWrite = planned.filter((p) => p.changed > 0);
+      unchanged += planned.filter((p) => p.changed === 0).reduce((n, p) => n + p.total, 0);
+      if (toWrite.length === 0) break;
+
+      const json = await this.request("POST", bulkDocsPath, { docs: toWrite.map((p) => p.doc) });
+      const results = parseResponse(bulkResultsSchema, json, bulkLabel);
+      if (results.length !== toWrite.length) {
+        throw new Error(
+          `${bulkLabel} の応答の件数が送った文書の数と合いません（送信 ${toWrite.length} 件、応答 ${results.length} 件）`,
+        );
+      }
+      const conflicts = new Set<string>();
+      results.forEach((r, i) => {
+        const p = toWrite[i]!;
+        if (r.ok) {
+          written += p.changed;
+          unchanged += p.total - p.changed;
+        } else if (r.error === "conflict") conflicts.add(p.date);
+        else
+          throw new Error(`CouchDB bulk 書き込みエラー: ${r.error ?? "unknown"} (${r.id ?? "?"})`);
+      });
+      pending = pending.filter((d) => conflicts.has(d));
+    }
+    return { written, unchanged };
   }
 
   async upsertDays(days: DailySummary[]): Promise<{ written: number; unchanged: number }> {

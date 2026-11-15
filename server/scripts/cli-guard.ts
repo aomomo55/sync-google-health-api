@@ -1,4 +1,4 @@
-// CLI（import:takeout / sync:notes）で共通の入力検査、サーバーへの通信のタイムアウト、エラー表示からのトークン除去
+// CLI（import:takeout / sync:notes / import:room-csv）で共通の入力検査、サーバーへの通信のタイムアウト、エラー表示からのトークン除去
 
 // トークンの規則とローカルのホストは、サーバーの設定の検査と同じものを使う
 import {
@@ -9,13 +9,14 @@ import {
 } from "../src/config.js";
 
 /** 問題があればエラーメッセージを返す。メッセージにトークンの値は含めない */
-export function checkApiToken(token: string | undefined): string | undefined {
-  if (!token) return "環境変数 API_TOKEN が未設定です";
+// name は環境変数の名前（ROOM_TOKEN なども同じ規則なので使い回す）
+export function checkApiToken(token: string | undefined, name = "API_TOKEN"): string | undefined {
+  if (!token) return `環境変数 ${name} が未設定です`;
   if (!BEARER_TOKEN_PATTERN.test(token)) {
-    return "環境変数 API_TOKEN に使えない文字が含まれています（英数字と . _ ~ + / - のみ、末尾に = 可）。貼り付け時に改行・空白・制御文字が混入していないか確認してください";
+    return `環境変数 ${name} に使えない文字が含まれています（英数字と . _ ~ + / - のみ、末尾に = 可）。貼り付け時に改行・空白・制御文字が混入していないか確認してください`;
   }
   if (token.length < MIN_API_TOKEN_LENGTH) {
-    return `環境変数 API_TOKEN は ${MIN_API_TOKEN_LENGTH} 文字以上にしてください`;
+    return `環境変数 ${name} は ${MIN_API_TOKEN_LENGTH} 文字以上にしてください`;
   }
   return undefined;
 }

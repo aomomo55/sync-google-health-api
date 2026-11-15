@@ -1,8 +1,36 @@
 import { type DailySummary, isSameDay, mergeDay } from "../domain/daily.js";
+import {
+  fromJstSlot,
+  groupByJstDate,
+  mergeSlots,
+  type RoomReading,
+  type RoomSlot,
+} from "../domain/room.js";
 import type { HealthStore } from "./health-store.js";
+import type { RoomStore } from "./room-store.js";
 
-export class MemoryStore implements HealthStore {
+export class MemoryStore implements HealthStore, RoomStore {
   private readonly days = new Map<string, DailySummary>();
+  private readonly room = new Map<string, RoomSlot[]>();
+
+  async upsertReadings(readings: RoomReading[]): Promise<{ written: number; unchanged: number }> {
+    const results = [...groupByJstDate(readings)].map(([date, incoming]) => {
+      const { slots, changed } = mergeSlots(this.room.get(date) ?? [], incoming);
+      this.room.set(date, slots);
+      return { written: changed, unchanged: incoming.length - changed };
+    });
+    return results.reduce(
+      (acc, r) => ({ written: acc.written + r.written, unchanged: acc.unchanged + r.unchanged }),
+      { written: 0, unchanged: 0 },
+    );
+  }
+
+  async getReadings(from: string, to: string): Promise<RoomReading[]> {
+    return [...this.room.entries()]
+      .filter(([date]) => date >= from && date <= to)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .flatMap(([date, slots]) => slots.map((s) => fromJstSlot(date, s)));
+  }
 
   async ensureReady(): Promise<void> {}
 

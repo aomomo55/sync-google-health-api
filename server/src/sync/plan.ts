@@ -1,6 +1,7 @@
 import type { DailySummary } from "../domain/daily.js";
 import { isRealDate } from "../domain/dates.js";
 import { summarizeMonth } from "../domain/monthly.js";
+import type { NightClimate } from "../domain/room.js";
 import {
   mergeMemo,
   notePaths,
@@ -58,7 +59,7 @@ export function planNotes(
   allDays: DailySummary[],
   targetDates: string[],
   root?: string,
-  opts: { includeStatic?: boolean } = {},
+  opts: { includeStatic?: boolean; climate?: ReadonlyMap<string, NightClimate> } = {},
 ): PlanItem[] {
   const days = splitValidDays(allDays).valid;
   const p = notePaths(root);
@@ -70,9 +71,10 @@ export function planNotes(
     const i = byDate.get(date)!;
     const day = days[i]!;
     const nav = { prev: days[i - 1]?.date, next: days[i + 1]?.date };
+    const climate = opts.climate?.get(date) ?? null;
     items.push({
       path: p.daily(date),
-      render: (existing) => mergeMemo(existing, renderDailyNote(day, nav, root)),
+      render: (existing) => mergeMemo(existing, renderDailyNote(day, nav, root, climate)),
     });
   }
 

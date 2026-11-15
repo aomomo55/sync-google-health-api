@@ -142,6 +142,8 @@ const schema = z
       .string()
       .refine(isAgeRecipient, "age の公開鍵（age1...）を指定してください")
       .optional(),
+    // 寝室の温湿度の受信（POST /room/readings）専用。漏れても健康データの読み書きはできないよう、ほかのトークンと分ける
+    ROOM_TOKEN: bearerToken.optional(),
   })
   .refine((c) => !!c.OBSIDIAN_MCP_URL === !!c.OBSIDIAN_MCP_TOKEN, {
     message: "OBSIDIAN_MCP_URL と OBSIDIAN_MCP_TOKEN は両方設定するか両方未設定にしてください",
@@ -154,7 +156,16 @@ const schema = z
   .refine((c) => c.BACKUP_TOKEN === undefined || c.BACKUP_TOKEN !== c.API_TOKEN, {
     message: "BACKUP_TOKEN には API_TOKEN と別の値を指定してください",
     path: ["BACKUP_TOKEN"],
-  });
+  })
+  .refine(
+    (c) =>
+      c.ROOM_TOKEN === undefined ||
+      (c.ROOM_TOKEN !== c.API_TOKEN && c.ROOM_TOKEN !== c.BACKUP_TOKEN),
+    {
+      message: "ROOM_TOKEN には API_TOKEN・BACKUP_TOKEN と別の値を指定してください",
+      path: ["ROOM_TOKEN"],
+    },
+  );
 
 export type Config = z.infer<typeof schema>;
 export type CouchdbConnection = z.infer<typeof couchdbConnectionSchema>;

@@ -1,3 +1,4 @@
+import { generateIdentity, identityToRecipient } from "age-encryption";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../src/app.js";
 import { loadConfig, loadCouchdbConnection } from "../src/config.js";
@@ -186,6 +187,65 @@ describe("API_TOKEN", () => {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(res.status).toBe(200);
+  });
+});
+
+const recipient = await identityToRecipient(await generateIdentity());
+
+describe("ROOM_TOKEN", () => {
+  const ROOM = "r".repeat(32);
+
+  it("未設定でも起動できる", () => {
+    expect(loadConfig(BASE).ROOM_TOKEN).toBeUndefined();
+  });
+
+  it("API_TOKEN と同じ規則で受け付ける", () => {
+    const ok = `Ab0._~+/-${"x".repeat(24)}==`;
+    expect(loadConfig({ ...BASE, ROOM_TOKEN: ok }).ROOM_TOKEN).toBe(ok);
+  });
+
+  it("短すぎるトークンは拒否し、値を出さない", () => {
+    const short = "r".repeat(8);
+    const msg = errorOf({ ...BASE, ROOM_TOKEN: short });
+    expect(msg).toMatch(/ROOM_TOKEN/);
+    expect(msg).not.toContain(short);
+  });
+
+  it("使えない文字を含むトークンは拒否し、値を出さない", () => {
+    for (const ch of ["!", "#", ":", "@", " ", "\n", "\x1b", "\u200b", "\uff41"]) {
+      const bad = `${"r".repeat(32)}${ch}`;
+      const msg = errorOf({ ...BASE, ROOM_TOKEN: bad });
+      expect(msg).toMatch(/ROOM_TOKEN/);
+      expect(msg).not.toContain(bad);
+    }
+  });
+
+  it("API_TOKEN と同じ値は拒否する", () => {
+    const msg = errorOf({ ...BASE, ROOM_TOKEN: BASE.API_TOKEN });
+    expect(msg).toMatch(/ROOM_TOKEN/);
+    expect(msg).not.toContain(BASE.API_TOKEN);
+  });
+
+  it("BACKUP_TOKEN と同じ値は拒否する", () => {
+    const backup = "b".repeat(32);
+    const msg = errorOf({
+      ...BASE,
+      BACKUP_TOKEN: backup,
+      BACKUP_AGE_RECIPIENT: recipient,
+      ROOM_TOKEN: backup,
+    });
+    expect(msg).toMatch(/ROOM_TOKEN/);
+    expect(msg).not.toContain(backup);
+  });
+
+  it("API_TOKEN とも BACKUP_TOKEN とも違えば受け付ける", () => {
+    const config = loadConfig({
+      ...BASE,
+      BACKUP_TOKEN: "b".repeat(32),
+      BACKUP_AGE_RECIPIENT: recipient,
+      ROOM_TOKEN: ROOM,
+    });
+    expect(config.ROOM_TOKEN).toBe(ROOM);
   });
 });
 

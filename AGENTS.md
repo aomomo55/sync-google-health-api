@@ -8,8 +8,8 @@
 |---|---|---|
 | `server/` | TypeScript / Hono のサーバー。日次データの受信・保存（CouchDB）、Google Takeout の取り込み、Obsidian ノートの生成と obsidian-sync-mcp 経由の書き込み、暗号化したバックアップの提供と復元 | [server/AGENTS.md](server/AGENTS.md) |
 | `android/` | Kotlin / Jetpack Compose のアプリ。Health Connect から日次サマリーを作り `POST /api/ingest` へ送る | [android/AGENTS.md](android/AGENTS.md) |
-| `gas/` | Google Apps Script。サーバーのバックアップを Google Drive に保存する | [gas/AGENTS.md](gas/AGENTS.md) |
-| `docs/` | 手順書（[デプロイ](docs/deploy.md)、[バックアップ](docs/backup.md)、[秘密情報が漏れたとき](docs/rotate-secrets.md)）、設計判断の記録（`docs/adr/`）、レビューの材料（[UI・UX 観点](docs/review/ux.md)） | - |
+| `gas/` | Google Apps Script。サーバーのバックアップを Google Drive に保存する。寝室の温湿度計の値をサーバーへ送る | [gas/AGENTS.md](gas/AGENTS.md) |
+| `docs/` | 手順書（[デプロイ](docs/deploy.md)、[バックアップ](docs/backup.md)、[寝室の温湿度](docs/room-climate.md)、[秘密情報が漏れたとき](docs/rotate-secrets.md)）、設計判断の記録（`docs/adr/`）、レビューの材料（[UI・UX 観点](docs/review/ux.md)） | - |
 
 ## 変更するときの約束
 
@@ -48,7 +48,7 @@
 
 扱うのは個人の健康データで、サーバーはインターネットに公開している。レビューで確認することは REVIEW.md の「セキュリティ（脆弱性）」にある。
 
-- 経路は認証の掛かったグループに置く。`/api/*` は `API_TOKEN`、`/backup/*` は `BACKUP_TOKEN` で、互いの経路を使えないよう分けている（バックアップ用のトークンが漏れても書き込めず、書き込み用のトークンでは全データを取れないようにするため）。認証なしの経路はデータや設定を返さない
+- 経路は認証の掛かったグループに置く。`/api/*` は `API_TOKEN`、`/backup/*` は `BACKUP_TOKEN`、`/room/*` は `ROOM_TOKEN` で、互いの経路を使えないよう分けている（バックアップ用のトークンが漏れても書き込めず、書き込み用のトークンでは全データを取れず、温湿度用のトークンでは健康データに触れないようにするため。[ADR 0033](docs/adr/0033-room-climate-readings.md)）。認証なしの経路はデータや設定を返さない
 - 設定が足りないときは、認証を外して動かさず、経路を作らないか起動を止める
 - 外から来る値（リクエスト、Takeout、復元するバックアップ、Vault から読んだノート、外部サービスの応答）は zod などで検証してから使う。件数・サイズ・期間には上限を設ける
   - オブジェクトは `z.strictObject` で余分な項目を弾く。例外は Google が形を決める外部ファイル（Takeout）で、余分な項目を許す `z.object` にし、使う項目だけを検証する（Google が項目を足しても取り込みを止めないため）
@@ -70,7 +70,7 @@ CI（`.github/`）とビルド（`server/Dockerfile`）に入るものを、レ�
 
 ## 秘密情報の扱い
 
-- 秘密情報（`API_TOKEN`、`COUCHDB_*`、`OBSIDIAN_MCP_*`、`BACKUP_TOKEN` など）は fly.io の secrets や GAS のスクリプト プロパティに登録し、リポジトリやログに出さない
+- 秘密情報（`API_TOKEN`、`COUCHDB_*`、`OBSIDIAN_MCP_*`、`BACKUP_TOKEN`、`ROOM_TOKEN`、SwitchBot のトークンなど）は fly.io の secrets や GAS のスクリプト プロパティに登録し、リポジトリやログに出さない
 - 利用者に登録の手順を案内するときは [docs/deploy.md](docs/deploy.md#秘密情報を登録する) の書き方に合わせる。シェルの履歴に残らない `fly secrets import -a <アプリ名>` に標準入力から渡す方法を基本にする。案内には次のことを書く
   - `KEY=` と打ってから値だけを貼る形で、1 行ずつ入力する
   - 最後に Enter で空の行に移ってから Ctrl-D で終える（終わらなければもう一度）
