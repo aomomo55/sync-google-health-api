@@ -225,4 +225,21 @@ describe("summarizeNights", () => {
     const shuffled = [readings[2]!, readings[0]!, readings[3]!, readings[1]!];
     expect(summarizeNights(nights, shuffled)).toEqual(summarizeNights(nights, readings));
   });
+
+  it("時刻が不正な読み取り値が混ざっても、ほかの夜の結果は変わらない", () => {
+    const nights = [
+      { date: "2026-03-02", start: START, end: END },
+      { date: "2026-03-03", start: "2026-03-03T01:00:00+09:00", end: "2026-03-03T03:00:00+09:00" },
+    ];
+    const readings = [
+      reading("2026-03-02T01:30:00+09:00", 18, 50),
+      reading("2026-03-02T02:30:00+09:00", 19, 52),
+      reading("2026-03-03T01:30:00+09:00", 24, 60),
+      reading("2026-03-03T02:30:00+09:00", 25, 62),
+    ];
+    // 時刻として読めない値（手で直された文書など）は Date.parse で NaN になる
+    const broken = [reading("2026-03-02T25:00:00+09:00", 30, 90), reading("not-a-time", 30, 90)];
+    const mixed = [broken[0]!, readings[2]!, readings[0]!, broken[1]!, readings[3]!, readings[1]!];
+    expect(summarizeNights(nights, mixed)).toEqual(summarizeNights(nights, readings));
+  });
 });

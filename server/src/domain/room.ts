@@ -159,6 +159,8 @@ export function summarizeNights(
       temperature_c: r.temperature_c,
       humidity_pct: r.humidity_pct,
     }))
+    // 手で直された文書などで時刻が不正（NaN）な値は、並べ替えと二分探索を崩すので先に除く
+    .filter((r) => Number.isFinite(r.at))
     .sort((a, b) => a.at - b.at);
   return new Map(
     nights.flatMap((n) => {

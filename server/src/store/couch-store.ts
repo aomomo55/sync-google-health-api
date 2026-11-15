@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { type DailySummary, isSameDay, mergeDay } from "../domain/daily.js";
+import { isRealDate } from "../domain/dates.js";
 import {
   fromJstSlot,
   groupByJstDate,
@@ -70,7 +71,8 @@ type RoomDoc = {
 // 文書の中身も外から来る値（手で直された文書など）として検証する。値の範囲は受信時に確かめている
 const roomSlotsSchema = z.array(
   z.object({
-    time: z.string().regex(/^\d{2}:\d{2}$/),
+    // 00:00〜23:59 に限る（25:00 などは時刻にならない）
+    time: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
     temperature_c: z.number(),
     humidity_pct: z.number(),
   }),
@@ -219,9 +221,12 @@ export class CouchStore implements HealthStore, RoomStore {
       .sort((a, b) => a._id.localeCompare(b._id))
       .flatMap((doc) => {
         // 日付の正は _id（day: の文書と同じ）。中身の形は確かめてから使う
-        const parsed = roomSlotsSchema.safeParse(doc.readings);
-        if (!parsed.success) throw new Error(`${label} の温湿度の文書の形が不正です（${doc._id}）`);
+        // 実在しない日付は Date.parse で翌月などに繰り越され、別の夜の値として紛れ込むので弾く
         const date = doc._id.slice(ROOM_ID_PREFIX.length);
+        const parsed = roomSlotsSchema.safeParse(doc.readings);
+        if (!parsed.success || !isRealDate(date)) {
+          throw new Error(`${label} の温湿度の文書の形が不正です（${doc._id}）`);
+        }
         return sortSlots(parsed.data).map((s) => fromJstSlot(date, s));
       });
   }

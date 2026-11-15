@@ -38,3 +38,6 @@ android/.kotlin/
 *.age
 *backup-key*.txt
 *restore-key*.txt
+
+# Git Bash（Windows）が落ちたときに作るログ
+*.stackdump

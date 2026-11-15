@@ -292,6 +292,15 @@ describe("CouchStore の温湿度（fake fetch）", () => {
     expect(err?.message).toContain("room:2026-03-01");
     expect(err?.message).not.toContain("9:00");
   });
+
+  it.each([
+    ["範囲外の時刻", "2026-03-01", "25:00"],
+    ["実在しない日付", "2026-02-30", "01:30"],
+  ])("getReadings は%sの文書を拒否する", async (_label, date, time) => {
+    const bad = roomDoc(date, [{ time, temperature_c: 20, humidity_pct: 50 }]);
+    const { store } = make([{ status: 200, json: { rows: [rowOf(bad)] } }]);
+    await expect(store.getReadings("2026-02-01", "2026-03-31")).rejects.toThrow(`room:${date}`);
+  });
 });
 
 const TEST_URL = process.env.COUCHDB_TEST_URL;
