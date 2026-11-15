@@ -39,6 +39,29 @@ describe("checkApiToken", () => {
   });
 });
 
+describe("checkApiToken の環境変数名", () => {
+  it("name を渡すとメッセージにその名前を使う", () => {
+    expect(checkApiToken(undefined, "ROOM_TOKEN")).toBe("環境変数 ROOM_TOKEN が未設定です");
+    expect(checkApiToken("short", "ROOM_TOKEN")).toMatch(/ROOM_TOKEN は 32 文字以上/);
+    expect(
+      checkApiToken(
+        `${VALID}
+`,
+        "ROOM_TOKEN",
+      ),
+    ).toMatch(/ROOM_TOKEN に使えない文字/);
+    expect(checkApiToken("short", "ROOM_TOKEN")).not.toContain("API_TOKEN");
+  });
+
+  it("name を省略すると API_TOKEN", () => {
+    expect(checkApiToken(undefined)).toContain("API_TOKEN");
+  });
+
+  it("規則に合うトークンは名前に関わらず受け付ける", () => {
+    expect(checkApiToken(VALID, "ROOM_TOKEN")).toBeUndefined();
+  });
+});
+
 describe("checkApiUrl", () => {
   it.each([
     "https://example.test",

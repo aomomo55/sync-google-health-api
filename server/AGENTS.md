@@ -4,25 +4,25 @@
 
 ## 構成
 
-日次データの受信・保存（CouchDB）、Google Takeout の取り込み、Obsidian ノートの生成と obsidian-sync-mcp 経由の書き込み、暗号化したバックアップの提供と復元を行う。
+日次データと寝室の温湿度の受信・保存（CouchDB）、Google Takeout の取り込み、Obsidian ノートの生成と obsidian-sync-mcp 経由の書き込み、暗号化したバックアップの提供と復元を行う。
 
-- `src/domain/` 日次・月次のデータ型と集計（純粋関数）
-- `src/store/` 保存先（`HealthStore`。CouchDB 実装とテスト用のメモリ実装）
+- `src/domain/` 日次・月次・寝室の温湿度のデータ型と集計（純粋関数）
+- `src/store/` 保存先（`HealthStore` と `RoomStore`。CouchDB 実装とテスト用のメモリ実装）
 - `src/notes/` ノート・ダッシュボード・Bases の生成（純粋関数、出力は決定的）
 - `src/sync/` どのノートを更新するかの計画と実行
 - `src/vault/` obsidian-sync-mcp を MCP クライアントとして呼ぶ書き込み
-- `src/routes/` HTTP の経路（`/api/*` と `/backup/*`）。組み立ては `src/app.ts`
+- `src/routes/` HTTP の経路（`/api/*`・`/backup/*`・`/room/*`）。組み立ては `src/app.ts`
 - `src/takeout/` Takeout（Google Fit 形式）の解析
 - `src/backup/` バックアップの形式（JSON → gzip → age での暗号化と復号）
 - `src/shared/` 複数の層から使う、健康データを知らない汎用の部品（純粋関数のユーティリティ、汎用の基底クラスなど）。必要になったときに作る
-- `scripts/` `import:takeout`・`sync:notes`・`restore:backup` の CLI
+- `scripts/` `import:takeout`・`sync:notes`・`restore:backup`・`import:room-csv` の CLI。温湿度計の CSV の形式（メーカー固有）を知っているのは `scripts/room-csv.ts` だけ
 
 依存の向き（これ以外の import はしない）:
 
 - `shared` → なし（他の層を import しない）。どの層からも使ってよい（以下の一覧では省略する）
 - `domain` → なし（外部ライブラリは zod のみ）
 - `notes` / `store` / `takeout` / `backup` → `domain`
-- `sync` → `domain` / `notes` と、`store` のインターフェース（`HealthStore`）と、`vault` のインターフェース（`VaultWriter` と、それが投げるエラーの型。型としてだけ import する）
+- `sync` → `domain` / `notes` と、`store` のインターフェース（`HealthStore`・`RoomStore`）と、`vault` のインターフェース（`VaultWriter` と、それが投げるエラーの型。型としてだけ import する）
 - `routes` → `domain` / `sync` / `backup` と、`store` のインターフェース
 - `vault` → なし（設定の `Config` も知らない。必要な値は引数で受け取る）
 - `index.ts` / `app.ts` / `config.ts` / `scripts/` → 何でもよい（設定を読み、実装を組み立てる場所）
@@ -54,6 +54,8 @@ pnpm build
 - ノートの生成は決定的でなければならない（生成日時などを入れない）。同期処理は「内容が変わらないノートは書き込まない」ことに依存している
 - 日次ノートの `%% health:memo` の行より下は利用者のメモ欄。`mergeMemo` で必ず保持する。obsidian-sync-mcp の `write_note` はノート全体を置き換えるので、読んでから書く
 - Vault への書き込みは `VAULT_HEALTH_PREFIX`（既定 `Health/`）配下の `.md` / `.base` に限る
+- 温湿度の文書の `_id` は `room:YYYY-MM-DD`（Asia/Tokyo）で、日次の `day:` の範囲に入らない。日次の範囲の取得や `findAdjacentDate` に混ざらないよう、接頭辞を変えない
+- 夜の温湿度は、受信時ではなく日次ノートを作るときに、睡眠の就寝〜起床の時刻で保存済みの値から求める（睡眠は起床後に届くため。[ADR 0033](../docs/adr/0033-room-climate-readings.md)）
 - 前後の日のリンクは、範囲で探さず `HealthStore.findAdjacentDate` で求める（データが長く途切れていても正しくつなぐため）
 - obsidian-sync-mcp は LiveSync 1.0.33 以降の「ID キー」に未対応。LiveSync 側の ID キーや Obfuscate Properties の設定を変える提案をしない（[ADR 0007](../docs/adr/0007-write-via-obsidian-sync-mcp.md)）
 

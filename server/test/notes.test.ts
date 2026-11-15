@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { DailySummary } from "../src/domain/daily.js";
 import { BEDTIME_DAY_BOUNDARY_HOURS, summarizeMonth } from "../src/domain/monthly.js";
+import type { NightClimate } from "../src/domain/room.js";
+import { dailyEntries } from "../src/notes/daily.js";
 import { GENERATED_NOTICE } from "../src/notes/format.js";
 import {
   MEMO_MARKER,
@@ -90,6 +92,10 @@ const DAILY_KEYS = [
   "浅い睡眠分",
   "REM睡眠分",
   "仮眠分",
+  "夜平均室温",
+  "夜最低室温",
+  "夜最高室温",
+  "夜平均湿度",
   "8000歩達成",
   "7時間以上",
   "tags",
@@ -185,6 +191,10 @@ type: health-daily
 浅い睡眠分: 290
 REM睡眠分: 60
 仮眠分:
+夜平均室温:
+夜最低室温:
+夜最高室温:
+夜平均湿度:
 8000歩達成: true
 7時間以上: true
 tags:
@@ -540,7 +550,7 @@ describe("静的ノート", () => {
     expect(d).toContain("suggestedMax: 9,");
     expect(d).toBe(renderSleepDashboard());
     expect(d).toContain("[[Health/ヘルスケアダッシュボード|ヘルスケアダッシュボード]]");
-    expect(jsBlocks(d)).toHaveLength(6);
+    expect(jsBlocks(d)).toHaveLength(7);
     expect(d).toContain(GENERATED_NOTICE);
     expect(renderHealthDashboard()).toContain(GENERATED_NOTICE);
     // 直近1週間の睡眠時間が一番上にある
@@ -774,5 +784,73 @@ describe("ノート・Bases・ダッシュボードの整合", () => {
     for (const [, file, view] of embeds) {
       expect(bases.get(file!)).toContain(`name: ${view}\n`);
     }
+  });
+});
+
+describe("寝室の温湿度（日次ノート）", () => {
+  const climate: NightClimate = {
+    avg_temperature_c: 21.4,
+    min_temperature_c: 19.8,
+    max_temperature_c: 23,
+    avg_humidity_pct: 48,
+    readings: 30,
+  };
+
+  it("dailyEntries は仮眠分の後に温湿度のキーを並べる", () => {
+    const keys = dailyEntries(fullDay, climate).map((e) => e.key);
+    const i = keys.indexOf("仮眠分");
+    expect(keys.slice(i + 1, i + 5)).toEqual([
+      "夜平均室温",
+      "夜最低室温",
+      "夜最高室温",
+      "夜平均湿度",
+    ]);
+    const value = (k: string) => dailyEntries(fullDay, climate).find((e) => e.key === k)?.value;
+    expect(value("夜平均室温")).toBe(21.4);
+    expect(value("夜最低室温")).toBe(19.8);
+    expect(value("夜最高室温")).toBe(23);
+    expect(value("夜平均湿度")).toBe(48);
+  });
+
+  it("温湿度が無ければ（引数なしでも null でも）値は null", () => {
+    for (const entries of [dailyEntries(fullDay), dailyEntries(fullDay, null)]) {
+      for (const k of ["夜平均室温", "夜最低室温", "夜最高室温", "夜平均湿度"]) {
+        expect(entries.find((e) => e.key === k)?.value).toBeNull();
+      }
+    }
+  });
+
+  it("renderDailyNote は frontmatter とサマリーの行に温湿度を出す", () => {
+    const note = renderDailyNote(fullDay, {}, undefined, climate);
+    const rows = parseFm(note);
+    const get = (k: string) => rows.find(([x]) => x === k)?.[1];
+    expect(get("夜平均室温")).toBe("21.4");
+    expect(get("夜最低室温")).toBe("19.8");
+    expect(get("夜最高室温")).toBe("23");
+    expect(get("夜平均湿度")).toBe("48");
+    expect(rows.map(([k]) => k)).toEqual(DAILY_KEYS);
+    expect(note).toContain("- 寝室（睡眠中）: 平均 21.4℃（19.8〜23℃）/ 湿度 48%\n");
+  });
+
+  it("温湿度が無ければサマリーの行を出さず、キーは空のまま", () => {
+    const note = renderDailyNote(fullDay, {});
+    expect(note).not.toContain("寝室（睡眠中）");
+    expect(parseFm(note).find(([k]) => k === "夜平均室温")?.[1]).toBe("");
+  });
+});
+
+describe("分析ノートと寝室の温湿度（ダッシュボード）", () => {
+  it("睡眠ダッシュボードに寝室の室温・湿度のグラフがある", () => {
+    const d = renderSleepDashboard();
+    expect(d).toContain("### 寝室の室温・湿度（直近30夜）");
+    expect(d).toContain("夜平均室温");
+    expect(d).toContain("夜平均湿度");
+  });
+
+  it("睡眠ダッシュボードに health-analysis のノートの一覧がある", () => {
+    const d = renderSleepDashboard();
+    expect(d).toContain("## 分析ノート");
+    expect(d).toContain('```dataview\nLIST\nFROM "Health"\nWHERE type = "health-analysis"');
+    expect(renderSleepDashboard("Custom/Root")).toContain('FROM "Custom/Root"');
   });
 });

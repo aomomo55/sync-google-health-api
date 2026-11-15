@@ -4,6 +4,7 @@ import {
   hasSleepRecord,
   isSleepPending,
 } from "../domain/daily.js";
+import type { NightClimate } from "../domain/room.js";
 import { round } from "../shared/rounding.js";
 import { fmtDuration, fmtNum, jstHm, monthLabelJa, numOrNull, weekdayJa } from "./format.js";
 import { linkTarget, notePaths } from "./paths.js";
@@ -52,7 +53,7 @@ function recordedNutrition(day: DailySummary): DailySummary["nutrition"] {
   return hasNutritionRecord(day.nutrition) ? day.nutrition : undefined;
 }
 
-export function dailyEntries(day: DailySummary): YamlEntry[] {
+export function dailyEntries(day: DailySummary, climate: NightClimate | null = null): YamlEntry[] {
   const a = day.activity;
   const h = day.heart_rate;
   const b = day.body;
@@ -90,12 +91,17 @@ export function dailyEntries(day: DailySummary): YamlEntry[] {
     { key: "浅い睡眠分", value: numOrNull(s?.light_minutes) },
     { key: "REM睡眠分", value: numOrNull(s?.rem_minutes) },
     { key: "仮眠分", value: numOrNull(s?.nap_minutes) },
+    // 就寝〜起床の間の寝室の温湿度（ADR 0033）
+    { key: "夜平均室温", value: climate?.avg_temperature_c ?? null },
+    { key: "夜最低室温", value: climate?.min_temperature_c ?? null },
+    { key: "夜最高室温", value: climate?.max_temperature_c ?? null },
+    { key: "夜平均湿度", value: climate?.avg_humidity_pct ?? null },
     { key: STEP_GOAL_KEY, value: steps === null ? null : steps >= STEP_GOAL },
     { key: SLEEP_GOAL_KEY, value: asleep === null ? null : asleep >= SLEEP_GOAL_MINUTES },
   ];
 }
 
-function summaryLines(day: DailySummary, nav: DailyNav): string[] {
+function summaryLines(day: DailySummary, nav: DailyNav, climate: NightClimate | null): string[] {
   const lines: string[] = [];
   const a = day.activity;
   const h = day.heart_rate;
@@ -166,20 +172,31 @@ function summaryLines(day: DailySummary, nav: DailyNav): string[] {
   }
   const nap = numOrNull(s?.nap_minutes);
   if (nap !== null) lines.push(`- 仮眠: ${fmtDuration(nap)}`);
+  // 温湿度計は後から足した計測なので、値の無い日は行を出さない（ADR 0033）
+  if (climate) {
+    lines.push(
+      `- 寝室（睡眠中）: 平均 ${fmtNum(climate.avg_temperature_c)}℃（${fmtNum(climate.min_temperature_c)}〜${fmtNum(climate.max_temperature_c)}℃）/ 湿度 ${fmtNum(climate.avg_humidity_pct)}%`,
+    );
+  }
 
   const w = numOrNull(b?.weight_kg);
   if (w !== null) lines.push(`- 体重: ${fmtNum(w)} kg`);
   return lines;
 }
 
-export function renderDailyNote(day: DailySummary, nav: DailyNav = {}, root?: string): string {
+export function renderDailyNote(
+  day: DailySummary,
+  nav: DailyNav = {},
+  root?: string,
+  climate: NightClimate | null = null,
+): string {
   const p = notePaths(root);
   const month = day.date.slice(0, 7);
   const parts: string[] = [
-    frontmatter(dailyEntries(day), ["health/daily"]),
+    frontmatter(dailyEntries(day, climate), ["health/daily"]),
     `# ${day.date}（${weekdayJa(day.date)}）\n`,
   ];
-  const summary = summaryLines(day, nav);
+  const summary = summaryLines(day, nav, climate);
   if (summary.length > 0) parts.push(`${summary.join("\n")}\n`);
 
   const links: string[] = [];

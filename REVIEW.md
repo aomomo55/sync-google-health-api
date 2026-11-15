@@ -19,7 +19,7 @@ CI が成功していることは前提で、ここに挙げるのは **CI で�
 - [ ] `shared` に置いたものが、実際に複数の層（Android では複数の機能）から使われているか。1 か所でしか使わないものを先回りして置いていないか。使う層が 1 つに減ったものが残っていないか
 - [ ] `shared` の新しいファイルの名前が中身を表しているか（`utils` / `helpers` / `common` / `misc` / `lib` ではないか）。既存のファイルに別のテーマを足していないか。再エクスポートだけのファイル（バレル）を作っていないか
 - [ ] `shared` を初めて作る PR なら、禁止した名前と `shared` からの import を確かめるテストも足しているか
-- [ ] 外側の実装（`CouchStore`、`McpVaultWriter` など）に直接依存せず、インターフェース（`HealthStore`、`VaultWriter`）を通しているか。実装の組み立ては外側（`index.ts` など）で行っているか
+- [ ] 外側の実装（`CouchStore`、`McpVaultWriter` など）に直接依存せず、インターフェース（`HealthStore`、`RoomStore`、`VaultWriter`）を通しているか。実装の組み立ては外側（`index.ts` など）で行っているか
 - [ ] server の `sync` から `vault` への import が、`VaultWriter` とそれが投げるエラーの型だけを `import type` で使う形になっているか（`noteRootFromPrefix` などの値やクラスの実体を import していないか）
 - [ ] 純粋な処理（`domain` / `notes`、Android の `DayAggregator` / `SleepAssigner` / `Chunking`）に、I/O、現在時刻、乱数、環境変数、Android の API（`android.*` / `androidx.*`）が入り込んでいないか
 - [ ] 新しいディレクトリや層を作ったら、server/AGENTS.md の依存の向きに書き足しているか。新しいトップレベルのディレクトリなら、そのディレクトリの AGENTS.md を作り、ルートの AGENTS.md の表に足しているか
@@ -80,8 +80,8 @@ done
 
 ### 認証・認可
 
-- [ ] 新しい経路が、認証の掛かったグループ（`/api/*` は `API_TOKEN`、`/backup/*` は `BACKUP_TOKEN`）の中に置かれているか。認証なしの経路（`/healthz` など）を足すなら、データや設定を返さないか
-- [ ] `API_TOKEN` と `BACKUP_TOKEN` の分離が保たれているか（片方のトークンで、もう片方の経路を使えるようになっていないか）
+- [ ] 新しい経路が、認証の掛かったグループ（`/api/*` は `API_TOKEN`、`/backup/*` は `BACKUP_TOKEN`、`/room/*` は `ROOM_TOKEN`）の中に置かれているか。認証なしの経路（`/healthz` など）を足すなら、データや設定を返さないか
+- [ ] `API_TOKEN`・`BACKUP_TOKEN`・`ROOM_TOKEN` の分離が保たれているか（あるトークンで、ほかのトークンの経路を使えるようになっていないか）
 - [ ] トークンの比較を自前で書かず、`hono/bearer-auth` など比較にかかる時間が値に左右されない方法を使っているか
 - [ ] 設定が無いときに、認証を外して動くのではなく、経路を作らないか起動を止めるか
 
@@ -95,7 +95,7 @@ done
 
 - [ ] Vault のパスが `assertVaultPath` を通っているか。`..`・`\`・制御文字・先頭の `/` を含むパスや、接頭辞の外へ書けないか
 - [ ] ノートに埋め込む値（フロントマターの YAML、dataviewjs のコード、Bases の式、Markdown のリンク）が、文字列として正しくエスケープされているか。利用者が送れる文字列（`source` など）で、構文を壊したりコードを差し込んだりできないか
-- [ ] CouchDB の URL に入れる値（DB 名、`_id`、`startkey` など）を `encodeURIComponent` していて、`_id` が `day:` の範囲から外れないか
+- [ ] CouchDB の URL に入れる値（DB 名、`_id`、`startkey` など）を `encodeURIComponent` していて、`_id` が `day:`（温湿度は `room:`）の範囲から外れないか
 - [ ] シェルのコマンドや正規表現を、外から来る値で組み立てていないか
 
 ### 通信

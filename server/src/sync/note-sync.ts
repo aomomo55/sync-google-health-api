@@ -1,8 +1,11 @@
-import { isRealDate, monthKeyRange } from "../domain/dates.js";
+import type { DailySummary } from "../domain/daily.js";
+import { addDays, isRealDate, monthKeyRange } from "../domain/dates.js";
+import { type NightClimate, summarizeNights } from "../domain/room.js";
 import { MemoMarkerMissingError } from "../notes/index.js";
 import type { HealthStore } from "../store/health-store.js";
+import type { RoomStore } from "../store/room-store.js";
 import type { VaultPathError, VaultWriter } from "../vault/vault-writer.js";
-import { type PlanItem, planNotes, splitValidDays } from "./plan.js";
+import { affectedNotes, type PlanItem, planNotes, splitValidDays } from "./plan.js";
 
 const INVALID_DATE_MESSAGE =
   "保存されている日付が不正なため、ノートを生成しませんでした。CouchDB の該当する文書を確認してください";
@@ -40,6 +43,8 @@ export interface SyncReport {
 
 export interface NoteSyncDeps {
   store: HealthStore;
+  // 寝室の温湿度。無ければ日次ノートの温湿度は空になる
+  room?: RoomStore | null;
   writer: VaultWriter;
   root?: string;
   concurrency?: number;
@@ -50,12 +55,14 @@ const maxDate = (a: string, b: string) => (a > b ? a : b);
 
 export class NoteSync {
   private readonly store: HealthStore;
+  private readonly room: RoomStore | null;
   private readonly writer: VaultWriter;
   private readonly root?: string;
   private readonly concurrency: number;
 
   constructor(deps: NoteSyncDeps) {
     this.store = deps.store;
+    this.room = deps.room ?? null;
     this.writer = deps.writer;
     this.root = deps.root;
     this.concurrency = Math.max(1, deps.concurrency ?? DEFAULT_CONCURRENCY);
@@ -107,8 +114,38 @@ export class NoteSync {
 
     const targetDates =
       targets ?? days.filter((d) => d.date >= from && d.date <= to).map((d) => d.date);
-    const items = planNotes(days, targetDates, this.root, { includeStatic });
+    const climate = await this.nightClimate(days, targetDates);
+    const items = planNotes(days, targetDates, this.root, { includeStatic, climate });
     return this.apply(items, failed);
+  }
+
+  // 日次ノートを作り直す日（対象の日と前後の日。planNotes と同じ affectedNotes で決める）の夜の温湿度。
+  // 就寝は起床日の前日に始まるので、前日から読む。
+  // 温湿度は補助の計測なので、読めなくても空にしてノートの同期は続ける（ADR 0033）
+  private async nightClimate(
+    days: DailySummary[],
+    targetDates: string[],
+  ): Promise<Map<string, NightClimate>> {
+    if (!this.room) return new Map();
+    const dates = new Set(affectedNotes(days, targetDates).dates);
+    const nightDays = days.filter((d) => dates.has(d.date));
+    const first = nightDays[0]?.date;
+    const last = nightDays.at(-1)?.date;
+    if (!first || !last) return new Map();
+    try {
+      const readings = await this.room.getReadings(addDays(first, -1), last);
+      const nights = nightDays.map((d) => ({
+        date: d.date,
+        start: d.sleep?.start,
+        end: d.sleep?.end,
+      }));
+      return summarizeNights(nights, readings);
+    } catch (e) {
+      console.error(
+        `寝室の温湿度を読めなかったので、温湿度を空にしてノートを同期します: ${describeForLog(e)}`,
+      );
+      return new Map();
+    }
   }
 
   // 前後の日を、不正な日付を読み飛ばして求める

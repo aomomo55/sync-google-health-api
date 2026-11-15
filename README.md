@@ -20,12 +20,14 @@ flowchart LR
     C[スマホの Claude] -- カスタムコネクタ --> M
     S -- "age で暗号化した全データ<br/>（GAS が GET /backup/health で取得）" --> G["GAS<br/>（1 日 1 回）"]
     G --> D[(Google Drive)]
+    R["GAS<br/>（30 分おき）"] -- "寝室の温湿度<br/>POST /room/readings" --> S
 ```
 
 - **Android アプリ**が Health Connect から日ごとのサマリーを作り、サーバーへ送る
 - **サーバー**がデータを保存し、日次・月次ノートとダッシュボードを生成して、[obsidian-sync-mcp](https://github.com/es617/obsidian-sync-mcp) 経由で Vault に書き込む（LiveSync の E2EE を保ったまま全端末に同期される）
 - **Claude** は obsidian-sync-mcp のコネクタでノートを読み、分析する
 - **GAS（Google Apps Script）** が 1 日 1 回サーバーから暗号化済みのバックアップを受け取り、Google Drive に保存する（[docs/backup.md](docs/backup.md)）
+- 別の **GAS** が 30 分おきに寝室の温湿度計（SwitchBot）の値を読んでサーバーへ送り、サーバーは就寝〜起床の間の室温・湿度を日次ノートに書く（[docs/room-climate.md](docs/room-climate.md)）
 
 ## 主な機能
 
@@ -36,6 +38,7 @@ flowchart LR
 - Vault への書き込みが一時的なエラー（通信の失敗、obsidian-sync-mcp の裏の DB のエラーなど）で失敗したら、間隔をあけてやり直す
 - 値が範囲外の日（歩数の上限超えなど）はその日だけを保存せずに理由を返し、同じ送信の他の日は保存する
 - Android アプリ: 1 時間ごとに直近 7 日分を自動で送るほか、ボタンで直近 7 日・過去 30 日・開始日（90 日前まで）からの範囲を送れる。保存されなかった日は日付と理由を画面に出す。朝の自動送信で昨夜の睡眠がまだ届いていなければ通知する
+- 寝室の温湿度: 就寝〜起床の間の平均・最低・最高の室温と平均の湿度を日次ノートのプロパティにし、睡眠ダッシュボードにグラフを出す。過去の分は温湿度計のアプリの CSV から取り込める
 - バックアップと復元: health DB の全期間を age の公開鍵で暗号化して Google Drive に毎日保存し（日次と週次の世代を残す）、手元の秘密鍵で復号して別の DB に書き戻せる
 
 ## 技術スタック
@@ -54,9 +57,10 @@ flowchart LR
 ```
 server/          サーバー、Takeout 取り込み・ノート同期・バックアップ復元のスクリプト（→ server/README.md）
 android/         Health Connect のデータを送る Android アプリ（→ android/README.md）
-gas/             バックアップを Google Drive に保存する Google Apps Script（GAS のエディタにコピーして使う）
+gas/             バックアップを Google Drive に保存する GAS と、寝室の温湿度を送る GAS（GAS のエディタにコピーして使う）
 docs/deploy.md   サーバーのデプロイと秘密情報の登録の手順
 docs/backup.md   バックアップの設定と復元の手順
+docs/room-climate.md  寝室の温湿度の取り込みの設定と、過去の CSV の取り込みの手順
 docs/rotate-secrets.md  秘密情報が漏れたときの入れ替えの手順
 docs/adr/        設計判断の記録（Architecture Decision Records）
 AGENTS.md        エージェント向けの指示（全体の約束。ディレクトリごとの指示は server/ などの AGENTS.md）

@@ -68,6 +68,23 @@ function goalLine(label: string, rows: string, value: number): string {
   return `{ type: "line", label: "${label}", data: ${rows}.map(() => ${value}), borderColor: "${COLORS.red}", borderDash: [6, 4], pointRadius: 0, borderWidth: 1 }`;
 }
 
+// 利用者が書いた分析のノート（フロントマターが type: health-analysis のもの）の一覧。
+// ダッシュボードは自動生成なので、個々のノートへのリンクは書かず、ここに集める（ADR 0033）
+export const ANALYSIS_NOTE_TYPE = "health-analysis";
+
+// dir は dataview のクエリの文字列に埋め込む。使える文字は設定の検証で制限している
+function analysisList(dir: string): string {
+  return [
+    "```dataview",
+    "LIST",
+    `FROM "${dir}"`,
+    `WHERE type = "${ANALYSIS_NOTE_TYPE}"`,
+    "SORT file.name ASC",
+    "```",
+    "",
+  ].join("\n");
+}
+
 function emptyGuard(msg: string): string {
   return `if (pages.length === 0) { dv.paragraph("${msg}"); } else {`;
 }
@@ -287,6 +304,24 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
   });
 }`);
 
+  // 寝室の温湿度（ADR 0033）。温度と湿度は単位が違うので、縦軸を左右に分ける
+  const climate = block(`${prelude()}
+${dailyPages(p.dailyDir, SLEEP_CHART_NIGHTS, "nights")}
+const rows = pages.filter((p) => num(p.夜平均室温) !== null);
+if (rows.length === 0) { dv.paragraph("寝室の温湿度のデータがありません"); } else {
+  draw({
+    type: "line",
+    data: {
+      labels: rows.map(day),
+      datasets: [
+        line("夜平均室温", rows.map((p) => num(p.夜平均室温)), "${COLORS.orange}", { yAxisID: "y" }),
+        line("夜平均湿度", rows.map((p) => num(p.夜平均湿度)), "${COLORS.teal}", { yAxisID: "y1" }),
+      ],
+    },
+    options: { scales: { y: { position: "left", title: { display: true, text: "℃" } }, y1: { position: "right", min: 0, max: 100, grid: { drawOnChartArea: false }, title: { display: true, text: "%" } } } },
+  });
+}`);
+
   const monthlyTimes = block(`${prelude()}
 ${hours}
 ${monthlyPages(p.monthlyDir)}
@@ -319,10 +354,14 @@ if (rows.length === 0) { dv.paragraph("月次データがありません"); } el
     times,
     `### 中途覚醒（直近${SLEEP_CHART_NIGHTS}夜）\n`,
     awake,
+    `### 寝室の室温・湿度（直近${SLEEP_CHART_NIGHTS}夜）\n`,
+    climate,
     "## 月次の推移\n",
     "### 平均睡眠時間\n",
     monthlySleep,
     "### 平均就寝・起床時刻\n",
     monthlyTimes,
+    "## 分析ノート\n",
+    analysisList(p.root),
   ].join("\n");
 }

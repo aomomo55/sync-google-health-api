@@ -18,6 +18,7 @@ Android アプリから送られる日次ヘルスデータを受け取るサー
 | `VAULT_HEALTH_PREFIX` | いいえ | `Health/` | Vault 内で書き込みを許可するフォルダ。ノートもこの下に生成する（文字・数字・空白・`_`・`-` からなるフォルダ名を `/` で区切る。先頭の `/`、`.` / `..`、空のフォルダ名、フォルダ名の前後の空白は不可） |
 | `BACKUP_TOKEN` | いいえ | - | `GET /backup/health` 専用の Bearer トークン（`API_TOKEN` と同じ規則で、`API_TOKEN` とは別の値）。`BACKUP_AGE_RECIPIENT` と両方指定するか両方未設定 |
 | `BACKUP_AGE_RECIPIENT` | いいえ | - | バックアップを暗号化する age の公開鍵（`age1...`）。秘密鍵はサーバーに置かない（[docs/backup.md](../docs/backup.md)） |
+| `ROOM_TOKEN` | いいえ | - | `POST /room/readings`（寝室の温湿度の受信）専用の Bearer トークン（`API_TOKEN` と同じ規則で、`API_TOKEN`・`BACKUP_TOKEN` とは別の値）。未設定なら経路を作らない（[docs/room-climate.md](../docs/room-climate.md)） |
 
 ローカル開発では `server/dev.vars`（gitignore 済み）に `KEY=value` 形式で書く。
 
@@ -49,7 +50,7 @@ pnpm build       # dist/ へ出力
 pnpm start       # node dist/index.js（環境変数は自前で渡す）
 ```
 
-CLI（`pnpm import:takeout` / `pnpm sync:notes` / `pnpm restore:backup`）は下の各節にある。pnpm 12 は `pnpm <スクリプト> -- --opt` の `--` もそのまま渡すが、どの CLI も先頭の `--` は読み飛ばすので、付けても付けなくてもよい。
+CLI（`pnpm import:takeout` / `pnpm sync:notes` / `pnpm restore:backup` / `pnpm import:room-csv`）は下の各節にある。pnpm 12 は `pnpm <スクリプト> -- --opt` の `--` もそのまま渡すが、どの CLI も先頭の `--` は読み飛ばすので、付けても付けなくてもよい。
 
 ### 結合テスト
 
@@ -68,6 +69,7 @@ CLI（`pnpm import:takeout` / `pnpm sync:notes` / `pnpm restore:backup`）は下
 - `POST /api/notes/sync` — `{"from":"YYYY-MM-DD","to":"YYYY-MM-DD","includeStatic":bool?}`（最大400日。本文は 16 KB まで、超えると 413）。範囲内のノートを再生成し、内容が同じものは書き込まない。`{"written":n,"unchanged":n,"failed":[...]}`。`OBSIDIAN_MCP_URL` と `OBSIDIAN_MCP_TOKEN` が未設定なら経路を作らない（404）
 - `GET /api/summary?date=YYYY-MM-DD` または `?from=&to=`（最大400日）— `{"days":[...]}`。`types=activity,heart_rate,body,sleep,nutrition` で絞り込み
 - `GET /api/summary/monthly?from=YYYY-MM&to=YYYY-MM`（最大120か月）— 月次集計 `{"months":[...]}`（データのある月のみ）。`sleep.missing_dates` は、日次データはあるが睡眠の記録が無い日（`YYYY-MM-DD`、昇順）。翌日以降のデータがまだ無い最新の日は「まだ届いていない」ので含めない（[ADR 0028](../docs/adr/0028-show-missing-sleep-and-nutrition-in-notes.md)）。月次ノートでは frontmatter の `睡眠なしの日` と、本文の「睡眠の記録が無い日」になる
+- `POST /room/readings` — `Authorization: Bearer <ROOM_TOKEN>` 必須（`API_TOKEN` では使えず、`ROOM_TOKEN` では `/api` を使えない）。`{"readings":[{"time":"2026-01-01T00:30:00+09:00","temperature_c":19.5,"humidity_pct":52}]}`（1〜2000件。本文は 512 KB まで）。時刻はオフセット付きの ISO 形式で、Asia/Tokyo の分単位にそろえて保存し、同じ分の値は置き換える。温度は -40〜80、湿度は 0〜100。1 件でも形や範囲が合わなければ全体を 400 で拒否する。`{"written":n,"unchanged":n}`（読み取り値の件数）。ノートは作らない。日次ノートを作るときに、就寝〜起床の間の値から `夜平均室温`・`夜最低室温`・`夜最高室温`・`夜平均湿度` を求める（1 時間あたり平均 1 件に満たない夜は空。[ADR 0033](../docs/adr/0033-room-climate-readings.md)）。`ROOM_TOKEN` が未設定なら 404
 - `GET /backup/health` — `Authorization: Bearer <BACKUP_TOKEN>` 必須（`API_TOKEN` では取れない）。全期間の日次データを JSON → gzip → age で暗号化して返す（`application/octet-stream`、`X-Backup-Days` に日数）。`BACKUP_TOKEN` と `BACKUP_AGE_RECIPIENT` が未設定なら 404。復元は `pnpm restore:backup`（[docs/backup.md](../docs/backup.md)）
 
 ### Vault への書き込みのやり直し
@@ -130,6 +132,24 @@ pnpm sync:notes --from 2022-01-01 --to 2026-09-30 --api-url http://localhost:808
 - `API_TOKEN` はサーバーと同じ規則（英数字と `. _ ~ + / -`、末尾に `=` 可、32 文字以上）で起動時に検査する。貼り付けで改行・空白・制御文字が混ざると、値を表示せずに終了する
 - エラー表示の中にトークンが含まれていれば `***` に置き換える
 - サーバーの応答は 1 回の通信につき 10 分まで待ち、過ぎると「サーバーが 600 秒以内に応答しませんでした」と表示する。`import:takeout` はそこで止まり、`sync:notes` はその区間を失敗として扱う。`--batch` / `--days` を小さくしてやり直す
+
+## 寝室の温湿度計の CSV の取り込み
+
+SwitchBot のアプリの温湿度計の「データのエクスポート」で書き出した CSV を読み、`POST /room/readings` へ送る。設定の全体は [docs/room-climate.md](../docs/room-climate.md)。
+
+```sh
+# 試し実行: 読み取った件数と期間、形の合わない行を表示する（送らない）
+pnpm import:room-csv --file "<CSV のパス>"
+
+# 送る。ROOM_TOKEN は環境変数で渡す
+pnpm import:room-csv --file "<CSV のパス>" --api-url https://<アプリ名>.fly.dev
+```
+
+- 先頭の行が `timestamp`・`temperature`・`humidity` で始まる列であることを確かめる。時刻（`YYYY-MM-DD HH:MM:SS`）は Asia/Tokyo として読む
+- 形の合わない行は送らずに行番号と理由を表示し、最後に終了コード 1 になる
+- `--batch` は 1 回の POST で送る件数で、1〜2000（既定 1000）。失敗するとそこで止まる。同じ分の値は置き換えるので、もう一度実行すればよい
+- 送っただけでは日次ノートは変わらない。`sync:notes` で期間を指定して作り直す
+- `--api-url` と `ROOM_TOKEN` は、下の「両 CLI 共通」の `--api-url` と `API_TOKEN` と同じ規則で検査する。エラー表示の中のトークンは `***` に置き換える
 
 ## バックアップの復元
 
