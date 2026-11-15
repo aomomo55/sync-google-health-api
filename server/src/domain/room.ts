@@ -112,9 +112,23 @@ interface TimedReading {
 
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
 
-function summarize(readings: TimedReading[], startMs: number, endMs: number): NightClimate | null {
+// sorted（時刻の昇順）の中で、at が t 以上になる最初の位置
+function lowerBound(sorted: TimedReading[], t: number): number {
+  // 二分探索の範囲そのものがループの制御なので let にする
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (sorted[mid]!.at < t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+// sorted は時刻の昇順。夜の始まりを二分探索で求め、終わりまでだけを見る
+function summarize(sorted: TimedReading[], startMs: number, endMs: number): NightClimate | null {
   if (!(endMs > startMs)) return null;
-  const inNight = readings.filter((r) => r.at >= startMs && r.at <= endMs);
+  const inNight = sorted.slice(lowerBound(sorted, startMs), lowerBound(sorted, endMs + 1));
   const required = Math.max(
     1,
     Math.floor(((endMs - startMs) / MS_PER_HOUR) * MIN_READINGS_PER_HOUR),
@@ -138,12 +152,14 @@ export function summarizeNights(
   nights: { date: string; start?: string | null; end?: string | null }[],
   readings: RoomReading[],
 ): Map<string, NightClimate> {
-  // 夜の数 × 読み取り値の数だけ比べるので、時刻は先に 1 度だけ数値にする
-  const timed = readings.map((r) => ({
-    at: Date.parse(r.time),
-    temperature_c: r.temperature_c,
-    humidity_pct: r.humidity_pct,
-  }));
+  // 時刻は先に 1 度だけ数値にして並べ、夜ごとには二分探索で範囲を切り出す
+  const timed = readings
+    .map((r) => ({
+      at: Date.parse(r.time),
+      temperature_c: r.temperature_c,
+      humidity_pct: r.humidity_pct,
+    }))
+    .sort((a, b) => a.at - b.at);
   return new Map(
     nights.flatMap((n) => {
       const start = n.start ? Date.parse(n.start) : Number.NaN;

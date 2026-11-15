@@ -5,7 +5,7 @@ import { MemoMarkerMissingError } from "../notes/index.js";
 import type { HealthStore } from "../store/health-store.js";
 import type { RoomStore } from "../store/room-store.js";
 import type { VaultPathError, VaultWriter } from "../vault/vault-writer.js";
-import { type PlanItem, planNotes, splitValidDays } from "./plan.js";
+import { affectedNotes, type PlanItem, planNotes, splitValidDays } from "./plan.js";
 
 const INVALID_DATE_MESSAGE =
   "保存されている日付が不正なため、ノートを生成しませんでした。CouchDB の該当する文書を確認してください";
@@ -119,17 +119,33 @@ export class NoteSync {
     return this.apply(items, failed);
   }
 
-  // 対象の日と前後の日（ノートを作り直す日）の夜の温湿度。就寝は起床日の前日に始まるので、前日から読む
+  // 日次ノートを作り直す日（対象の日と前後の日。planNotes と同じ affectedNotes で決める）の夜の温湿度。
+  // 就寝は起床日の前日に始まるので、前日から読む。
+  // 温湿度は補助の計測なので、読めなくても空にしてノートの同期は続ける（ADR 0033）
   private async nightClimate(
     days: DailySummary[],
     targetDates: string[],
   ): Promise<Map<string, NightClimate>> {
-    const first = days[0]?.date;
-    const last = days.at(-1)?.date;
-    if (!this.room || targetDates.length === 0 || !first || !last) return new Map();
-    const nights = days.map((d) => ({ date: d.date, start: d.sleep?.start, end: d.sleep?.end }));
-    const readings = await this.room.getReadings(addDays(first, -1), last);
-    return summarizeNights(nights, readings);
+    if (!this.room) return new Map();
+    const dates = new Set(affectedNotes(days, targetDates).dates);
+    const nightDays = days.filter((d) => dates.has(d.date));
+    const first = nightDays[0]?.date;
+    const last = nightDays.at(-1)?.date;
+    if (!first || !last) return new Map();
+    try {
+      const readings = await this.room.getReadings(addDays(first, -1), last);
+      const nights = nightDays.map((d) => ({
+        date: d.date,
+        start: d.sleep?.start,
+        end: d.sleep?.end,
+      }));
+      return summarizeNights(nights, readings);
+    } catch (e) {
+      console.error(
+        `寝室の温湿度を読めなかったので、温湿度を空にしてノートを同期します: ${describeForLog(e)}`,
+      );
+      return new Map();
+    }
   }
 
   // 前後の日を、不正な日付を読み飛ばして求める

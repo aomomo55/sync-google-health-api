@@ -437,4 +437,49 @@ describe("NoteSync の寝室の温湿度", () => {
     expect(r.written).toContain(NOTE_PATH);
     expect(frontmatterValue(writer.notes.get(NOTE_PATH)!, "夜平均室温")).toBe("19.8");
   });
+
+  it("温湿度を読めなくても、温湿度を空にして日次ノートは書く", async () => {
+    const store = new MemoryStore();
+    const writer = new MemoryVaultWriter();
+    const brokenRoom = {
+      upsertReadings: store.upsertReadings.bind(store),
+      getReadings: async () => {
+        throw new Error("CouchDB GET /_all_docs の温湿度の文書の形が不正です");
+      },
+    };
+    await store.upsertDays([sleepDay]);
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const r = await new NoteSync({ store, room: brokenRoom, writer }).syncDates(["2026-03-15"]);
+      expect(r.failed).toEqual([]);
+      const note = writer.notes.get(NOTE_PATH)!;
+      expect(note).toContain("睡眠時間h: 7.5");
+      expect(frontmatterValue(note, "夜平均室温")).toBe("");
+      expect(errors).toHaveBeenCalledWith(expect.stringContaining("寝室の温湿度を読めなかった"));
+    } finally {
+      errors.mockRestore();
+    }
+  });
+
+  it("温湿度は、作り直す日次ノートの夜の分だけを読む", async () => {
+    const store = new MemoryStore();
+    const writer = new MemoryVaultWriter();
+    const ranges: [string, string][] = [];
+    const room = {
+      upsertReadings: store.upsertReadings.bind(store),
+      getReadings: (from: string, to: string) => {
+        ranges.push([from, to]);
+        return store.getReadings(from, to);
+      },
+    };
+    // 月次の集計のために月全体を読むが、温湿度は対象の日と前後の日（3 月 14〜16 日）の夜だけでよい
+    await store.upsertDays(
+      ["2026-03-01", "2026-03-14", "2026-03-15", "2026-03-16", "2026-03-31"].map((date) => ({
+        date,
+        activity: { steps: 1000 },
+      })),
+    );
+    await new NoteSync({ store, room, writer }).syncDates(["2026-03-15"]);
+    expect(ranges).toEqual([["2026-03-13", "2026-03-16"]]);
+  });
 });

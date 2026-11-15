@@ -210,4 +210,19 @@ describe("summarizeNights", () => {
     expect(r.get("2026-03-02")?.avg_temperature_c).toBe(18);
     expect(r.get("2026-03-03")?.avg_temperature_c).toBe(24);
   });
+
+  it("読み取り値が時刻の順に並んでいなくても、同じ結果になる", () => {
+    const nights = [
+      { date: "2026-03-02", start: START, end: END },
+      { date: "2026-03-03", start: "2026-03-03T01:00:00+09:00", end: "2026-03-03T03:00:00+09:00" },
+    ];
+    const readings = [
+      reading("2026-03-02T01:30:00+09:00", 18, 50),
+      reading("2026-03-02T02:30:00+09:00", 19, 52),
+      reading("2026-03-03T01:30:00+09:00", 24, 60),
+      reading("2026-03-03T02:30:00+09:00", 25, 62),
+    ];
+    const shuffled = [readings[2]!, readings[0]!, readings[3]!, readings[1]!];
+    expect(summarizeNights(nights, shuffled)).toEqual(summarizeNights(nights, readings));
+  });
 });
