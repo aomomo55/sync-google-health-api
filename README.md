@@ -79,6 +79,7 @@ REVIEW.md        PR をレビューするときの観点
 - **秘密情報の扱い**: トークンや認証情報は fly.io の secrets と Android Keystore に置き、ログやエラーメッセージに出さない。端末への貼り付けで紛れ込む制御文字は起動時に検出して止める
 - **受信データの検証**（[0012](docs/adr/0012-input-validation-and-error-exposure.md)）: 形の誤りはリクエスト全体を拒否し、値の範囲の誤りはその日だけを拒否する。応答のエラー文には値を載せない
 - **バックアップ**（[0015](docs/adr/0015-backup-health-db-to-google-drive.md)）: サーバーが age の公開鍵で暗号化してから渡すので、サーバー・GAS・Google Drive のどこから漏れても中身は読めない。取得用のトークンは書き込み用と分け、漏れても書き込みはできない
+- **寝室の温湿度**（[0033](docs/adr/0033-room-climate-readings.md)）: 温湿度計の API は今の値しか返さないので、GAS が 30 分おきに読んでサーバーへ送る。送信用のトークンは健康データの読み書き・バックアップ用のものと分け、漏れても温湿度を書き込めるだけにした。夜の値は、睡眠のデータが届いてから就寝〜起床の時刻で求める。メーカーの形式を知っているのは GAS と CSV の取り込みだけ
 - **コードの約束**（[0016](docs/adr/0016-shared-for-cross-layer-utilities.md)、[0017](docs/adr/0017-design-principles.md)）: 複数の層から使う汎用の部品の置き場所と、DRY・KISS・YAGNI などの原則どうしがぶつかったときの線の引き方を決めている
 
 ## 使い方の流れ
@@ -88,6 +89,7 @@ REVIEW.md        PR をレビューするときの観点
 3. 過去データがあれば Google Takeout から取り込み、`sync:notes` でノートとダッシュボードを書き込む
 4. `android/` のアプリをビルドして端末に入れ、サーバーの URL と API トークンを設定する（[android/README.md](android/README.md)）
 5. 必要ならバックアップを設定する。age の鍵の組を作り、`BACKUP_TOKEN` と `BACKUP_AGE_RECIPIENT` をサーバーに登録して、`gas/` のスクリプトを GAS に置く（[docs/backup.md](docs/backup.md)）
+6. 必要なら寝室の温湿度を設定する。`ROOM_TOKEN` をサーバーに登録し、SwitchBot のトークンと合わせて `gas/room-climate.gs` を GAS に置く。過去の分は温湿度計のアプリの CSV から取り込める（[docs/room-climate.md](docs/room-climate.md)）
 
 ## 動作確認した環境
 
@@ -95,6 +97,7 @@ REVIEW.md        PR をレビューするときの観点
 |---|---|
 | スマートフォン | Nothing Phone (3a)（Android 16） |
 | スマートウォッチ | CMF Watch Pro 2 |
+| 温湿度計 | SwitchBot 温湿度計（ハブ経由で SwitchBot API v1.1 から読む） |
 | Obsidian プラグイン | Self-hosted LiveSync 1.0.34、Dataview、Charts |
 | Vault への書き込み | obsidian-sync-mcp 0.7.1 |
 | サーバー | Node.js 24（fly.io）、CouchDB 3 |
@@ -107,6 +110,8 @@ REVIEW.md        PR をレビューするときの観点
 - Health Connect には Google Fit の Move Minutes やハートポイントに当たる項目がないため、運動時間はエクササイズの記録時間で近似している（[0008](docs/adr/0008-android-app-health-connect-mapping.md)）
 - Android アプリから送れるのは 90 日前まで。今日を含む直近 30 日より前を送るには履歴の権限が要る（Health Connect が既定では権限を初めて許可した日の 30 日前より前を読ませないため）。90 日より前は Google Takeout から取り込む（[android/README.md](android/README.md#開始日を指定して送る)）
 - バックアップの秘密鍵を失くすと、バックアップを復号できない（[docs/backup.md](docs/backup.md)）
+- 寝室の温湿度はバックアップに含めない。失ったときは温湿度計のアプリの CSV から入れ直す（[0033](docs/adr/0033-room-climate-readings.md)）
+- 温湿度計の値を読む GAS と CSV の取り込みは SwitchBot 用。ほかの温湿度計を使うときは、この 2 つを書き換える（サーバーはメーカーを知らない）
 - 個人用途（利用者 1 人）を前提にしている
 
 ## ライセンス
